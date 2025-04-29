@@ -55,7 +55,7 @@ function LoginContent() {
       // If we're on localhost, modify the redirect URI to match the main site's domain
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         const baseUrl = `${window.location.protocol}//${window.location.host}`;
-        redirectUri = window.location.origin + '/tools/shadow-it-scan/api/auth/google';
+        redirectUri = window.location.origin + '/api/auth/google';
       }
       
       const scopes = [
@@ -120,7 +120,7 @@ function LoginContent() {
 
       // If we're on localhost, update the redirect URI
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        redirectUri = window.location.origin + '/tools/shadow-it-scan/api/auth/microsoft';
+        redirectUri = window.location.origin + '/api/auth/microsoft';
         console.log('Updated redirect URI for localhost:', redirectUri);
       }
       
@@ -180,7 +180,7 @@ function LoginContent() {
                 size="lg"
                 disabled={isLoading}
               >
-                <img src="/tools/shadow-it-scan/images/google-logo.svg" alt="Google logo" className="h-5 w-5" />
+                <img src="/images/google-logo.svg" alt="Google logo" className="h-5 w-5" />
                 {isLoading && loginProvider === 'google' ? 'Connecting...' : 'Sign in with Google Workspace'}
               </Button>
               
@@ -190,7 +190,7 @@ function LoginContent() {
                 size="lg"
                 disabled={isLoading}
               >
-                <img src="/tools/shadow-it-scan/images/microsoft-logo.svg" alt="Microsoft logo" className="h-5 w-5" />
+                <img src="/images/microsoft-logo.svg" alt="Microsoft logo" className="h-5 w-5" />
                 {isLoading && loginProvider === 'microsoft' ? 'Connecting...' : 'Sign in with Microsoft Entra ID'}
               </Button>
             </div>

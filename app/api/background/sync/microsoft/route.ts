@@ -359,7 +359,7 @@ export async function GET(request: NextRequest) {
     // Trigger categorization
     console.log('🔄 Triggering application categorization...');
     try {
-      const categorizationResponse = await fetch(`${request.nextUrl.origin}/tools/shadow-it-scan/api/background/sync/categorize`, {
+      const categorizationResponse = await fetch(`${request.nextUrl.origin}/api/background/sync/categorize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

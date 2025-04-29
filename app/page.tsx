@@ -186,7 +186,7 @@ export default function ShadowITDashboard() {
   const checkCategorizationStatus = async (orgId: string) => {
     try {
       // Use the path that will be rewritten by our middleware
-      const response = await fetch(`/tools/shadow-it-scan/api/categorization/status?orgId=${orgId}`);
+      const response = await fetch(`/api/categorization/status?orgId=${orgId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch categorization status');
       }
@@ -258,12 +258,12 @@ export default function ShadowITDashboard() {
       }
       
       if (!orgId) {
-        router.push('/tools/shadow-it-scan/login');
+        router.push('/login');
         return;
       }
 
       // Fetch applications - keep the original path for this API
-      const response = await fetch(`/tools/shadow-it-scan/api/applications?orgId=${orgId}`);
+      const response = await fetch(`/api/applications?orgId=${orgId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch applications');
       }
@@ -335,7 +335,7 @@ export default function ShadowITDashboard() {
     if (email) {
       const fetchUserFromDB = async () => {
         try {
-          const response = await fetch(`/tools/shadow-it-scan/api/user?email=${encodeURIComponent(email)}`);
+          const response = await fetch(`/api/user?email=${encodeURIComponent(email)}`);
           if (response.ok) {
             const userData = await response.json();
             if (userData) {
@@ -363,7 +363,7 @@ export default function ShadowITDashboard() {
     localStorage.clear();
     
     // Redirect to login page
-    router.push('/tools/shadow-it-scan/login');
+    router.push('/login');
   };
 
   // Helper function to parse CSV row handling quoted values
@@ -707,7 +707,7 @@ export default function ShadowITDashboard() {
   // Handle status change
   const handleStatusChange = async (appId: string, newStatus: string) => {
     try {
-      const response = await fetch('/tools/shadow-it-scan/api/applications', {
+      const response = await fetch('/api/applications', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
