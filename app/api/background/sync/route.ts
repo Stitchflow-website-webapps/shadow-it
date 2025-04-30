@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     // Call each endpoint in sequence
     for (const endpoint of endpoints) {
       try {
-        // Try first with the /tools/shadow-it-scan prefix as per next.config.js assetPrefix
+        // Try first with the  prefix as per next.config.js assetPrefix
         const prefixedUrl = `${baseUrl}/${endpoint}`;
         console.log(`Calling ${prefixedUrl}...`);
         let response;
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
             }),
           });
         } catch (fetchError) {
-          console.log(`Error with ${prefixedUrl}, trying without /tools/shadow-it-scan/ prefix...`);
+          console.log(`Error with ${prefixedUrl}, trying without / prefix...`);
           // If the first attempt fails, try without the prefix
           const directUrl = `${baseUrl}/${endpoint}`;
           console.log(`Calling ${directUrl}...`);

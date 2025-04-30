@@ -142,7 +142,7 @@ export async function GET(request: Request) {
         console.error('Error recording failed signup:', err);
       }
         
-      return NextResponse.redirect(new URL('https://www.stitchflow.com/tools/shadow-it-scan/login?error=admin_required', request.url));
+      return NextResponse.redirect(new URL('https://www.stitchflow.com/login?error=admin_required', request.url));
     }
 
     // Create organization ID from domain
@@ -191,7 +191,7 @@ export async function GET(request: Request) {
     }
 
     // Create URL for loading page with syncId parameter
-    const redirectUrl = new URL('https://www.stitchflow.com/tools/shadow-it-scan/loading');
+    const redirectUrl = new URL('https://www.stitchflow.com/loading');
     if (syncStatus?.id) {
       redirectUrl.searchParams.set('syncId', syncStatus.id);
     }

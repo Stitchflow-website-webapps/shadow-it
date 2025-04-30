@@ -41,7 +41,7 @@ function LoadingContent() {
     if (!syncId) return;
     
     try {
-      const response = await fetch('/tools/shadow-it-scan/api/background/sync/complete', {
+      const response = await fetch('/api/background/sync/complete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -78,7 +78,7 @@ function LoadingContent() {
     const checkSyncStatus = async () => {
       try {
         console.log('Checking sync status for ID:', syncId);
-        const response = await fetch(`/tools/shadow-it-scan/api/sync/status?syncId=${syncId}`);
+        const response = await fetch(`/api/sync/status?syncId=${syncId}`);
         
         if (!response.ok) {
           console.error('Error fetching sync status:', response.statusText);
@@ -123,9 +123,9 @@ function LoadingContent() {
             // Wait a moment to show progress before redirecting
             setTimeout(() => {
               if (data.organization_id) {
-                router.push(`/tools/shadow-it-scan/?orgId=${data.organization_id}`);
+                router.push(`/?orgId=${data.organization_id}`);
               } else {
-                router.push('/tools/shadow-it-scan/');
+                router.push('/');
               }
             }, 1500);
             return;
@@ -177,9 +177,9 @@ function LoadingContent() {
   // Function to manually go to dashboard
   const goToDashboard = () => {
     if (orgId) {
-      router.push(`/tools/shadow-it-scan/?orgId=${orgId}`);
+      router.push(`/?orgId=${orgId}`);
     } else {
-      router.push('/tools/shadow-it-scan/');
+      router.push('/');
     }
   };
 

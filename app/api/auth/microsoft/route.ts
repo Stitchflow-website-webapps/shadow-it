@@ -2,8 +2,8 @@
  * Microsoft Auth Configuration
  * 
  * IMPORTANT: In Azure portal, ensure ALL your redirect URIs use your production domain:
- * - https://stitchflow.com/tools/shadow-it-scan/api/auth/microsoft (CORRECT)
- * - https://www.stitchflow.com/tools/shadow-it-scan/api/auth/microsoft (CORRECT)
+ * - https://stitchflow.com/api/auth/microsoft (CORRECT)
+ * - https://www.stitchflow.com/api/auth/microsoft (CORRECT)
  * 
  * Remove any localhost redirect URIs from production:
  * - http://localhost:3000/api/auth/microsoft (REMOVE FROM PRODUCTION APP)
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       redirectUri = `${request.nextUrl.origin}/api/auth/microsoft`;
     } else {
       // For production, use the full production URL
-      redirectUri = 'https://www.stitchflow.com/tools/shadow-it-scan/api/auth/microsoft';
+      redirectUri = 'https://www.stitchflow.com/api/auth/microsoft';
     }
     
     console.log('Using redirect URI for token exchange:', redirectUri);
@@ -180,7 +180,7 @@ export async function GET(request: NextRequest) {
         console.error('Error recording failed signup:', err);
       }
       
-      return NextResponse.redirect(new URL('https://www.stitchflow.com/tools/shadow-it-scan/login?error=admin_required', request.url));
+      return NextResponse.redirect(new URL('https://www.stitchflow.com/login?error=admin_required', request.url));
     }
 
     // First check if user exists
@@ -277,7 +277,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Create URL for loading page with syncId parameter
-    const redirectUrl = new URL('https://www.stitchflow.com/tools/shadow-it-scan/loading');
+    const redirectUrl = new URL('https://www.stitchflow.com/loading');
     if (syncStatus?.id) {
       redirectUrl.searchParams.set('syncId', syncStatus.id);
     }
@@ -305,7 +305,7 @@ export async function GET(request: NextRequest) {
     
     // Trigger the Microsoft sync process in the background
     // This will run after we've already redirected the user
-    fetch(`${request.nextUrl.origin}/tools/shadow-it-scan/api/background/sync/microsoft`, {
+    fetch(`${request.nextUrl.origin}/api/background/sync/microsoft`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
