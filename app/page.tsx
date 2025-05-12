@@ -12,7 +12,7 @@ import {
   CheckCircle,
   AlertTriangle,
   LayoutGrid,
-  Settings,
+  Settings as EmailNotifications,
   X,
   Eye,
   LogOut,
@@ -2348,8 +2348,8 @@ export default function ShadowITDashboard() {
                       onClick={handleOpenSettings}
                       className="border-gray-200"
                     >
-                      <Settings className="h-4 w-4 mr-2" />
-                      Settings
+                      <EmailNotifications className="h-4 w-4 mr-2" />
+                      Email Notifications
                     </Button>
 
                     {/* Only show profile if authenticated */}
@@ -2490,7 +2490,7 @@ export default function ShadowITDashboard() {
                           
                             <div className="min-w-[150px]">
                               <div className="flex justify-between items-center mb-1">
-                                <Label className="text-sm font-medium text-gray-700">Risk Level</Label>
+                                <Label className="text-sm font-medium text-gray-700">Scope Risk</Label>
                                 {filterRisk && (
                                   <button
                                     onClick={() => setFilterRisk(null)}
@@ -2514,7 +2514,7 @@ export default function ShadowITDashboard() {
                           
                           <div className="min-w-[150px]">
                             <div className="flex justify-between items-center mb-1">
-                              <Label className="text-sm font-medium text-gray-700">App Status</Label>
+                              <Label className="text-sm font-medium text-gray-700">Managed Status</Label>
                               {filterManaged && (
                                 <button
                                   onClick={() => setFilterManaged(null)}
@@ -2565,7 +2565,7 @@ export default function ShadowITDashboard() {
                                   
                                     <TableHead className="text-center cursor-pointer" onClick={() => handleSort("riskLevel")}>
                                       <div className="flex items-center justify-center">
-                                        Risk
+                                        Scope Risk
                                         {getSortIcon("riskLevel")}
                                       </div>
                                     </TableHead>
@@ -2582,11 +2582,11 @@ export default function ShadowITDashboard() {
                                 
                                 <TableHead className={`cursor-pointer`} onClick={() => handleSort("managementStatus")}>
                                   <div className="flex items-center">
-                                    Status
+                                    Managed Status
                                     {getSortIcon("managementStatus")}
                                   </div>
                                 </TableHead>
-                                <TableHead className={`text-center rounded-tr-lg`}>User Access</TableHead>
+                                <TableHead className={`text-center rounded-tr-lg`}>User Scope Analysis</TableHead>
                               </TableRow>
                             </TableHeader>
                           <TableBody>
@@ -3263,8 +3263,8 @@ export default function ShadowITDashboard() {
                     onClick={handleOpenSettings}
                     className="border-gray-200"
                   >
-                    <Settings className="h-4 w-4 mr-2" />
-                    Settings
+                    <EmailNotifications className="h-4 w-4 mr-2" />
+                    Email Notifications
                   </Button>
 
                   {/* Only show profile if authenticated */}

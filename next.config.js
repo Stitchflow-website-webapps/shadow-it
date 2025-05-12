@@ -39,7 +39,6 @@ const nextConfig = {
     
     return config;}
   ,
-  assetPrefix:'/tools/shadow-it-scan',
 }
 
 // Handle optional user config merging
