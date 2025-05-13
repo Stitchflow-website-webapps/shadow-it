@@ -12,7 +12,7 @@ import {
   CheckCircle,
   AlertTriangle,
   LayoutGrid,
-  Settings,
+  Settings as EmailNotifications,
   X,
   Eye,
   LogOut,
@@ -2119,17 +2119,17 @@ export default function ShadowITDashboard() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-medium hover:bg-primary/15 transition-colors"
             >
-              A free tool from Stitchflow
+              A tool from Stitchflow
               <ExternalLink className="h-3 w-3" />
             </a>
             
             <div className="space-y-4 sm:space-y-6">
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mx-auto max-w-[900px] leading-tight">
-              Free Shadow IT Scanner 
+              Shadow IT Scanner 
               </h1>
               
               <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Discover the apps your employees are using, detect potential risks by tracking usage patterns, and prevent compliance gaps before they escalate.
+              Discover the apps your employees are using, detect potential risks by tracking app scopes, and prevent compliance gaps before they escalate.
               </p>
             </div>
           </div>
@@ -2185,24 +2185,24 @@ export default function ShadowITDashboard() {
                         const activeFilters = [filterCategory, filterRisk, filterManaged].filter(Boolean).length;
                         
                         if (activeFilters === 0) {
-                          return `Hey, we found ${sortedApps.length} applications.`;
+                          return `We found ${sortedApps.length} applications.`;
                         }
 
                         // Single filter messages
                         if (activeFilters === 1) {
                           if (filterCategory) {
-                            return `Hey, we found ${sortedApps.length} applications in ${filterCategory}.`;
+                            return `We found ${sortedApps.length} applications in ${filterCategory}.`;
                           }
                           if (filterRisk) {
-                            return `Hey, we found ${sortedApps.length} ${filterRisk.toLowerCase()} risk applications.`;
+                            return `We found ${sortedApps.length} ${filterRisk.toLowerCase()} risk applications.`;
                           }
                           if (filterManaged) {
-                            return `Hey, we found ${sortedApps.length} ${filterManaged.toLowerCase()} applications.`;
+                            return `We found ${sortedApps.length} ${filterManaged.toLowerCase()} applications.`;
                           }
                         }
 
                         // Multiple filters - show total count with "filtered"
-                        return `Hey, we found ${sortedApps.length} filtered applications.`;
+                        return `We found ${sortedApps.length} filtered applications.`;
                       })()}
                     </p>
                   </div>
@@ -2231,8 +2231,8 @@ export default function ShadowITDashboard() {
                       onClick={handleOpenSettings}
                       className="border-gray-200"
                     >
-                      <Settings className="h-4 w-4 mr-2" />
-                      Settings
+                      <EmailNotifications className="h-4 w-4 mr-2" />
+                      Email Notifications
                     </Button>
 
                     {/* Only show profile if authenticated */}
@@ -2373,7 +2373,7 @@ export default function ShadowITDashboard() {
                           
                             <div className="min-w-[150px]">
                               <div className="flex justify-between items-center mb-1">
-                                <Label className="text-sm font-medium text-gray-700">Risk Level</Label>
+                                <Label className="text-sm font-medium text-gray-700">Scope Risk</Label>
                                 {filterRisk && (
                                   <button
                                     onClick={() => setFilterRisk(null)}
@@ -2397,7 +2397,7 @@ export default function ShadowITDashboard() {
                           
                           <div className="min-w-[150px]">
                             <div className="flex justify-between items-center mb-1">
-                              <Label className="text-sm font-medium text-gray-700">App Status</Label>
+                              <Label className="text-sm font-medium text-gray-700">Managed Status</Label>
                               {filterManaged && (
                                 <button
                                   onClick={() => setFilterManaged(null)}
@@ -2448,7 +2448,7 @@ export default function ShadowITDashboard() {
                                   
                                     <TableHead className="text-center cursor-pointer" onClick={() => handleSort("riskLevel")}>
                                       <div className="flex items-center justify-center">
-                                        Risk
+                                        Scope Risk
                                         {getSortIcon("riskLevel")}
                                       </div>
                                     </TableHead>
@@ -2465,11 +2465,11 @@ export default function ShadowITDashboard() {
                                 
                                 <TableHead className={`cursor-pointer`} onClick={() => handleSort("managementStatus")}>
                                   <div className="flex items-center">
-                                    Status
+                                    Managed Status
                                     {getSortIcon("managementStatus")}
                                   </div>
                                 </TableHead>
-                                <TableHead className={`text-center rounded-tr-lg`}>User Access</TableHead>
+                                <TableHead className={`text-center rounded-tr-lg`}>User Scope Analysis</TableHead>
                               </TableRow>
                             </TableHeader>
                           <TableBody>
@@ -3100,24 +3100,24 @@ export default function ShadowITDashboard() {
                       const activeFilters = [filterCategory, filterRisk, filterManaged].filter(Boolean).length;
                       
                       if (activeFilters === 0) {
-                        return `Hey, we found ${sortedApps.length} applications.`;
+                        return `We found ${sortedApps.length} applications.`;
                       }
 
                       // Single filter messages
                       if (activeFilters === 1) {
                         if (filterCategory) {
-                          return `Hey, we found ${sortedApps.length} applications in ${filterCategory}.`;
+                          return `We found ${sortedApps.length} applications in ${filterCategory}.`;
                         }
                         if (filterRisk) {
-                          return `Hey, we found ${sortedApps.length} ${filterRisk.toLowerCase()} risk applications.`;
+                          return `We found ${sortedApps.length} ${filterRisk.toLowerCase()} risk applications.`;
                         }
                         if (filterManaged) {
-                          return `Hey, we found ${sortedApps.length} ${filterManaged.toLowerCase()} applications.`;
+                          return `We found ${sortedApps.length} ${filterManaged.toLowerCase()} applications.`;
                         }
                       }
 
                       // Multiple filters - show total count with "filtered"
-                      return `Hey, we found ${sortedApps.length} filtered applications.`;
+                      return `We found ${sortedApps.length} filtered applications.`;
                     })()}
                   </h2>
                 </div>
@@ -3146,8 +3146,8 @@ export default function ShadowITDashboard() {
                     onClick={handleOpenSettings}
                     className="border-gray-200"
                   >
-                    <Settings className="h-4 w-4 mr-2" />
-                    Settings
+                    <EmailNotifications className="h-4 w-4 mr-2" />
+                    Email Notifications
                   </Button>
 
                   {/* Only show profile if authenticated */}
@@ -3291,10 +3291,10 @@ export default function ShadowITDashboard() {
                     <Tabs defaultValue="users" className="mb-6">
                       <TabsList className="bg-gray-100 p-1">
                         <TabsTrigger value="users" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                          Users
+                          All Users
                         </TabsTrigger>
                         <TabsTrigger value="scopes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                          Scopes
+                          Scope User Groups
                         </TabsTrigger>
                         <TabsTrigger value="similar" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
                           Similar Apps
@@ -3474,10 +3474,9 @@ export default function ShadowITDashboard() {
 
                       <TabsContent value="scopes">
                         <div className="p-5 border border-gray-200 rounded-md bg-white">
-                          <h3 className="text-lg font-medium mb-4">Scope Groups</h3>
+                          <h3 className="text-lg font-medium mb-4">Scope User Groups</h3>
                           <p className="text-sm text-muted-foreground mb-4">
-                            Users are grouped by identical permission sets. Each group represents a unique set of
-                            permissions.
+                          Users are grouped by identical scope permission sets. Each user group represents a unique set of permissions.
                           </p>
 
                             {(() => {
@@ -3755,7 +3754,7 @@ export default function ShadowITDashboard() {
               </div>
               <h3 className="text-lg font-semibold mb-2">Spot unauthorized apps instantly</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-              Automatically detect all the AI and SaaS apps your employees are using across Google Workspace or Microsoft 365. Identify your org's managed apps and mark specific apps for review
+              Automatically detect all the AI and SaaS apps your employees are using across Google Workspace or Microsoft 365. Identify your org's managed apps and mark specific apps for review.
               </p>
             </div>
             <div className="flex flex-col p-8 bg-white rounded-xl shadow-sm border border-gray-100">
@@ -3767,7 +3766,7 @@ export default function ShadowITDashboard() {
               </div>
               <h3 className="text-lg font-semibold mb-2">Smart risk assessment</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-              Get instant visibility into OAuth scopes and user activity. See clear risk indicators based on scope access and usage patterns
+              Get instant visibility into OAuth scopes and see clear risk indicators based on scope permissions per user.
               </p>
             </div>
             <div className="flex flex-col p-8 bg-white rounded-xl shadow-sm border border-gray-100">
@@ -3786,7 +3785,7 @@ export default function ShadowITDashboard() {
               </div>
               <h3 className="text-lg font-semibold mb-2">Granular insights</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-              Track every user's permissions and activities for each app. View app insights by category, risk, and scope groups—all in one place. Catch risky behavior before it becomes a problem
+              Track every user's permissions and activities for each app. View app insights by category, risk, and scope groups—all in one place. Catch risky behavior before it becomes a problem.
               </p>
             </div>
             <div className="flex flex-col p-8 bg-white rounded-xl shadow-sm border border-gray-100">
@@ -3805,7 +3804,7 @@ export default function ShadowITDashboard() {
               </div>
               <h3 className="text-lg font-semibold mb-2">Continuous monitoring & real-time alerts</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-              Get notified when new apps or users appear, or when high-risk apps gain new users. Your environment, under control
+              Get notified when new apps or users appear, or when high-risk apps gain new users. Your environment, under control.
               </p>
             </div>
           </div>
