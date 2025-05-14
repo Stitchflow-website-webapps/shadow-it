@@ -2022,7 +2022,7 @@ export default function ShadowITDashboard() {
         localStorage.setItem('auth_provider', 'microsoft');
         localStorage.setItem('lastLogin', Date.now().toString());
         localStorage.setItem('login_attempt_time', Date.now().toString());
-        
+
         const authUrl = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
         authUrl.searchParams.append('client_id', clientId);
         authUrl.searchParams.append('redirect_uri', redirectUri);
@@ -2031,7 +2031,7 @@ export default function ShadowITDashboard() {
         authUrl.searchParams.append('response_mode', 'query');
         authUrl.searchParams.append('prompt', 'select_account');
         authUrl.searchParams.append('state', state);
-
+        
         window.location.href = authUrl.toString();
       } catch (err) {
         console.error('Microsoft login error:', err);
@@ -2076,11 +2076,11 @@ export default function ShadowITDashboard() {
                 <img src="/tools/shadow-it-scan/images/microsoft-logo.svg" alt="Microsoft logo" className="h-5 w-5" />
                 {isLoading && loginProvider === 'microsoft' ? 'Connecting...' : 'Sign in with Microsoft Entra ID'}
               </Button>
-              
-              <div className="flex justify-end mt-6">
-                <Button variant="outline" onClick={() => setShowLoginModal(false)}>
-                  Cancel
-                </Button>
+            
+            <div className="flex justify-end mt-6">
+              <Button variant="outline" onClick={() => setShowLoginModal(false)}>
+                Cancel
+              </Button>
               </div>
             </div>
           </div>
@@ -2424,7 +2424,7 @@ export default function ShadowITDashboard() {
                       </div>
 
                       <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
-                        <div className="max-h-[800px] overflow-y-auto">
+                        <div>
                         <Table>
                             <TableHeader className="sticky top-0 bg-gray-50/80 backdrop-blur-sm z-10">
                               <TableRow className="border-b border-gray-100">
@@ -3346,7 +3346,7 @@ export default function ShadowITDashboard() {
                                         {getUserSortIcon("email")}
                                       </div>
                                     </TableHead>
-
+                                  
                                     <TableHead 
                                       className="cursor-pointer rounded-tr-lg bg-transparent"
                                       onClick={() => handleUserSort("riskLevel")}
@@ -3541,12 +3541,12 @@ export default function ShadowITDashboard() {
                                   {/* First box - All Application Scopes */}
                                   <div className="mb-6 border rounded-md overflow-hidden">
                                     <div className="p-3 flex justify-between items-center border-b border-gray-200 bg-blue-50">
-                                      <h4 className="font-medium">
-                                        <span className="flex items-center">
-                                          <Info className="h-4 w-4 mr-1 text-blue-600" />
-                                          All Application Scopes
-                                        </span>
-                                      </h4>
+                                <h4 className="font-medium">
+                                    <span className="flex items-center">
+                                      <Info className="h-4 w-4 mr-1 text-blue-600" />
+                                      All Application Scopes
+                                    </span>
+                                </h4>
                                       <Badge variant="default" className="bg-blue-600">
                                         {selectedApp?.scopes.length || 0} {(selectedApp?.scopes.length || 0) === 1 ? "permission" : "permissions"}
                                       </Badge>
@@ -3632,14 +3632,14 @@ export default function ShadowITDashboard() {
                                                 </Badge>
                                               )}
                                               <Badge variant="outline" className="bg-primary/10">
-                                                {group.scopes.length} {group.scopes.length === 1 ? "permission" : "permissions"}
-                                              </Badge>
+                                  {group.scopes.length} {group.scopes.length === 1 ? "permission" : "permissions"}
+                                </Badge>
                                             </div>
-                                          </div>
+                              </div>
 
-                                          <div className="p-3 border-b">
+                              <div className="p-3 border-b">
                                             <h5 className="text-sm font-medium mb-2">Permissions:</h5>
-                                            <div className="max-h-60 overflow-y-auto">
+                                        <div className="max-h-60 overflow-y-auto">
                                               {group.scopes.map((scope, scopeIndex) => {
                                                 // Determine risk level for each scope
                                                 const isHighRisk = ['admin', 'admin.directory.user', 'admin.directory.group', 
@@ -3667,34 +3667,34 @@ export default function ShadowITDashboard() {
                                                       style={{ backgroundColor: riskColor }}
                                                     />
                                                     <span className="text-sm">{scope}</span>
-                                                  </div>
+                                            </div>
                                                 );
                                               })}
-                                            </div>
-                                          </div>
-
-                                          <div className="p-3">
-                                            <h5 className="text-sm font-medium mb-2">
-                                              Users with this permission set:
-                                            </h5>
-                                            <div className="flex flex-wrap gap-2">
-                                              {group.users.map((user, userIndex) => (
-                                                <div
-                                                  key={userIndex}
-                                                  className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-md border border-gray-200"
-                                                >
-                                                  <div className="flex items-center justify-center w-6 h-6 rounded-md bg-gray-200 text-xs font-medium text-gray-800">
-                                                    {user.name
-                                                      .split(" ")
-                                                      .map((n) => n[0])
-                                                      .join("")}
-                                                  </div>
-                                                  <span className="text-sm">{user.name}</span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
                                         </div>
+                                      </div>
+
+                                      <div className="p-3">
+                                <h5 className="text-sm font-medium mb-2">
+                                              Users with this permission set:
+                                </h5>
+                                  <div className="flex flex-wrap gap-2">
+                                    {group.users.map((user, userIndex) => (
+                                      <div
+                                        key={userIndex}
+                                        className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-md border border-gray-200"
+                                      >
+                                        <div className="flex items-center justify-center w-6 h-6 rounded-md bg-gray-200 text-xs font-medium text-gray-800">
+                                          {user.name
+                                            .split(" ")
+                                            .map((n) => n[0])
+                                            .join("")}
+                                        </div>
+                                        <span className="text-sm">{user.name}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                              </div>
+                                    </div>
                                       );
                                     })}
 
@@ -3703,7 +3703,7 @@ export default function ShadowITDashboard() {
                                     <div className="mt-4 flex items-center justify-between px-4 py-2 border-t border-gray-200">
                                       <div className="text-sm text-muted-foreground">
                                         Showing {scopeStartIndex + 1}-{Math.min(scopeEndIndex, scopeGroups.length)} of {scopeGroups.length} scope groups
-                                      </div>
+                                    </div>
                                       <div className="flex items-center space-x-2">
                                         <Button
                                           variant="outline"
@@ -3736,31 +3736,31 @@ export default function ShadowITDashboard() {
                                                 {page}
                                               </Button>
                                             )
-                                          ))}
-                                        </div>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => setScopeCurrentPage(prev => Math.min(totalScopePages, prev + 1))}
-                                          disabled={scopeCurrentPage === totalScopePages}
-                                        >
-                                          Next
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => setScopeCurrentPage(totalScopePages)}
-                                          disabled={scopeCurrentPage === totalScopePages}
-                                        >
-                                          Last
-                                        </Button>
-                                      </div>
-                                    </div>
+                                  ))}
+                                </div>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setScopeCurrentPage(prev => Math.min(totalScopePages, prev + 1))}
+                                        disabled={scopeCurrentPage === totalScopePages}
+                                      >
+                                        Next
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setScopeCurrentPage(totalScopePages)}
+                                        disabled={scopeCurrentPage === totalScopePages}
+                                      >
+                                        Last
+                                      </Button>
+                              </div>
+                            </div>
                                   )}
                                 </>
                               )
                             })()}
-                          </div>
+                        </div>
                       </TabsContent>
 
                       {/* <TabsContent value="similar">
