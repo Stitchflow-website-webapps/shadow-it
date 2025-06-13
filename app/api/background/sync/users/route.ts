@@ -160,7 +160,8 @@ async function processUsers(
         await googleService.setCredentials({
           access_token: refreshedTokens.access_token,
           refresh_token: refreshedTokens.refresh_token,
-          expiry_date: refreshedTokens.expiry_date || Date.now() + 3600 * 1000
+          expiry_date: refreshedTokens.expiry_date || Date.now() + 3600 * 1000,
+          scope: GOOGLE_SYNC_SCOPES, // Pass scopes back in
         });
         
         // Update the sync_status record with new tokens for future use
