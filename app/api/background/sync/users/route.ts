@@ -140,6 +140,35 @@ async function processUsers(
       expiry_date: Date.now() + 3600 * 1000 // Add expiry_date to help with token refresh
     });
     
+    // Attempt to refresh tokens before making API calls
+    console.log(`[Users ${sync_id}] Refreshing tokens before API calls...`);
+    try {
+      const refreshedTokens = await googleService.refreshAccessToken(true); // Force refresh
+      if (refreshedTokens) {
+        console.log(`[Users ${sync_id}] Successfully refreshed tokens`);
+        
+        // Update the sync_status record with new tokens for future use
+        await supabaseAdmin
+          .from('sync_status')
+          .update({
+            access_token: refreshedTokens.access_token,
+            refresh_token: refreshedTokens.refresh_token,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sync_id);
+      }
+    } catch (refreshError: any) {
+      console.error(`[Users ${sync_id}] Token refresh failed:`, refreshError.message);
+      
+      // If token refresh fails, it's likely the refresh token is invalid
+      const errorMessage = refreshError.message.includes('invalid_grant') 
+        ? 'Google authentication has expired. Please re-authenticate your Google Workspace account.'
+        : `Token refresh failed: ${refreshError.message}`;
+        
+      await updateSyncStatus(sync_id, -1, errorMessage, 'FAILED');
+      throw new Error(errorMessage);
+    }
+    
     await updateSyncStatus(sync_id, 15, 'Fetching users from Google Workspace');
     
     // Fetch users
@@ -166,10 +195,11 @@ async function processUsers(
       // Check if this is an auth error
       const isAuthError = 
         userFetchError?.response?.status === 401 || 
-        (userFetchError?.message && userFetchError.message.toLowerCase().includes('auth'));
+        userFetchError?.code === 401 ||
+        (userFetchError?.message && userFetchError.message.toLowerCase().includes('invalid credentials'));
       
       if (isAuthError) {
-        errorMessage = 'Authentication error: Unable to access Google Workspace. Please re-authenticate.';
+        errorMessage = 'Authentication error: Google Workspace access denied. Please re-authenticate your account.';
       }
 
       await updateSyncStatus(sync_id, -1, errorMessage, 'FAILED');

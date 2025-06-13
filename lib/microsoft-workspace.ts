@@ -193,8 +193,8 @@ export class MicrosoftWorkspaceService {
       }
       
       try {
-        // Prepare the token endpoint request
-        const tokenEndpoint = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
+        // Use 'common' tenant for token refresh to avoid tenant-specific issues
+        const tokenEndpoint = `https://login.microsoftonline.com/common/oauth2/v2.0/token`;
         const params = new URLSearchParams({
           client_id: this.clientId,
           client_secret: this.clientSecret,
@@ -203,6 +203,8 @@ export class MicrosoftWorkspaceService {
           scope: 'https://graph.microsoft.com/.default offline_access'
         });
 
+        console.log('Making token refresh request to Microsoft...');
+        
         // Make the refresh token request
         const response = await fetch(tokenEndpoint, {
           method: 'POST',
@@ -214,12 +216,31 @@ export class MicrosoftWorkspaceService {
 
         if (!response.ok) {
           const errorData = await response.text();
-          console.error('Failed to refresh Microsoft token:', errorData);
-          throw new Error(`Failed to refresh token: ${response.status} ${response.statusText} - ${errorData}`);
+          console.error('Failed to refresh Microsoft token:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData
+          });
+          
+          // Parse error details if possible
+          try {
+            const errorJson = JSON.parse(errorData);
+            if (errorJson.error === 'invalid_grant') {
+              throw new Error(`Microsoft refresh token has expired or been revoked. User needs to re-authenticate. Error: ${errorJson.error_description || errorData}`);
+            }
+          } catch (parseError) {
+            // If we can't parse the error, use the raw text
+          }
+          
+          throw new Error(`Failed to refresh Microsoft token: ${response.status} ${response.statusText} - ${errorData}`);
         }
 
         // Parse the new tokens
         const newTokens = await response.json();
+        
+        if (!newTokens.access_token) {
+          throw new Error('No access token received in refresh response');
+        }
         
         // Merge with existing tokens, ensuring we keep the refresh token if not returned
         const updatedTokens = {
@@ -227,13 +248,21 @@ export class MicrosoftWorkspaceService {
           access_token: newTokens.access_token,
           id_token: newTokens.id_token || this.currentTokens.id_token,
           refresh_token: newTokens.refresh_token || this.currentTokens.refresh_token,
-          expires_at: Date.now() + (newTokens.expires_in * 1000)
+          expires_at: Date.now() + ((newTokens.expires_in || 3600) * 1000),
+          token_type: newTokens.token_type || 'Bearer'
         };
         
-        // Update the client with the new tokens
-        await this.setCredentials(updatedTokens);
+        // Update the stored tokens
+        this.currentTokens = updatedTokens;
         
-        console.log('Successfully refreshed Microsoft access token');
+        // Reinitialize the Microsoft Graph client with the new access token
+        this.client = Client.init({
+          authProvider: (done) => {
+            done(null, updatedTokens.access_token);
+          }
+        });
+        
+        console.log('Successfully refreshed Microsoft access token and updated client');
         return updatedTokens;
       } catch (refreshError) {
         console.error('Detailed Microsoft token refresh error:', refreshError);
@@ -242,9 +271,11 @@ export class MicrosoftWorkspaceService {
         if (refreshError instanceof Error) {
           // Check for common OAuth errors and provide better messages
           if (refreshError.message.includes('invalid_grant')) {
-            throw new Error(`Invalid Microsoft refresh token. OAuth grant has expired or been revoked: ${refreshError.message}`);
+            throw new Error(`Invalid Microsoft refresh token. OAuth grant has expired or been revoked. User needs to re-authenticate: ${refreshError.message}`);
+          } else if (refreshError.message.includes('AADSTS70008')) {
+            throw new Error(`Microsoft refresh token has expired. User needs to re-authenticate: ${refreshError.message}`);
           } else if (refreshError.message.includes('AADSTS')) {
-            throw new Error(`Microsoft token refresh error: ${refreshError.message}`);
+            throw new Error(`Microsoft Azure AD error: ${refreshError.message}`);
           } else {
             throw new Error(`Microsoft token refresh failed: ${refreshError.message}`);
           }

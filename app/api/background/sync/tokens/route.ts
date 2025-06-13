@@ -143,7 +143,13 @@ function extractScopesFromToken(token: any): string[] {
   return Array.from(scopes);
 }
 
-async function sendSyncCompletedEmail(userEmail: string, syncId?: string) {
+async function sendSyncCompletedEmail(userEmail: string, syncId?: string, skipEmail: boolean = false) {
+  // Skip email if in test mode
+  if (skipEmail) {
+    console.log(`[Tokens Sync ${syncId || ''}] 🧪 TEST MODE: Skipping email notification to ${userEmail}`);
+    return;
+  }
+
   const transactionalId = process.env.LOOPS_TRANSACTIONAL_ID_SYNC_COMPLETED;
   const loopsApiKey = process.env.LOOPS_API_KEY;
 
@@ -195,6 +201,14 @@ export async function POST(request: Request) {
     requestData = await request.json();
     const { organization_id, sync_id, access_token, refresh_token, users } = requestData;
     
+    // Check if we should skip emails (test mode)
+    const skipEmail = request.headers.get('X-Skip-Email') === 'true';
+    const isTestMode = request.headers.get('X-Test-Mode') === 'true';
+    
+    if (isTestMode) {
+      console.log(`[Tokens API ${sync_id}] 🧪 Running in TEST MODE - emails will be skipped`);
+    }
+    
     console.log(`[Tokens API ${sync_id}] Starting token fetch processing`);
     
     // Validate required fields
@@ -207,13 +221,14 @@ export async function POST(request: Request) {
     }
 
     // Await the processTokens function
-    await processTokens(organization_id, sync_id, access_token, refresh_token, users, request);
+    await processTokens(organization_id, sync_id, access_token, refresh_token, users, request, skipEmail);
     
     console.log(`[Tokens API ${sync_id}] Token fetch completed successfully`);
     return NextResponse.json({ 
       message: 'Token fetch completed successfully',
       syncId: sync_id,
-      organizationId: organization_id
+      organizationId: organization_id,
+      testMode: isTestMode
     });
 
   } catch (error: any) {
@@ -249,7 +264,8 @@ async function processTokens(
   access_token: string,
   refresh_token: string,
   users: Array<{googleId: string, userId: string}> | undefined,
-  request: Request
+  request: Request,
+  skipEmail: boolean
 ) {
   try {
     console.log(`[Tokens ${sync_id}] Starting token fetch for organization: ${organization_id}`);
@@ -645,7 +661,8 @@ async function processTokens(
       if (syncInfoError) {
         console.error(`[Tokens ${sync_id}] Error fetching sync info for email:`, syncInfoError.message);
       } else if (syncInfo && syncInfo.user_email) {
-        await sendSyncCompletedEmail(syncInfo.user_email, sync_id);
+        // await sendSyncCompletedEmail(syncInfo.user_email, sync_id, skipEmail);
+        console.log(`[Tokens ${sync_id}] Skipping sync completed email to ${syncInfo.user_email}.`);
       } else {
         console.warn(`[Tokens ${sync_id}] User email not found for sync_id ${sync_id}. Cannot send completion email.`);
       }

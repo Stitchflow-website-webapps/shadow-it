@@ -18,6 +18,14 @@ export async function POST(request: NextRequest) {
       provider 
     } = requestData;
 
+    // Check for test mode headers
+    const isTestMode = request.headers.get('X-Test-Mode') === 'true';
+    const skipEmail = request.headers.get('X-Skip-Email') === 'true';
+    
+    if (isTestMode) {
+      console.log(`🧪 [MAIN SYNC] Running in TEST MODE for sync_id: ${sync_id}`);
+    }
+
     if (!organization_id || !sync_id || !access_token || !provider) {
       return NextResponse.json(
         { error: 'Missing required parameters' },
@@ -26,11 +34,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Update sync status to indicate progress
+    const statusMessage = isTestMode 
+      ? `🧪 TEST: Starting ${provider} data sync...`
+      : `Starting ${provider} data sync...`;
+      
     await supabaseAdmin
       .from('sync_status')
       .update({
         progress: 10,
-        message: `Starting ${provider} data sync...`,
+        message: statusMessage,
         updated_at: new Date().toISOString()
       })
       .eq('id', sync_id);
@@ -65,12 +77,22 @@ export async function POST(request: NextRequest) {
         console.log(`Calling ${prefixedUrl}...`);
         let response;
         
+        // Prepare headers with test mode flags
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        
+        if (isTestMode) {
+          headers['X-Test-Mode'] = 'true';
+        }
+        if (skipEmail) {
+          headers['X-Skip-Email'] = 'true';
+        }
+        
         try {
           response = await fetch(prefixedUrl, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers,
             body: JSON.stringify({
               organization_id,
               sync_id,
@@ -86,9 +108,7 @@ export async function POST(request: NextRequest) {
           console.log(`Calling ${directUrl}...`);
           response = await fetch(directUrl, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers,
             body: JSON.stringify({
               organization_id,
               sync_id,
@@ -123,11 +143,15 @@ export async function POST(request: NextRequest) {
     await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay
     
     // Update sync status to 95% while we wait for final background tasks
+    const finalizeMessage = isTestMode 
+      ? '🧪 TEST: Finalizing data synchronization...'
+      : 'Finalizing data synchronization...';
+      
     await supabaseAdmin
       .from('sync_status')
       .update({
         progress: 95,
-        message: 'Finalizing data synchronization...',
+        message: finalizeMessage,
         updated_at: new Date().toISOString()
       })
       .eq('id', sync_id);
@@ -136,27 +160,40 @@ export async function POST(request: NextRequest) {
     await new Promise(resolve => setTimeout(resolve, 5000)); // Another 5 second delay
 
     // Mark sync as completed
+    const completedMessage = isTestMode 
+      ? `🧪 TEST: ${provider} data sync completed`
+      : `${provider} data sync completed`;
+      
     await supabaseAdmin
       .from('sync_status')
       .update({
         progress: 100,
         status: 'COMPLETED',
-        message: `${provider} data sync completed`,
+        message: completedMessage,
         updated_at: new Date().toISOString()
       })
       .eq('id', sync_id);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true,
+      testMode: isTestMode,
+      emailsSkipped: skipEmail
+    });
   } catch (error) {
     console.error('Background sync error:', error);
     
     // Update sync status to failed
     if (requestData && requestData.sync_id) {
+      const isTestMode = request.headers.get('X-Test-Mode') === 'true';
+      const failedMessage = isTestMode 
+        ? `🧪 TEST FAILED: ${(error as Error).message}`
+        : `Sync failed: ${(error as Error).message}`;
+        
       await supabaseAdmin
         .from('sync_status')
         .update({
           status: 'FAILED',
-          message: `Sync failed: ${(error as Error).message}`,
+          message: failedMessage,
           updated_at: new Date().toISOString()
         })
         .eq('id', requestData.sync_id);

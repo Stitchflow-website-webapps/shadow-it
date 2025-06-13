@@ -187,35 +187,41 @@ export class GoogleWorkspaceService {
         // Request a new access token
         try {
           const response = await this.oauth2Client.getAccessToken();
-          const token = response.token as Credentials;
           
-          if (typeof token !== 'string') {
-            // If token is an object (which it should be)
-            const newCredentials = {
-              access_token: token.access_token || credentials.access_token,
-              refresh_token: token.refresh_token || credentials.refresh_token,
-              expiry_date: token.expiry_date || (Date.now() + 3600 * 1000) // Default to 1 hour expiry
-            };
-            
-            // Update the client with new tokens
-            this.oauth2Client.setCredentials(newCredentials);
-            
-            console.log('Successfully refreshed access token');
-            return newCredentials;
-          } else {
-            // If token is just a string (access token)
-            const newCredentials = {
-              ...credentials,
-              access_token: token,
-              // Update expiry time to 1 hour from now if not provided
-              expiry_date: credentials.expiry_date || (Date.now() + 3600 * 1000)
-            };
-            
-            this.oauth2Client.setCredentials(newCredentials);
-            
-            console.log('Successfully refreshed access token (string format)');
-            return newCredentials;
+          // Get the updated credentials after refresh
+          const updatedCredentials = this.oauth2Client.credentials;
+          
+          // Ensure we have a valid access token
+          if (!updatedCredentials.access_token) {
+            throw new Error('No access token received after refresh');
           }
+          
+          // Create a clean credentials object
+          const newCredentials = {
+            access_token: updatedCredentials.access_token,
+            refresh_token: updatedCredentials.refresh_token || credentials.refresh_token,
+            expiry_date: updatedCredentials.expiry_date || (Date.now() + 3600 * 1000),
+            id_token: updatedCredentials.id_token,
+            scope: updatedCredentials.scope || credentials.scope
+          };
+          
+          // Explicitly set the new credentials to ensure they're used
+          this.oauth2Client.setCredentials(newCredentials);
+          
+          // Reinitialize the admin SDK with the refreshed credentials
+          this.admin = google.admin({
+            version: 'directory_v1',
+            auth: this.oauth2Client
+          });
+          
+          // Reinitialize the OAuth2 API with the refreshed credentials
+          this.oauth2 = google.oauth2({
+            version: 'v2',
+            auth: this.oauth2Client
+          });
+          
+          console.log('Successfully refreshed access token and updated all services');
+          return newCredentials;
         } catch (refreshError) {
           console.error('Failed to refresh access token:', refreshError);
           

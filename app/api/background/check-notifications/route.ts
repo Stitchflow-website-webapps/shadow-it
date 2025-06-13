@@ -169,52 +169,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'No organizations to process' });
     }
 
-    // For each organization, check for new apps and users from connected providers
-    for (const org of organizations) {
-      console.log(`Processing organization: ${org.id} (${org.name})`);
-      
-      // Check for new Google apps and users
-      if (org.auth_provider === 'google') {
-        await processGoogleWorkspace(org);
-      }
-      
-      // Check for Microsoft apps and users
-      if (org.auth_provider === 'microsoft') {
-        await processMicrosoftEntra(org);
+    // to a direct API call for notification processing
+    const isNotificationOnlyMode = request.headers.get('X-Notification-Only') === 'true';
+
+    if (isNotificationOnlyMode) {
+      console.log('Running in notification-only mode, skipping sync triggers.');
+    } else {
+      // For each organization, trigger the main background sync
+      for (const org of organizations) {
+        console.log(`🚀 Processing organization: ${org.id} (${org.name})`);
+
+        if (org.auth_provider === 'google' || org.auth_provider === 'microsoft') {
+          await triggerBackgroundSync(org, org.auth_provider);
+        } else {
+          console.log(`⏭️ Skipping organization ${org.id} with unknown provider: ${org.auth_provider}`);
+        }
+
+        // Add a small delay to stagger the start of each sync and avoid overwhelming the system
+        await new Promise(resolve => setTimeout(resolve, 3000)); // 3-second delay
       }
     }
 
-    // Set a flag to track whether we're running in notification-only mode
-    // This would happen if we're not processing a cron job but instead responding
-    // to a direct API call for notification processing
-    const isNotificationOnlyMode = request.headers.get('X-Notification-Only') === 'true';
-    
-    // if (isNotificationOnlyMode) {
-    //   console.log('Running in notification-only mode - processing notifications for already discovered apps/users');
-      
-    //   // Process notifications for apps/users that were already discovered
-    //   try {
-    //     await processNewAppNotifications();
-    //   } catch (error) {
-    //     console.error('Error in processNewAppNotifications:', error);
-    //   }
-      
-    //   try {
-    //     await processNewUserNotifications();
-    //   } catch (error) {
-    //     console.error('Error in processNewUserNotifications:', error);
-    //   }
-      
-    //   try {
-    //     await processNewUserReviewNotifications();
-    //   } catch (error) {
-    //     console.error('Error in processNewUserReviewNotifications:', error);
-    //   }
-    // }
+    // After triggering syncs (or in notification-only mode), process notifications for recent events.
+    console.log('🔄 Starting notification processing for all organizations...');
+    try {
+      await processNewAppNotifications();
+      await processNewUserNotifications();
+      await processNewUserReviewNotifications();
+      console.log('✅ Successfully processed all notifications.');
+    } catch (error) {
+      console.error('❌ Error during notification processing:', error);
+    }
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Notifications checked and processed'
+      message: 'Syncs triggered and notifications checked'
     });
   } catch (error) {
     console.error('Error in notification check cron job:', error);
@@ -222,6 +211,86 @@ export async function POST(request: Request) {
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
+  }
+}
+
+/**
+ * Triggers the main background sync process for a given organization.
+ * This is a fire-and-forget operation.
+ */
+async function triggerBackgroundSync(org: any, provider: 'google' | 'microsoft') {
+  try {
+    console.log(`⚙️ Triggering background sync for ${provider} org ${org.id}...`);
+
+    // 1. Get the latest sync record to retrieve the most recent tokens
+    const { data: latestSync, error: syncError } = await supabaseAdmin
+      .from('sync_status')
+      .select('access_token, refresh_token, user_email')
+      .eq('organization_id', org.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (syncError || !latestSync) {
+      console.warn(`⚠️ Could not find a previous sync record for ${provider} org ${org.id}. Cannot trigger new sync.`, syncError?.message);
+      return;
+    }
+
+    // 2. Create a new sync_status record for this cron-triggered run
+    const { data: newSyncStatus, error: createError } = await supabaseAdmin
+      .from('sync_status')
+      .insert({
+        organization_id: org.id,
+        user_email: latestSync.user_email,
+        status: 'IN_PROGRESS',
+        progress: 5,
+        message: `Daily background sync initiated by cron for ${provider}.`,
+        provider: provider,
+        access_token: latestSync.access_token,
+        refresh_token: latestSync.refresh_token,
+      })
+      .select('id')
+      .single();
+
+    if (createError) {
+      console.error(`❌ Failed to create new sync status for cron run (org ${org.id}):`, createError);
+      return;
+    }
+
+    const sync_id = newSyncStatus.id;
+    console.log(`✅ Created new sync record ${sync_id} for org ${org.id}.`);
+
+    // 3. Get base URL for the internal API call
+    const baseUrl = "https://www.stitchflow.com/tools/shadow-it-scan"
+
+    const syncUrl = `${baseUrl}/api/background/sync`;
+
+    // 4. Fire-and-forget the sync process. The cron job's task is just to kick it off.
+    fetch(syncUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        organization_id: org.id,
+        sync_id: sync_id,
+        access_token: latestSync.access_token,
+        refresh_token: latestSync.refresh_token,
+        provider: provider,
+      }),
+    }).catch(fetchError => {
+      console.error(`❌ Fetch error triggering background sync for org ${org.id}:`, fetchError);
+      // If the fetch itself fails, mark the sync as failed.
+      supabaseAdmin
+        .from('sync_status')
+        .update({ status: 'FAILED', message: `Cron failed to trigger sync endpoint: ${fetchError.message}` })
+        .eq('id', sync_id);
+    });
+
+    console.log(`▶️ Successfully dispatched sync request for ${provider} org ${org.id}.`);
+
+  } catch (error) {
+    console.error(`❌ Error in triggerBackgroundSync for org ${org.id}:`, error);
   }
 }
 
@@ -543,995 +612,5 @@ async function processNewUserReviewNotifications() {
   } catch (error) {
     console.error('Error processing new user in review app notifications:', error);
     throw error;
-  }
-}
-
-async function processGoogleWorkspace(org: any) {
-  try {
-    console.log(`Checking Google Workspace for organization ${org.id}...`);
-    
-    // Get the latest sync record to get auth tokens
-    const { data: latestSync, error: syncError } = await supabaseAdmin
-      .from('sync_status')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq('status', 'COMPLETED')
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    
-    if (syncError) {
-      console.error(`Error fetching latest sync for org ${org.id}:`, syncError);
-      return;
-    }
-    
-    if (!latestSync || !latestSync.access_token || !latestSync.refresh_token) {
-      console.log(`No valid sync record found for Google org ${org.id}`);
-      return;
-    }
-
-    // Get provider information
-    const { data: orgDetails, error: orgDetailsError } = await supabaseAdmin
-      .from('organizations')
-      .select('auth_provider')
-      .eq('id', org.id)
-      .single();
-
-    if (orgDetailsError) {
-      console.error(`Error fetching organization details for org ${org.id}:`, orgDetailsError);
-      return;
-    }
-
-    // Skip if organization is not using Google
-    if (orgDetails.auth_provider !== 'google' && orgDetails.auth_provider !== null) {
-      console.log(`Organization ${org.id} is not using Google, skipping Google workspace check`);
-      return;
-    }
-    
-    // Initialize Google Workspace service
-    console.log(`Initializing Google Workspace service for org ${org.id}...`);
-    const googleService = new GoogleWorkspaceService({
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: process.env.GOOGLE_REDIRECT_URI,
-    });
-    
-    // Set the credentials from the latest sync
-    await googleService.setCredentials({
-      access_token: latestSync.access_token,
-      refresh_token: latestSync.refresh_token,
-      expiry_date: latestSync.token_expiry || Date.now() + 3600 * 1000
-    });
-    
-    // Always force token refresh before making any API calls
-    try {
-      console.log(`Forcing token refresh for org ${org.id}...`);
-      const refreshedTokens = await safelyRefreshTokens(googleService, latestSync.id, org.id, 'Google');
-      
-      if (!refreshedTokens) {
-        throw new Error('Failed to refresh tokens - no tokens returned');
-      }
-      
-      console.log(`Tokens refreshed for org ${org.id}, updating in database...`);
-      
-      // Create a new sync_status record with updated tokens
-      const { data: newSyncStatus, error: createError } = await supabaseAdmin
-        .from('sync_status')
-        .insert({
-          organization_id: org.id,
-          user_email: latestSync.user_email,
-          status: 'COMPLETED',
-          message: 'Tokens refreshed successfully',
-          access_token: refreshedTokens.access_token,
-          refresh_token: refreshedTokens.refresh_token || latestSync.refresh_token,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select('id')
-        .single();
-      
-      if (createError) {
-        console.error(`Error creating new sync status record:`, createError);
-        throw createError;
-      }
-      
-      console.log(`Created new sync status record with ID: ${newSyncStatus.id}`);
-    } catch (refreshError) {
-      console.error(`Error refreshing tokens for org ${org.id}:`, refreshError);
-      
-      // Update sync status to indicate authentication failure
-      await supabaseAdmin
-        .from('sync_status')
-        .insert({
-          organization_id: org.id,
-          status: 'FAILED',
-          error_message: `Token refresh failed: ${refreshError instanceof Error ? refreshError.message : 'Unknown error'}`,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-      
-      console.log(`Marked sync status as FAILED for org ${org.id} due to token refresh failure`);
-      return; // Exit early as we can't proceed without valid tokens
-    }
-    
-    // Fetch current apps from Google Workspace
-    console.log(`Fetching current apps from Google Workspace for org ${org.id}...`);
-    
-    try {
-      const tokens = await googleService.getOAuthTokens();
-      console.log(`Fetched ${tokens.length} tokens from Google Workspace for org ${org.id}`);
-      
-      // Group tokens by application
-      const appMap = new Map<string, any>(); // clientId -> app info
-      for (const token of tokens) {
-        if (!token.clientId || !token.displayText) continue;
-        
-        if (!appMap.has(token.clientId)) {
-          // Calculate all unique scopes for this app across all users
-          const allScopes = new Set<string>();
-          if (token.scopes && Array.isArray(token.scopes)) {
-            token.scopes.forEach(scope => allScopes.add(scope));
-          }
-          
-          appMap.set(token.clientId, {
-            clientId: token.clientId,
-            name: token.displayText,
-            scopes: allScopes,
-            users: new Set(),
-            riskLevel: determineRiskLevel(token.scopes),
-            // Track which users have access to this app and with what permissions
-            userPermissions: new Map<string, string[]>()
-          });
-        } else {
-          // Update existing app entry
-          const app = appMap.get(token.clientId);
-          if (token.scopes && Array.isArray(token.scopes)) {
-            token.scopes.forEach(scope => app.scopes.add(scope));
-          }
-          
-          // Update risk level if needed
-          const tokenRisk = determineRiskLevel(token.scopes);
-          if (tokenRisk === 'HIGH' || (tokenRisk === 'MEDIUM' && app.riskLevel !== 'HIGH')) {
-            app.riskLevel = tokenRisk;
-          }
-        }
-        
-        // Add user to this app with their specific permissions
-        if (token.userEmail) {
-          appMap.get(token.clientId).users.add(token.userEmail);
-          
-          // Store this user's specific permissions for this app
-          appMap.get(token.clientId).userPermissions.set(
-            token.userEmail, 
-            token.scopes || []
-          );
-        }
-      }
-      
-      console.log(`Processed ${appMap.size} unique apps from Google Workspace for org ${org.id}`);
-      
-      // Get existing apps from our database
-      const { data: existingApps, error: appError } = await supabaseAdmin
-        .from('applications')
-        .select('id, name, google_app_id, category, risk_level, total_permissions, management_status, created_at, user_count')
-        .eq('organization_id', org.id)
-        .not('google_app_id', 'is', null);  // Only get Google apps
-      
-      if (appError) {
-        console.error(`Error fetching existing apps for org ${org.id}:`, appError);
-        return;
-      }
-      
-      // Create a map of existing apps by Google client ID
-      const existingAppMap = new Map<string, any>();
-      existingApps?.forEach(app => {
-        if (app.google_app_id) {
-          // Handle multiple client IDs separated by commas
-          app.google_app_id.split(',').forEach((clientId: string) => {
-            existingAppMap.set(clientId.trim(), app);
-          });
-        }
-      });
-      
-      // Track all Google client IDs we've seen in this sync
-      const seenClientIds = new Set<string>();
-      
-      // Process each app from Google Workspace
-      for (const [clientId, appInfo] of appMap.entries()) {
-        seenClientIds.add(clientId);
-        
-        if (existingAppMap.has(clientId)) {
-          // This is an existing app - update it with the latest info
-          const existingApp = existingAppMap.get(clientId);
-          const updatedValues: any = {};
-          let needsUpdate = false;
-          
-          // Check if any values need to be updated
-          if (appInfo.name !== existingApp.name) {
-            updatedValues.name = appInfo.name;
-            needsUpdate = true;
-          }
-          
-          if (appInfo.riskLevel !== existingApp.risk_level) {
-            updatedValues.risk_level = appInfo.riskLevel;
-            needsUpdate = true;
-          }
-          
-          if (appInfo.scopes.size !== existingApp.total_permissions) {
-            updatedValues.total_permissions = appInfo.scopes.size;
-            updatedValues.all_scopes = Array.from(appInfo.scopes);
-            needsUpdate = true;
-          }
-          
-          if (appInfo.users.size !== existingApp.user_count) {
-            updatedValues.user_count = appInfo.users.size;
-            needsUpdate = true;
-          }
-          
-          if (needsUpdate) {
-            console.log(`Updating existing app ${existingApp.name} (${existingApp.id}) with new info`);
-            updatedValues.updated_at = new Date().toISOString();
-            
-            const { error: updateError } = await supabaseAdmin
-              .from('applications')
-              .update(updatedValues)
-              .eq('id', existingApp.id);
-            
-            if (updateError) {
-              console.error(`Error updating app ${existingApp.id}:`, updateError);
-            } else {
-              console.log(`Successfully updated app ${existingApp.name} (${existingApp.id})`);
-            }
-          } else {
-            console.log(`No changes needed for existing app ${existingApp.name} (${existingApp.id})`);
-          }
-        } else {
-          // This is a new app - add it to our database
-          console.log(`Found new app ${appInfo.name} from Google Workspace`);
-          
-          try {
-            // Add app to database
-            const { data: insertedApp, error: insertError } = await supabaseAdmin
-              .from('applications')
-              .insert({
-                organization_id: org.id,
-                name: appInfo.name,
-                google_app_id: appInfo.clientId,
-                risk_level: appInfo.riskLevel,
-                total_permissions: appInfo.scopes.size,
-                all_scopes: Array.from(appInfo.scopes),
-                user_count: appInfo.users.size,
-                management_status: 'NEEDS_REVIEW',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .select()
-              .single();
-            
-            if (insertError) {
-              console.error(`Error inserting new app ${appInfo.name}:`, insertError);
-              continue;
-            }
-            
-            console.log(`Added new app to database: ${appInfo.name} (${insertedApp.id})`);
-            
-            // Send notifications to users who have enabled them
-            await sendNewAppNotifications(org, insertedApp);
-            
-          } catch (error) {
-            console.error(`Error processing new app ${appInfo.name}:`, error);
-          }
-        }
-      }
-      
-      // Check for apps in our database that no longer exist in Google Workspace
-      console.log(`Checking for apps that no longer exist in Google Workspace...`);
-      for (const [clientId, app] of existingAppMap.entries()) {
-        if (!seenClientIds.has(clientId)) {
-          console.log(`App ${app.name} (${app.id}) with client ID ${clientId} no longer exists in Google Workspace`);
-          
-          // You could mark these as inactive or remove them, depending on your requirements
-          // For now, we'll just log them
-        }
-      }
-      
-      // Now reconcile users for each app
-      console.log(`Reconciling users for Google Workspace apps...`);
-      
-      // Get all users from the database
-      const { data: dbUsers, error: usersError } = await supabaseAdmin
-        .from('users')
-        .select('id, email, name')
-        .eq('organization_id', org.id);
-      
-      if (usersError) {
-        console.error(`Error fetching users for org ${org.id}:`, usersError);
-        return;
-      }
-      
-      // Create maps for quick lookups
-      const userEmailMap = new Map<string, { id: string, name: string }>();
-      dbUsers?.forEach(user => {
-        userEmailMap.set(user.email, { id: user.id, name: user.name || user.email });
-      });
-      
-      // Process each app from Google Workspace that exists in our database
-      for (const [clientId, appInfo] of appMap.entries()) {
-        // Skip if app doesn't exist in our database
-        if (!existingAppMap.has(clientId)) continue;
-        
-        const dbApp = existingAppMap.get(clientId);
-        
-        // Get all existing user-app relationships for this app
-        const { data: existingUserApps, error: userAppError } = await supabaseAdmin
-          .from('user_applications')
-          .select(`
-            id, 
-            user_id,
-            user:users!inner (email)
-          `)
-          .eq('application_id', dbApp.id);
-        
-        if (userAppError) {
-          console.error(`Error fetching existing user-app relationships for app ${dbApp.id}:`, userAppError);
-          continue;
-        }
-        
-        // Create a set of existing user emails for this app
-        const existingUserEmailSet = new Set<string>();
-        const userIdsByEmail = new Map<string, string>(); // email -> user_application.id
-        
-        existingUserApps?.forEach(userApp => {
-          const email = userApp.user?.[0]?.email;
-          if (email) {
-            existingUserEmailSet.add(email);
-            userIdsByEmail.set(email, userApp.id);
-          }
-        });
-        
-        // Track emails we've seen in this sync
-        const seenUserEmails = new Set<string>();
-        
-        // Check for new users for this app
-        for (const userEmail of appInfo.users) {
-          seenUserEmails.add(userEmail);
-          
-          // Skip if user doesn't exist in our database
-          if (!userEmailMap.has(userEmail)) {
-            console.log(`User ${userEmail} not found in database, skipping`);
-            continue;
-          }
-          
-          const userId = userEmailMap.get(userEmail)!.id;
-          const userName = userEmailMap.get(userEmail)!.name;
-          
-          // Get this user's specific permissions for this app
-          const userPermissions = appInfo.userPermissions?.get(userEmail) || [];
-          
-          // Check if this user-app relationship already exists
-          if (!existingUserEmailSet.has(userEmail)) {
-            // This is a new user-app relationship
-            console.log(`New user ${userEmail} for app ${dbApp.name}`);
-            
-            try {
-              // Create user-app relationship in database
-              const { error: insertError } = await supabaseAdmin
-                .from('user_applications')
-                .insert({
-                  application_id: dbApp.id,
-                  user_id: userId,
-                  organization_id: org.id,
-                  scopes: userPermissions,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                });
-              
-              if (insertError) {
-                console.error(`Error inserting user-app relationship:`, insertError);
-                continue;
-              }
-              
-              console.log(`Added new user-app relationship: ${userEmail} - ${dbApp.name}`);
-              
-              // Send notification for this new user-app relationship
-              const isReviewApp = dbApp.management_status === 'NEEDS_REVIEW';
-              await sendNewUserNotifications(
-                org, 
-                dbApp, 
-                userEmail, 
-                userName, 
-                isReviewApp
-              );
-              
-            } catch (error) {
-              console.error(`Error processing new user-app relationship:`, error);
-            }
-          } else {
-            // Update existing relationship with current permissions
-            console.log(`User ${userEmail} already exists for app ${dbApp.name}, updating permissions`);
-            
-            const userAppId = userIdsByEmail.get(userEmail);
-            if (userAppId) {
-              const { error: updateError } = await supabaseAdmin
-                .from('user_applications')
-                .update({
-                  scopes: userPermissions,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', userAppId);
-                
-              if (updateError) {
-                console.error(`Error updating user-app relationship:`, updateError);
-              } else {
-                console.log(`Updated existing user-app relationship: ${userEmail} - ${dbApp.name}`);
-              }
-            }
-          }
-        }
-        
-        // Check for users who no longer have access to this app
-        console.log(`Checking for removed users for app ${dbApp.name}...`);
-        for (const userEmail of existingUserEmailSet) {
-          if (!seenUserEmails.has(userEmail)) {
-            console.log(`User ${userEmail} no longer has access to app ${dbApp.name}`);
-            
-            // Get the user_application.id for this relationship
-            const userAppId = userIdsByEmail.get(userEmail);
-            if (userAppId) {
-              // Mark user-app relationship as removed or delete it
-              // For now, we'll keep the record but update status
-              const { error: updateError } = await supabaseAdmin
-                .from('user_applications')
-                .update({
-                  status: 'REMOVED',
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', userAppId);
-              
-              if (updateError) {
-                console.error(`Error updating user-app relationship:`, updateError);
-              } else {
-                console.log(`Marked user-app relationship as REMOVED: ${userEmail} - ${dbApp.name}`);
-              }
-            }
-          }
-        }
-      }
-      
-    } catch (error: any) {
-      console.error(`Error fetching OAuth tokens from Google:`, error);
-      
-      // Update sync status to indicate authentication failure
-      await supabaseAdmin
-        .from('sync_status')
-        .insert({
-          organization_id: org.id,
-          status: 'FAILED',
-          error_message: `Authentication failed: ${error.message || 'Unknown error'}`,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-    }
-    
-  } catch (error) {
-    console.error(`Error in Google Workspace processing for org ${org.id}:`, error);
-  }
-}
-
-async function processMicrosoftEntra(org: any) {
-  try {
-    console.log(`Checking Microsoft Entra for organization ${org.id}...`);
-    
-    // Get the latest sync record to get auth tokens
-    const { data: latestSync, error: syncError } = await supabaseAdmin
-      .from('sync_status')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq('status', 'COMPLETED')
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    
-    if (syncError) {
-      console.error(`Error fetching latest sync for org ${org.id}:`, syncError);
-      return;
-    }
-    
-    if (!latestSync || !latestSync.access_token || !latestSync.refresh_token) {
-      console.log(`No valid sync record found for Microsoft org ${org.id}`);
-      return;
-    }
-
-    // Get provider information
-    const { data: orgDetails, error: orgDetailsError } = await supabaseAdmin
-      .from('organizations')
-      .select('auth_provider')
-      .eq('id', org.id)
-      .single();
-
-    if (orgDetailsError) {
-      console.error(`Error fetching organization details for org ${org.id}:`, orgDetailsError);
-      return;
-    }
-
-    // Skip if organization is not using Microsoft
-    if (orgDetails.auth_provider !== 'microsoft' && orgDetails.auth_provider !== null) {
-      console.log(`Organization ${org.id} is not using Microsoft, skipping Microsoft Entra check`);
-      return;
-    }
-    
-    // Initialize Microsoft Entra service
-    console.log(`Initializing Microsoft Entra service for org ${org.id}...`);
-    const microsoftService = new MicrosoftWorkspaceService({
-      clientId: process.env.MICROSOFT_CLIENT_ID!,
-      clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
-      tenantId: process.env.MICROSOFT_TENANT_ID!,
-    });
-    
-    // Set the credentials from the latest sync
-    await microsoftService.setCredentials({
-      access_token: latestSync.access_token,
-      refresh_token: latestSync.refresh_token,
-      expiry_date: latestSync.token_expiry || Date.now() + 3600 * 1000
-    });
-    
-    // Always force token refresh before making any API calls
-    try {
-      console.log(`Forcing token refresh for org ${org.id}...`);
-      const refreshedTokens = await safelyRefreshTokens(microsoftService, latestSync.id, org.id, 'Microsoft');
-      
-      if (!refreshedTokens) {
-        throw new Error('Failed to refresh tokens - no tokens returned');
-      }
-      
-      console.log(`Tokens refreshed for org ${org.id}, updating in database...`);
-      
-      // Create a new sync_status record with updated tokens
-      const { data: newSyncStatus, error: createError } = await supabaseAdmin
-        .from('sync_status')
-        .insert({
-          organization_id: org.id,
-          status: 'COMPLETED',
-          message: 'Tokens refreshed successfully',
-          access_token: refreshedTokens.access_token,
-          refresh_token: refreshedTokens.refresh_token || latestSync.refresh_token,
-          token_expiry: refreshedTokens.expiry_date,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select('id')
-        .single();
-      
-      if (createError) {
-        console.error(`Error creating new sync status record:`, createError);
-        throw createError;
-      }
-      
-      console.log(`Created new sync status record with ID: ${newSyncStatus.id}`);
-    } catch (refreshError) {
-      console.error(`Error refreshing tokens for org ${org.id}:`, refreshError);
-      
-      // Update sync status to indicate authentication failure
-      await supabaseAdmin
-        .from('sync_status')
-        .insert({
-          organization_id: org.id,
-          status: 'FAILED',
-          error_message: `Token refresh failed: ${refreshError instanceof Error ? refreshError.message : 'Unknown error'}`,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-      
-      console.log(`Marked sync status as FAILED for org ${org.id} due to token refresh failure`);
-      return; // Exit early as we can't proceed without valid tokens
-    }
-    
-    // Fetch current apps from Microsoft Entra
-    console.log(`Fetching current apps from Microsoft Entra for org ${org.id}...`);
-    
-    try {
-      const tokens = await microsoftService.getOAuthTokens();
-      console.log(`Fetched ${tokens.length} tokens from Microsoft Entra for org ${org.id}`);
-      
-      // Group tokens by application
-      const appMap = new Map<string, any>(); // clientId -> app info
-      for (const token of tokens) {
-        if (!token.clientId || !token.displayText) continue;
-        
-        if (!appMap.has(token.clientId)) {
-          // Calculate all unique scopes for this app across all users
-          const allScopes = new Set<string>();
-          if (token.scopes && Array.isArray(token.scopes)) {
-            token.scopes.forEach(scope => allScopes.add(scope));
-          }
-          
-          appMap.set(token.clientId, {
-            clientId: token.clientId,
-            name: token.displayText,
-            scopes: allScopes,
-            users: new Set(),
-            riskLevel: determineRiskLevel(token.scopes),
-            // Track which users have access to this app and with what permissions
-            userPermissions: new Map<string, string[]>()
-          });
-        } else {
-          // Update existing app entry
-          const app = appMap.get(token.clientId);
-          if (token.scopes && Array.isArray(token.scopes)) {
-            token.scopes.forEach(scope => app.scopes.add(scope));
-          }
-          
-          // Update risk level if needed
-          const tokenRisk = determineRiskLevel(token.scopes);
-          if (tokenRisk === 'HIGH' || (tokenRisk === 'MEDIUM' && app.riskLevel !== 'HIGH')) {
-            app.riskLevel = tokenRisk;
-          }
-        }
-        
-        // Add user to this app with their specific permissions
-        if (token.userEmail) {
-          appMap.get(token.clientId).users.add(token.userEmail);
-          
-          // Store this user's specific permissions for this app
-          appMap.get(token.clientId).userPermissions.set(
-            token.userEmail, 
-            token.scopes || []
-          );
-        }
-      }
-      
-      console.log(`Processed ${appMap.size} unique apps from Microsoft Entra for org ${org.id}`);
-      
-      // Get existing apps from our database
-      const { data: existingApps, error: appError } = await supabaseAdmin
-        .from('applications')
-        .select('id, name, microsoft_app_id, category, risk_level, total_permissions, management_status, created_at')
-        .eq('organization_id', org.id);
-      
-      if (appError) {
-        console.error(`Error fetching existing apps for org ${org.id}:`, appError);
-        return;
-      }
-      
-      // Create a map of existing apps by Microsoft client ID
-      const existingAppMap = new Map<string, any>();
-      existingApps?.forEach(app => {
-        if (app.microsoft_app_id) {
-          // Handle multiple client IDs separated by commas
-          app.microsoft_app_id.split(',').forEach((clientId: string) => {
-            existingAppMap.set(clientId.trim(), app);
-          });
-        }
-      });
-      
-      // Check for new apps
-      const newApps = [];
-      for (const [clientId, appInfo] of appMap.entries()) {
-        if (!existingAppMap.has(clientId)) {
-          // This is a new app
-          newApps.push({
-            clientId,
-            name: appInfo.name,
-            scopes: Array.from(appInfo.scopes),
-            userCount: appInfo.users.size,
-            riskLevel: appInfo.riskLevel,
-          });
-        }
-      }
-      
-      console.log(`Found ${newApps.length} new apps from Microsoft Entra for org ${org.id}`);
-      
-      // Add new apps to the database and send notifications
-      for (const newApp of newApps) {
-        try {
-          // Add app to database
-          const { data: insertedApp, error: insertError } = await supabaseAdmin
-            .from('applications')
-            .insert({
-              organization_id: org.id,
-              name: newApp.name,
-              microsoft_app_id: newApp.clientId,
-              risk_level: newApp.riskLevel,
-              total_permissions: newApp.scopes.length,
-              all_scopes: newApp.scopes,
-              user_count: newApp.userCount,
-              management_status: 'NEEDS_REVIEW',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-          
-          if (insertError) {
-            console.error(`Error inserting new app ${newApp.name}:`, insertError);
-            continue;
-          }
-          
-          console.log(`Added new app to database: ${newApp.name} (${insertedApp.id})`);
-          
-          // Send notifications to users who have enabled them
-          await sendNewAppNotifications(org, insertedApp);
-          
-        } catch (error) {
-          console.error(`Error processing new app ${newApp.name}:`, error);
-        }
-      }
-      
-      // Now check for new users in existing apps
-      console.log(`Checking for new users in existing apps for org ${org.id}...`);
-      
-      // Get all existing user-app relationships for Microsoft
-      const { data: existingUserApps, error: userAppError } = await supabaseAdmin
-        .from('user_applications')
-        .select(`
-          id, 
-          application_id, 
-          user:users (email)
-        `)
-        .eq('organization_id', org.id);
-      
-      if (userAppError) {
-        console.error(`Error fetching existing user-app relationships for org ${org.id}:`, userAppError);
-        return;
-      }
-      
-      // Create a set of existing user-app combinations
-      const existingUserAppSet = new Set<string>();
-      existingUserApps?.forEach(userApp => {
-        // Access the email correctly from the nested user object
-        const key = `${userApp.application_id}-${userApp.user?.[0]?.email}`;
-        existingUserAppSet.add(key);
-      });
-      
-      // Get all users from the database
-      const { data: dbUsers, error: usersError } = await supabaseAdmin
-        .from('users')
-        .select('id, email, name')
-        .eq('organization_id', org.id);
-      
-      if (usersError) {
-        console.error(`Error fetching users for org ${org.id}:`, usersError);
-        return;
-      }
-      
-      // Create a map of email to user ID and name
-      const userEmailMap = new Map<string, { id: string, name: string }>();
-      dbUsers?.forEach(user => {
-        userEmailMap.set(user.email, { id: user.id, name: user.name || user.email });
-      });
-      
-      // Check for new user-app relationships
-      const newUserApps = [];
-      
-      for (const [clientId, appInfo] of appMap.entries()) {
-        // Skip if app doesn't exist in our database
-        if (!existingAppMap.has(clientId)) continue;
-        
-        const dbApp = existingAppMap.get(clientId);
-        const isReviewApp = dbApp.management_status === 'NEEDS_REVIEW';
-        
-        // Check each user for this app
-        for (const userEmail of appInfo.users) {
-          // Skip if user doesn't exist in our database
-          if (!userEmailMap.has(userEmail)) continue;
-          
-          const userId = userEmailMap.get(userEmail)!.id;
-          const userName = userEmailMap.get(userEmail)!.name;
-          
-          // Check if this user-app relationship already exists
-          const userAppKey = `${dbApp.id}-${userEmail}`;
-          if (!existingUserAppSet.has(userAppKey)) {
-            // This is a new user-app relationship
-            newUserApps.push({
-              appId: dbApp.id,
-              appName: dbApp.name,
-              userEmail,
-              userId,
-              userName,
-              isReviewApp
-            });
-          }
-        }
-      }
-      
-      console.log(`Found ${newUserApps.length} new user-app relationships for org ${org.id}`);
-      
-      // Process new user-app relationships
-      for (const newUserApp of newUserApps) {
-        try {
-          // Create user-app relationship in database
-          const { error: insertError } = await supabaseAdmin
-            .from('user_applications')
-            .insert({
-              application_id: newUserApp.appId,
-              user_id: newUserApp.userId,
-              organization_id: org.id,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-          
-          if (insertError) {
-            console.error(`Error inserting user-app relationship:`, insertError);
-            continue;
-          }
-          
-          console.log(`Added new user-app relationship: ${newUserApp.userEmail} - ${newUserApp.appName}`);
-          
-          // Get full app details for notification
-          const { data: app } = await supabaseAdmin
-            .from('applications')
-            .select('*')
-            .eq('id', newUserApp.appId)
-            .single();
-          
-          if (!app) {
-            console.error(`Could not find app with ID ${newUserApp.appId}`);
-            continue;
-          }
-          
-          // Send notifications
-          await sendNewUserNotifications(
-            org, 
-            app, 
-            newUserApp.userEmail, 
-            newUserApp.userName, 
-            newUserApp.isReviewApp
-          );
-          
-        } catch (error) {
-          console.error(`Error processing new user-app relationship:`, error);
-        }
-      }
-      
-    } catch (error: any) {
-      console.error(`Error fetching OAuth tokens from Microsoft:`, error);
-      
-      // Update sync status to indicate authentication failure
-      await supabaseAdmin
-        .from('sync_status')
-        .insert({
-          organization_id: org.id,
-          status: 'FAILED',
-          error_message: `Authentication failed: ${error.message || 'Unknown error'}`,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-    }
-    
-  } catch (error) {
-    console.error(`Error in Microsoft Entra processing for org ${org.id}:`, error);
-  }
-}
-
-// Helper function to send notifications for a new app
-async function sendNewAppNotifications(org: any, app: any) {
-  try {
-    console.log(`Preparing to send notifications for new app ${app.name} (${app.id})`);
-    
-    // Get users who should be notified (have new_app_detected = true)
-    const { data: notificationPrefs, error: prefsError } = await supabaseAdmin
-      .from('notification_preferences')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq('new_app_detected', true);
-    
-    if (prefsError) {
-      console.error(`Error fetching notification preferences for org ${org.id}:`, prefsError);
-      return;
-    }
-    
-    if (!notificationPrefs || notificationPrefs.length === 0) {
-      console.log(`No users with new app notifications enabled for org ${org.id}`);
-      return;
-    }
-    
-    console.log(`Found ${notificationPrefs.length} users with notifications enabled for org ${org.id}`);
-    
-    // For each user with notifications enabled, send an email
-    for (const pref of notificationPrefs) {
-      await safelySendNotification({
-        organizationId: org.id,
-        userEmail: pref.user_email,
-        applicationId: app.id,
-        notificationType: 'new_app',
-        sendFunction: async () => {
-          try {
-            // Send the email notification
-            await EmailService.sendNewAppNotification({
-              to: pref.user_email,
-              appName: app.name,
-              organizationName: org.name,
-              detectionTime: app.created_at,
-              riskLevel: app.risk_level,
-              category: app.category || 'Uncategorized',
-              userCount: app.user_count,
-              totalPermissions: app.total_permissions
-            });
-            
-            console.log(`Successfully sent new app notification to ${pref.user_email} for ${app.name}`);
-            return true;
-          } catch (error) {
-            console.error(`Error sending notification to ${pref.user_email}:`, error);
-            return false;
-          }
-        }
-      });
-    }
-  } catch (error) {
-    console.error(`Error sending notifications for app ${app.name}:`, error);
-  }
-}
-
-// Helper function to send notifications for a new user in an app
-async function sendNewUserNotifications(org: any, app: any, userEmail: string, userName: string, isReviewApp: boolean) {
-  try {
-    console.log(`Preparing to send notifications for new user ${userEmail} in app ${app.name}`);
-    
-    // Determine which notification type to check based on whether it's a review app
-    const preferenceField = isReviewApp ? 'new_user_in_review_app' : 'new_user_in_app';
-    const notificationType = isReviewApp ? 'new_user_review' : 'new_user';
-    
-    // Get users who should be notified
-    const { data: notificationPrefs, error: prefsError } = await supabaseAdmin
-      .from('notification_preferences')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq(preferenceField, true);
-    
-    if (prefsError) {
-      console.error(`Error fetching notification preferences for org ${org.id}:`, prefsError);
-      return;
-    }
-    
-    if (!notificationPrefs || notificationPrefs.length === 0) {
-      console.log(`No users with ${preferenceField} notifications enabled for org ${org.id}`);
-      return;
-    }
-    
-    console.log(`Found ${notificationPrefs.length} users with ${preferenceField} notifications enabled for org ${org.id}`);
-    
-    // For each user with notifications enabled, send an email
-    for (const pref of notificationPrefs) {
-      await safelySendNotification({
-        organizationId: org.id,
-        userEmail: pref.user_email,
-        applicationId: app.id,
-        notificationType: notificationType,
-        sendFunction: async () => {
-          try {
-            // Send the email notification based on notification type
-            if (isReviewApp) {
-              await EmailService.sendNewUserReviewNotification({
-                to: pref.user_email,
-                appName: app.name,
-                userName: userName || userEmail,
-                organizationName: org.name,
-                riskLevel: app.risk_level,
-                category: app.category || 'Uncategorized',
-                totalPermissions: app.total_permissions
-              });
-            } else {
-              await EmailService.sendNewUserNotification({
-                to: pref.user_email,
-                appName: app.name,
-                userName: userName || userEmail,
-                organizationName: org.name,
-                riskLevel: app.risk_level,
-                category: app.category || 'Uncategorized',
-                totalPermissions: app.total_permissions
-              });
-            }
-            
-            console.log(`Successfully sent ${notificationType} notification to ${pref.user_email}`);
-            return true;
-          } catch (error) {
-            console.error(`Error sending notification to ${pref.user_email}:`, error);
-            return false;
-          }
-        }
-      });
-    }
-  } catch (error) {
-    console.error(`Error sending notifications for user ${userEmail} in app ${app.name}:`, error);
   }
 }
