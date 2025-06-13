@@ -127,6 +127,14 @@ async function processUsers(
   try {
     console.log(`[Users ${sync_id}] Starting user fetch for organization: ${organization_id}`);
     
+    // Define the required scopes for background Google sync
+    const GOOGLE_SYNC_SCOPES = [
+      'https://www.googleapis.com/auth/admin.directory.user',
+      'https://www.googleapis.com/auth/admin.directory.token.readonly',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile'
+    ].join(' ');
+
     // Initialize Google Workspace service
     const googleService = new GoogleWorkspaceService({
       client_id: process.env.GOOGLE_CLIENT_ID!,
@@ -137,7 +145,8 @@ async function processUsers(
     await googleService.setCredentials({ 
       access_token,
       refresh_token,
-      expiry_date: Date.now() + 3600 * 1000 // Add expiry_date to help with token refresh
+      scope: GOOGLE_SYNC_SCOPES, // Explicitly set scopes
+      expiry_date: Date.now() + 3600 * 1000
     });
     
     // Attempt to refresh tokens before making API calls

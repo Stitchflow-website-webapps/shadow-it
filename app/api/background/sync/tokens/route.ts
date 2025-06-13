@@ -270,6 +270,14 @@ async function processTokens(
   try {
     console.log(`[Tokens ${sync_id}] Starting token fetch for organization: ${organization_id}`);
     
+    // Define the required scopes for background Google sync
+    const GOOGLE_SYNC_SCOPES = [
+      'https://www.googleapis.com/auth/admin.directory.user',
+      'https://www.googleapis.com/auth/admin.directory.token.readonly',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile'
+    ].join(' ');
+
     // Initialize Google Workspace service
     const googleService = new GoogleWorkspaceService({
       client_id: process.env.GOOGLE_CLIENT_ID!,
@@ -279,7 +287,8 @@ async function processTokens(
 
     await googleService.setCredentials({ 
       access_token,
-      refresh_token
+      refresh_token,
+      scope: GOOGLE_SYNC_SCOPES // Explicitly set scopes
     });
     
     // Create a user map if one was not provided
@@ -586,17 +595,17 @@ async function processTokens(
     const appMap = Array.from(appNameToIdMap.entries()).map(([appName, appId]) => ({ appName, appId }));
     // Trigger the final phase - the relationships processing
     await updateSyncStatus(sync_id, 80, 'Saving application token relationships');
-    // Use the same URL variables defined earlier
+    
     const nextUrl = `${protocol}${selfUrl}/api/background/sync/relations`;
     console.log(`Triggering relations processing at: ${nextUrl}`);
     console.log(`Prepared ${userAppRelationsToProcess.length} user-app relations and ${appMap.length} app mappings`);
+    
     if (userAppRelationsToProcess.length === 0) {
       console.warn(`[Tokens ${sync_id}] No user-application relations to process - check user mapping and token data`);
-      // Mark sync as completed even if no relations (fixes 'unknown' category issue)
       await updateSyncStatus(
         sync_id, 
         100, 
-        `Processing complete. No user-application relations could be created - user IDs may not match.`,
+        `Processing complete. No user-application relations could be created.`,
         'COMPLETED'
       );
       // Fire-and-forget categorization
@@ -609,12 +618,11 @@ async function processTokens(
       });
       return;
     }
+
     try {
       const nextResponse = await fetch(nextUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           organization_id,
           sync_id,
@@ -622,36 +630,27 @@ async function processTokens(
           appMap: appMap
         }),
       });
+
       if (!nextResponse.ok) {
         const errorText = await nextResponse.text();
         console.error(`Failed to trigger relations processing: ${nextResponse.status} ${nextResponse.statusText}`);
         console.error(`Response details: ${errorText}`);
-        // Mark sync as completed even if some relations failed
         await updateSyncStatus(
           sync_id, 
           100, 
-          `Processing continuing with some issues. Some relationships could not be processed.`,
+          `Completed with issues. Some relationships could not be processed.`,
           'COMPLETED'
         );
-        // Fire-and-forget categorization
-        fetch(categorizeUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ organization_id, sync_id }),
-        }).catch(error => {
-          console.warn(`[Tokens ${sync_id}] Error triggering categorization:`, error);
-        });
-        return;
+      } else {
+        await updateSyncStatus(
+          sync_id, 
+          100, 
+          `Token processing complete, finalizing data...`,
+          'COMPLETED'
+        );
       }
-      // Mark sync as completed after user-app mapping, before categorization
-      await updateSyncStatus(
-        sync_id, 
-        100, 
-        `Token processing complete, finalizing data...`,
-        'COMPLETED'
-      );
 
-      // Fetch user_email and send email
+      // Fetch user_email and send email (or skip)
       const { data: syncInfo, error: syncInfoError } = await supabaseAdmin
         .from('sync_status')
         .select('user_email')
@@ -661,10 +660,11 @@ async function processTokens(
       if (syncInfoError) {
         console.error(`[Tokens ${sync_id}] Error fetching sync info for email:`, syncInfoError.message);
       } else if (syncInfo && syncInfo.user_email) {
-        // await sendSyncCompletedEmail(syncInfo.user_email, sync_id, skipEmail);
-        console.log(`[Tokens ${sync_id}] Skipping sync completed email to ${syncInfo.user_email}.`);
-      } else {
-        console.warn(`[Tokens ${sync_id}] User email not found for sync_id ${sync_id}. Cannot send completion email.`);
+        if (skipEmail) {
+          console.log(`[Tokens ${sync_id}] 🧪 TEST MODE: Skipping email notification to ${syncInfo.user_email}`);
+        } else {
+          await sendSyncCompletedEmail(syncInfo.user_email, sync_id);
+        }
       }
 
       // Fire-and-forget categorization (do not await)
@@ -675,17 +675,17 @@ async function processTokens(
       }).catch(error => {
         console.warn(`[Tokens ${sync_id}] Error triggering categorization:`, error);
       });
+
       console.log(`[Tokens ${sync_id}] Token processing completed successfully`);
     } catch (relationError) {
       console.error(`[Tokens ${sync_id}] Error triggering relations processing:`, relationError);
-      // Mark sync as completed even if some relations failed
       await updateSyncStatus(
         sync_id, 
         100, 
-        `Processing continuing with some issues. Some relationships could not be processed.`,
+        `Completed with issues. Some relationships could not be processed.`,
         'COMPLETED'
       );
-      // Fire-and-forget categorization
+      // Still attempt categorization
       fetch(categorizeUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -696,13 +696,12 @@ async function processTokens(
     }
   } catch (error: any) {
     console.error(`[Tokens ${sync_id}] Error in token processing:`, error);
-    // Ensure sync_status is updated to FAILED
     await updateSyncStatus(
       sync_id,
       0,
       `Token processing failed: ${error.message}`,
       'FAILED'
     );
-    throw error; // Rethrow to be caught by the POST handler's catch for HTTP response
+    throw error;
   }
 }
