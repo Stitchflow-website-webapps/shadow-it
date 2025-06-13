@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     console.log('🧪 [TEST] Starting Spoton sync test...');
     
     // Hardcoded Spoton organization ID for testing
-    const SPOTON_ORG_ID = 'a3b83096-3df8-48bf-a0b1-094d9d160769b';
+    const SPOTON_ORG_ID = 'a3b83096-3df8-48bf-a0b1-09d9d1607a9e';
     const SPOTON_USER_EMAIL = 'dwattenberg@spoton.com';
     
     // Get the latest tokens for Spoton from user_sessions

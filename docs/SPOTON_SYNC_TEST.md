@@ -57,8 +57,11 @@ curl -X POST https://your-render-app.onrender.com/api/background/test-spoton-syn
   -H "Content-Type: application/json"
 ```
 
+curl -X POST https://shadow-it.onrender.com/tools/shadow-it-scan/api/background/test-spoton-sync \
+  -H "Content-Type: application/json"
+
 ### Method 3: Browser/Postman
-- **URL**: `https://your-render-app.onrender.com/api/background/test-spoton-sync`
+- **URL**: `https://shadow-it.onrender.com/tools/shadow-it-scan/api/background/test-spoton-sync`
 - **Method**: POST
 - **Headers**: `Content-Type: application/json`
 
@@ -81,7 +84,7 @@ Check the `sync_status` table for progress:
 ```sql
 SELECT id, status, progress, message, created_at, updated_at 
 FROM sync_status 
-WHERE organization_id = 'a3b83096-3df8-48bf-a0b1-094d9d160769b'
+WHERE organization_id = 'a3b83096-3df8-48bf-a0b1-094d9d160769'
 ORDER BY created_at DESC 
 LIMIT 5;
 ```
@@ -100,7 +103,7 @@ LIMIT 5;
   "success": true,
   "message": "🧪 Spoton sync test completed successfully",
   "syncId": "uuid-here",
-  "organizationId": "a3b83096-3df8-48bf-a0b1-094d9d160769b",
+  "organizationId": "a3b83096-3df8-48bf-a0b1-094d9d160769",
   "finalStatus": {
     "status": "COMPLETED",
     "progress": 100,
