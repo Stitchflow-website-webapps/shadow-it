@@ -195,6 +195,21 @@ export class GoogleWorkspaceService {
           if (!updatedCredentials.access_token) {
             throw new Error('No access token received after refresh');
           }
+
+          // DEBUGGING: Check the scopes of the new token
+          console.log('🔍 Checking scopes of the newly refreshed token...');
+          const tokenInfo = await this.getTokenInfo(updatedCredentials.access_token);
+          if (tokenInfo) {
+            console.log('✅ Token info retrieved:', {
+              scopes: tokenInfo.scope,
+              expires_in: tokenInfo.expires_in,
+              user_id: tokenInfo.user_id,
+              email: tokenInfo.email
+            });
+          } else {
+            console.error('❌ Could not retrieve token info.');
+          }
+          // END DEBUGGING
           
           // Create a clean credentials object
           const newCredentials = {
@@ -654,6 +669,18 @@ export class GoogleWorkspaceService {
         requestedScopes: this.oauth2Client.credentials.scope?.split(' ') || []
       });
       throw error;
+    }
+  }
+
+  async getTokenInfo(accessToken: string) {
+    try {
+      const tokenInfo = await this.oauth2.tokeninfo({
+        access_token: accessToken,
+      });
+      return tokenInfo.data;
+    } catch (error: any) {
+      console.error('Error fetching token info:', error.response?.data || error.message);
+      return null;
     }
   }
 } 
