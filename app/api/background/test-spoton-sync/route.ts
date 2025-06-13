@@ -49,7 +49,6 @@ export async function POST(request: NextRequest) {
         status: 'IN_PROGRESS',
         progress: 0,
         message: '🧪 TEST: Starting Spoton sync with CPU optimization',
-        provider: 'google',
         access_token: userSession.access_token,
         refresh_token: userSession.refresh_token,
       })
