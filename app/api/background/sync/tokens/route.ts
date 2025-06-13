@@ -303,7 +303,7 @@ async function processTokens(
         console.log(`[Tokens ${sync_id}] Successfully mapped ${userMap.size} users`);
       } catch (error) {
         console.error(`[Tokens ${sync_id}] Error waiting for users:`, error);
-        await updateSyncStatus(sync_id, -1, `Failed to get users: ${(error as Error).message}`, 'FAILED');
+        await updateSyncStatus(sync_id, 0, `Failed to get users: ${(error as Error).message}`, 'FAILED');
         throw error;
       }
     } else {
@@ -323,7 +323,7 @@ async function processTokens(
       console.log(`[Tokens ${sync_id}] Fetched ${applicationTokens.length} application tokens`);
     } catch (tokenError) {
       console.error(`[Tokens ${sync_id}] Error fetching OAuth tokens:`, tokenError);
-      await updateSyncStatus(sync_id, -1, 'Failed to fetch application tokens from Google Workspace', 'FAILED');
+      await updateSyncStatus(sync_id, 0, 'Failed to fetch application tokens from Google Workspace', 'FAILED');
       throw tokenError;
     }
     
@@ -699,7 +699,7 @@ async function processTokens(
     // Ensure sync_status is updated to FAILED
     await updateSyncStatus(
       sync_id,
-      -1,
+      0,
       `Token processing failed: ${error.message}`,
       'FAILED'
     );

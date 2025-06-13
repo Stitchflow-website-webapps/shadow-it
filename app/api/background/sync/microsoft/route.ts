@@ -392,7 +392,7 @@ export async function GET(request: NextRequest) {
         ? 'Microsoft authentication has expired. Please re-authenticate your Microsoft account.'
         : `Microsoft token refresh failed: ${refreshError.message}`;
         
-      await updateSyncStatus(syncRecord.id, -1, errorMessage, 'FAILED');
+      await updateSyncStatus(syncRecord.id, 0, errorMessage, 'FAILED');
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
 
@@ -792,7 +792,7 @@ export async function POST(request: NextRequest) {
     if (sync_id_for_error) {
       await updateSyncStatus(
         sync_id_for_error,
-        -1,
+        0,
         `Microsoft sync failed: ${error.message}`,
         'FAILED'
       );
@@ -852,7 +852,7 @@ async function processMicrosoftData(
         ? 'Microsoft authentication has expired. Please re-authenticate your Microsoft account.'
         : `Microsoft token refresh failed: ${refreshError.message}`;
         
-      await updateSyncStatus(sync_id, -1, errorMessage, 'FAILED');
+      await updateSyncStatus(sync_id, 0, errorMessage, 'FAILED');
       throw new Error(errorMessage);
     }
 
@@ -883,7 +883,7 @@ async function processMicrosoftData(
         errorMessage = 'Authentication error: Microsoft Entra ID access denied. Please re-authenticate your account.';
       }
 
-      await updateSyncStatus(sync_id, -1, errorMessage, 'FAILED');
+      await updateSyncStatus(sync_id, 0, errorMessage, 'FAILED');
       throw new Error(errorMessage);
     }
     
@@ -1060,7 +1060,7 @@ async function processMicrosoftData(
     console.error(`[Microsoft ${sync_id}] Error in Microsoft processing:`, error);
     await updateSyncStatus(
       sync_id,
-      -1,
+      0,
       `Microsoft sync failed: ${error.message}`,
       'FAILED'
     );

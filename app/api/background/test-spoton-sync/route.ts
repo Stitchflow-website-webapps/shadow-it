@@ -39,6 +39,14 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('✅ [TEST] Found Spoton tokens, creating test sync record...');
+    console.log('🔍 [TEST] Token info:', {
+      hasAccessToken: !!userSession.access_token,
+      hasRefreshToken: !!userSession.refresh_token,
+      accessTokenLength: userSession.access_token?.length || 0,
+      refreshTokenLength: userSession.refresh_token?.length || 0,
+      accessTokenPrefix: userSession.access_token?.substring(0, 20) + '...',
+      refreshTokenPrefix: userSession.refresh_token?.substring(0, 20) + '...'
+    });
 
     // Create a test sync status record
     const { data: syncRecord, error: syncError } = await supabaseAdmin

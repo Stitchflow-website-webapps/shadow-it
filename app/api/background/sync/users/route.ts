@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     if (sync_id) { // Check if sync_id is available
         await updateSyncStatus(
           sync_id,
-          -1,
+          0, // Use 0 instead of -1 to avoid constraint violation
           `User fetch failed: ${error.message}`,
           'FAILED'
         );
@@ -141,11 +141,18 @@ async function processUsers(
     });
     
     // Attempt to refresh tokens before making API calls
-    console.log(`[Users ${sync_id}] Refreshing tokens before API calls...`);
+    console.log(`🔄 Refreshing tokens before API calls...`);
     try {
       const refreshedTokens = await googleService.refreshAccessToken(true); // Force refresh
       if (refreshedTokens) {
-        console.log(`[Users ${sync_id}] Successfully refreshed tokens`);
+        console.log(`✅ Successfully refreshed tokens`);
+        
+        // Reinitialize the service with the refreshed tokens to ensure they're used
+        await googleService.setCredentials({
+          access_token: refreshedTokens.access_token,
+          refresh_token: refreshedTokens.refresh_token,
+          expiry_date: refreshedTokens.expiry_date || Date.now() + 3600 * 1000
+        });
         
         // Update the sync_status record with new tokens for future use
         await supabaseAdmin
@@ -157,16 +164,15 @@ async function processUsers(
           })
           .eq('id', sync_id);
       }
-    } catch (refreshError: any) {
-      console.error(`[Users ${sync_id}] Token refresh failed:`, refreshError.message);
-      
-      // If token refresh fails, it's likely the refresh token is invalid
-      const errorMessage = refreshError.message.includes('invalid_grant') 
-        ? 'Google authentication has expired. Please re-authenticate your Google Workspace account.'
-        : `Token refresh failed: ${refreshError.message}`;
-        
-      await updateSyncStatus(sync_id, -1, errorMessage, 'FAILED');
-      throw new Error(errorMessage);
+    } catch (refreshError) {
+      console.error(`❌ Token refresh failed:`, refreshError);
+      await updateSyncStatus(
+        sync_id, 
+        0, // Use 0 instead of -1 to avoid constraint violation
+        `Token refresh failed: ${(refreshError as Error).message}`,
+        'FAILED'
+      );
+      throw refreshError;
     }
     
     await updateSyncStatus(sync_id, 15, 'Fetching users from Google Workspace');
@@ -176,34 +182,16 @@ async function processUsers(
     try {
       users = await googleService.getUsersListPaginated();
       console.log(`[Users ${sync_id}] Successfully fetched ${users.length} users`);
-    } catch (userFetchError: any) {
-      console.error(`[Users ${sync_id}] Error fetching users:`, {
-        name: userFetchError?.name,
-        message: userFetchError?.message,
-        code: userFetchError?.code,
-        status: userFetchError?.status,
-        response: userFetchError?.response?.data,
-      });
-
-      let errorMessage = 'Failed to fetch users from Google Workspace';
-      if (userFetchError?.response?.data?.error?.message) {
-        errorMessage += `: ${userFetchError.response.data.error.message}`;
-      } else if (userFetchError?.message) {
-        errorMessage += `: ${userFetchError.message}`;
-      }
-
-      // Check if this is an auth error
-      const isAuthError = 
-        userFetchError?.response?.status === 401 || 
-        userFetchError?.code === 401 ||
-        (userFetchError?.message && userFetchError.message.toLowerCase().includes('invalid credentials'));
+    } catch (error: any) {
+      console.error(`[Users ${sync_id}] Error fetching users:`, error);
       
-      if (isAuthError) {
-        errorMessage = 'Authentication error: Google Workspace access denied. Please re-authenticate your account.';
-      }
-
-      await updateSyncStatus(sync_id, -1, errorMessage, 'FAILED');
-      throw userFetchError;
+      // If user fetch fails, it's likely a token or permission issue
+      const errorMessage = error.message.includes('Invalid Credentials') 
+        ? 'Google authentication credentials are invalid. Please re-authenticate your Google Workspace account.'
+        : `User fetch failed: ${error.message}`;
+        
+      await updateSyncStatus(sync_id, 0, errorMessage, 'FAILED'); // Use 0 instead of -1
+      throw new Error(errorMessage);
     }
     
     await updateSyncStatus(sync_id, 20, `Processing ${users.length} users in batches`);
