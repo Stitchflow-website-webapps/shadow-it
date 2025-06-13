@@ -3,6 +3,17 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { GoogleWorkspaceService } from '@/lib/google-workspace';
 import crypto from 'crypto';
 
+// Define the required scopes for Google Workspace
+const GOOGLE_SCOPES = [
+  'openid',
+  'profile',
+  'email',
+  'https://www.googleapis.com/auth/admin.directory.user',
+  'https://www.googleapis.com/auth/admin.directory.token.readonly',
+  'https://www.googleapis.com/auth/admin.directory.domain.readonly',
+  'https://www.googleapis.com/auth/admin.directory.user.security'
+];
+
 /**
  * API endpoint that checks if we already have stored credentials for a given user.
  * If we do, it returns the credentials; otherwise it returns a URL to redirect to.
@@ -48,7 +59,8 @@ export async function POST(request: Request) {
           include_granted_scopes: true,
           prompt: 'select_account', // Use select_account to minimize UI if user is already signed in
           login_hint: email, // Pre-select the user account if possible
-          state
+          state,
+          scope: GOOGLE_SCOPES
         });
       } else if (provider === 'microsoft') {
         // Microsoft implementation would go here
@@ -115,7 +127,8 @@ export async function POST(request: Request) {
           include_granted_scopes: true,
           prompt: 'consent', // Force consent to get a new refresh token
           login_hint: email,
-          state
+          state,
+          scope: GOOGLE_SCOPES
         });
         
         return NextResponse.json({

@@ -454,10 +454,76 @@ export async function GET(request: Request) {
     const hasExistingData = existingData && existingData.length > 0;
     console.log('Existing data check:', { hasExistingData, orgId: org.id });
 
-    // Only create a sync status for new users or users without existing data
+    // CRITICAL FIX: Always ensure we have admin-scoped tokens in sync_status for cron job
     let syncStatus = null;
-    if (!existingUser || !hasExistingData) {
-      // Create a status record for tracking the sync progress
+    
+    // If we have admin scopes and refresh token, we need to store/update tokens for cron job
+    if (hasRequiredAdminScopes && oauthTokens.refresh_token) {
+      console.log('Storing/updating admin-scoped tokens for cron job access');
+      
+      // Check if there's an existing sync_status record for this org
+      const { data: existingSyncStatus } = await supabaseAdmin
+        .from('sync_status')
+        .select('id')
+        .eq('organization_id', org.id)
+        .eq('user_email', userInfo.email)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (existingSyncStatus) {
+        // Update existing record with fresh admin-scoped tokens
+        const { data: updatedSyncStatus, error: updateError } = await supabaseAdmin
+          .from('sync_status')
+          .update({
+            access_token: oauthTokens.access_token,
+            refresh_token: oauthTokens.refresh_token,
+            scope: oauthTokens.scope,
+            token_expiry: oauthTokens.expiry_date ? new Date(oauthTokens.expiry_date).toISOString() : null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSyncStatus.id)
+          .select()
+          .single();
+          
+        if (updateError) {
+          console.error('Error updating sync status with admin tokens:', updateError);
+        } else {
+          syncStatus = updatedSyncStatus;
+          console.log('Updated existing sync_status with admin tokens');
+        }
+      }
+      
+      // If no existing record or update failed, create new one
+      if (!syncStatus) {
+        const shouldCreateSync = !existingUser || !hasExistingData;
+        const { data: newSyncStatus, error: syncStatusError } = await supabaseAdmin
+          .from('sync_status')
+          .insert({
+            organization_id: org.id,
+            user_email: userInfo.email,
+            status: shouldCreateSync ? 'IN_PROGRESS' : 'COMPLETED',
+            progress: shouldCreateSync ? 0 : 100,
+            message: shouldCreateSync ? 'Started Google Workspace data sync' : 'Admin tokens stored for background sync',
+            access_token: oauthTokens.access_token,
+            refresh_token: oauthTokens.refresh_token,
+            scope: oauthTokens.scope,
+            token_expiry: oauthTokens.expiry_date ? new Date(oauthTokens.expiry_date).toISOString() : null
+          })
+          .select()
+          .single();
+
+        if (syncStatusError) {
+          console.error('Error creating sync status:', syncStatusError);
+          return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=sync_failed', request.url));
+        }
+        
+        syncStatus = newSyncStatus;
+        console.log('Created new sync_status with admin tokens');
+      }
+    } else if (!existingUser || !hasExistingData) {
+      // Legacy path: only create sync for new users without admin tokens (shouldn't happen with two-step auth)
+      console.log('Creating sync status without admin tokens (legacy path)');
       const { data: newSyncStatus, error: syncStatusError } = await supabaseAdmin
         .from('sync_status')
         .insert({

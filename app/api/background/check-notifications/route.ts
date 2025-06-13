@@ -222,19 +222,23 @@ async function triggerBackgroundSync(org: any, provider: 'google' | 'microsoft')
   try {
     console.log(`⚙️ Triggering background sync for ${provider} org ${org.id}...`);
 
-    // 1. Get the latest sync record to retrieve the most recent tokens
+    // Get the latest sync record to retrieve the most recent admin-scoped tokens
     const { data: latestSync, error: syncError } = await supabaseAdmin
       .from('sync_status')
       .select('access_token, refresh_token, user_email')
       .eq('organization_id', org.id)
+      .not('refresh_token', 'is', null) // Ensure we have a refresh token
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
-    if (syncError || !latestSync) {
-      console.warn(`⚠️ Could not find a previous sync record for ${provider} org ${org.id}. Cannot trigger new sync.`, syncError?.message);
+    if (syncError || !latestSync || !latestSync.refresh_token || !latestSync.access_token) {
+      console.error(`❌ Could not find valid admin-scoped tokens in sync_status for ${provider} org ${org.id}. Error:`, syncError?.message);
+      console.error(`This indicates the user hasn't completed the admin consent flow properly.`);
       return;
     }
+
+    console.log(`✅ Found admin-scoped tokens in sync_status for ${provider} org ${org.id}`);
 
     // 2. Create a new sync_status record for this cron-triggered run
     const { data: newSyncStatus, error: createError } = await supabaseAdmin

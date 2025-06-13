@@ -196,20 +196,20 @@ export class GoogleWorkspaceService {
             throw new Error('No access token received after refresh');
           }
 
-          // DEBUGGING: Check the scopes of the new token
-          console.log('🔍 Checking scopes of the newly refreshed token...');
-          const tokenInfo = await this.getTokenInfo(updatedCredentials.access_token);
-          if (tokenInfo) {
-            console.log('✅ Token info retrieved:', {
-              scopes: tokenInfo.scope,
-              expires_in: tokenInfo.expires_in,
-              user_id: tokenInfo.user_id,
-              email: tokenInfo.email
-            });
-          } else {
-            console.error('❌ Could not retrieve token info.');
-          }
-          // END DEBUGGING
+          // // DEBUGGING: Check the scopes of the new token
+          // console.log('🔍 Checking scopes of the newly refreshed token...');
+          // const tokenInfo = await this.getTokenInfo(updatedCredentials.access_token);
+          // if (tokenInfo) {
+          //   console.log('✅ Token info retrieved:', {
+          //     scopes: tokenInfo.scope,
+          //     expires_in: tokenInfo.expires_in,
+          //     user_id: tokenInfo.user_id,
+          //     email: tokenInfo.email
+          //   });
+          // } else {
+          //   console.error('❌ Could not retrieve token info.');
+          // }
+          // // END DEBUGGING
           
           // Create a clean credentials object
           const newCredentials = {
@@ -613,7 +613,7 @@ export class GoogleWorkspaceService {
     
     try {
       console.log('Starting paginated user list fetch');
-      console.log('Using credentials with scopes:', this.oauth2Client.credentials.scope);
+      // console.log('Using credentials with scopes:', this.oauth2Client.credentials.scope);
       
       do {
         console.log(`Fetching user page${pageToken ? ' with token: ' + pageToken : ''}`);
@@ -643,11 +643,11 @@ export class GoogleWorkspaceService {
           throw error;
         });
         
-        console.log('User page response:', {
-          hasUsers: !!response.data.users,
-          userCount: response.data.users?.length || 0,
-          hasNextPage: !!response.data.nextPageToken
-        });
+        // console.log('User page response:', {
+        //   hasUsers: !!response.data.users,
+        //   userCount: response.data.users?.length || 0,
+        //   hasNextPage: !!response.data.nextPageToken
+        // });
         
         if (response.data.users && response.data.users.length > 0) {
           users = [...users, ...response.data.users];
@@ -672,15 +672,15 @@ export class GoogleWorkspaceService {
     }
   }
 
-  async getTokenInfo(accessToken: string) {
-    try {
-      const tokenInfo = await this.oauth2.tokeninfo({
-        access_token: accessToken,
-      });
-      return tokenInfo.data;
-    } catch (error: any) {
-      console.error('Error fetching token info:', error.response?.data || error.message);
-      return null;
-    }
-  }
+  // async getTokenInfo(accessToken: string) {
+  //   try {
+  //     const tokenInfo = await this.oauth2.tokeninfo({
+  //       access_token: accessToken,
+  //     });
+  //     return tokenInfo.data;
+  //   } catch (error: any) {
+  //     console.error('Error fetching token info:', error.response?.data || error.message);
+  //     return null;
+  //   }
+  // }
 } 
