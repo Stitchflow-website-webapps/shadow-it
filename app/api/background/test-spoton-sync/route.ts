@@ -59,20 +59,20 @@ export async function POST(request: NextRequest) {
 
     // Get current org data to understand the baseline
     console.log('📊 [CPU TEST] Analyzing current organization data...');
-    const { data: existingUsers, error: usersError } = await supabaseAdmin
+    const { count: usersCount, error: usersError } = await supabaseAdmin
       .from('users')
-      .select('id')
+      .select('*', { count: 'exact', head: true })
       .eq('organization_id', organization_id);
       
-    const { data: existingApps, error: appsError } = await supabaseAdmin
+    const { count: appsCount, error: appsError } = await supabaseAdmin
       .from('applications')
-      .select('id')
+      .select('*', { count: 'exact', head: true })
       .eq('organization_id', organization_id);
       
-    const { data: existingTokens, error: tokensError } = await supabaseAdmin
+    const { count: tokensCount, error: tokensError } = await supabaseAdmin
       .from('user_applications')
-      .select('id')
-      .eq('organization_id', organization_id);
+      .select('*, applications!inner(*)', { count: 'exact', head: true })
+      .eq('applications.organization_id', organization_id);
 
     if (usersError || appsError || tokensError) {
       console.error('❌ [CPU TEST] Error fetching existing data:', { usersError, appsError, tokensError });
@@ -80,9 +80,9 @@ export async function POST(request: NextRequest) {
     }
 
     const baseline = {
-      users: existingUsers?.length || 0,
-      applications: existingApps?.length || 0,
-      userAppRelations: existingTokens?.length || 0
+      users: usersCount || 0,
+      applications: appsCount || 0,
+      userAppRelations: tokensCount || 0
     };
 
     console.log('📊 [CPU TEST] Baseline data:', baseline);
