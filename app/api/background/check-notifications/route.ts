@@ -225,33 +225,71 @@ async function triggerBackgroundSync(org: any, provider: 'google' | 'microsoft')
     // Get the latest sync record to retrieve the most recent admin-scoped tokens
     const { data: latestSync, error: syncError } = await supabaseAdmin
       .from('sync_status')
-      .select('access_token, refresh_token, user_email')
+      .select('access_token, refresh_token, user_email, scope')
       .eq('organization_id', org.id)
       .not('refresh_token', 'is', null) // Ensure we have a refresh token
+      .not('scope', 'is', null) // Ensure we have scopes
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(10); // Get multiple records to find the best one
 
-    if (syncError || !latestSync || !latestSync.refresh_token || !latestSync.access_token) {
-      console.error(`❌ Could not find valid admin-scoped tokens in sync_status for ${provider} org ${org.id}. Error:`, syncError?.message);
+    if (syncError || !latestSync || latestSync.length === 0) {
+      console.error(`❌ Could not find any tokens in sync_status for ${provider} org ${org.id}. Error:`, syncError?.message);
       console.error(`This indicates the user hasn't completed the admin consent flow properly.`);
       return;
     }
 
-    console.log(`✅ Found admin-scoped tokens in sync_status for ${provider} org ${org.id}`);
+    // Find the best admin-scoped token from the results
+    const requiredAdminScopes = [
+      'https://www.googleapis.com/auth/admin.directory.user.readonly',
+      'https://www.googleapis.com/auth/admin.directory.domain.readonly',
+      'https://www.googleapis.com/auth/admin.directory.user.security'
+    ];
+
+    let bestToken = null;
+    for (const token of latestSync) {
+      if (!token.refresh_token || !token.access_token) continue;
+      
+      // Check if this token has admin scopes
+      const tokenScopes = token.scope ? token.scope.split(' ') : [];
+      const hasRequiredAdminScopes = requiredAdminScopes.every(scope => 
+        tokenScopes.includes(scope)
+      );
+      
+      if (hasRequiredAdminScopes) {
+        bestToken = token;
+        break; // Found admin-scoped token, use it
+      }
+    }
+
+    if (!bestToken) {
+      console.error(`❌ Could not find admin-scoped tokens in sync_status for ${provider} org ${org.id}.`);
+      console.error(`Available tokens:`, latestSync.map(t => ({
+        hasRefresh: !!t.refresh_token,
+        hasAccess: !!t.access_token,
+        scopes: t.scope
+      })));
+      console.error(`This indicates the user hasn't completed the admin consent flow properly.`);
+      return;
+    }
+
+    console.log(`✅ Found admin-scoped tokens in sync_status for ${provider} org ${org.id}`, {
+      hasRefresh: !!bestToken.refresh_token,
+      hasAccess: !!bestToken.access_token,
+      scopes: bestToken.scope
+    });
 
     // 2. Create a new sync_status record for this cron-triggered run
     const { data: newSyncStatus, error: createError } = await supabaseAdmin
       .from('sync_status')
       .insert({
         organization_id: org.id,
-        user_email: latestSync.user_email,
+        user_email: bestToken.user_email,
         status: 'IN_PROGRESS',
         progress: 5,
         message: `Daily background sync initiated by cron for ${provider}.`,
         provider: provider,
-        access_token: latestSync.access_token,
-        refresh_token: latestSync.refresh_token,
+        access_token: bestToken.access_token,
+        refresh_token: bestToken.refresh_token,
       })
       .select('id')
       .single();
@@ -278,8 +316,8 @@ async function triggerBackgroundSync(org: any, provider: 'google' | 'microsoft')
       body: JSON.stringify({
         organization_id: org.id,
         sync_id: sync_id,
-        access_token: latestSync.access_token,
-        refresh_token: latestSync.refresh_token,
+        access_token: bestToken.access_token,
+        refresh_token: bestToken.refresh_token,
         provider: provider,
       }),
     }).catch(fetchError => {

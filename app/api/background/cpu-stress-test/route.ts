@@ -9,12 +9,12 @@ export const runtime = 'nodejs';
 
 // CPU-optimized configuration for stress testing
 const CPU_STRESS_CONFIG = {
-  MAX_CONCURRENT_OPERATIONS: 1, // Sequential only for single CPU
-  BATCH_SIZE: 25, // Optimized batch size
-  DELAY_BETWEEN_BATCHES: 1, // Reduced delay for stress testing
-  MAX_TOKENS_PER_BATCH: 75,
-  DB_OPERATION_DELAY: 1,
-  MEMORY_CLEANUP_INTERVAL: 150,
+  MAX_CONCURRENT_OPERATIONS: 3, // Increased from 1 for parallel processing
+  BATCH_SIZE: 50, // Increased from 25 for bigger batches
+  DELAY_BETWEEN_BATCHES: 0, // Removed delay for maximum stress
+  MAX_TOKENS_PER_BATCH: 150, // Increased from 75 for bigger batches
+  DB_OPERATION_DELAY: 0, // Removed delay for maximum stress
+  MEMORY_CLEANUP_INTERVAL: 200, // Less frequent cleanup for more stress
 };
 
 // Realistic scopes for simulated OAuth tokens - based on common real-world applications
@@ -108,146 +108,185 @@ async function simulateTokenProcessing(
   const tokenBatchSize = CPU_STRESS_CONFIG.MAX_TOKENS_PER_BATCH;
   const totalBatches = Math.ceil(totalTokensToProcess / tokenBatchSize);
   
-  for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-    const batchStart = batchIndex * tokenBatchSize;
-    const batchEnd = Math.min(batchStart + tokenBatchSize, totalTokensToProcess);
-    const tokenBatch = tokensToProcess.slice(batchStart, batchEnd);
+  // Process batches in parallel for maximum stress
+  const concurrency = CPU_STRESS_CONFIG.MAX_CONCURRENT_OPERATIONS;
+  const batchPromises: Promise<void>[] = [];
+  
+  for (let batchIndex = 0; batchIndex < totalBatches; batchIndex += concurrency) {
+    // Create a group of concurrent batches
+    const concurrentBatches: Promise<void>[] = [];
     
-    // Simulate grouping by application (CPU-intensive operation)
-    const appGroups = new Map<string, any[]>();
-    for (const token of tokenBatch) {
-      const appName = token.displayText;
-      if (!appName) {
-        continue;
-      }
-      if (!appGroups.has(appName)) {
-        appGroups.set(appName, []);
-      }
-      appGroups.get(appName)!.push(token);
-    }
-    
-    // Simulate processing each app group
-    for (const [appName, tokensInGroup] of appGroups.entries()) {
-      // Simulate scope aggregation and risk analysis
-      const allScopes = new Set<string>();
-      tokensInGroup.forEach((token: any) => {
-        if(token.scopes && Array.isArray(token.scopes)) {
-            token.scopes.forEach((scope: string) => allScopes.add(scope));
-        }
-      });
+    for (let i = 0; i < concurrency && (batchIndex + i) < totalBatches; i++) {
+      const currentBatchIndex = batchIndex + i;
+      const batchStart = currentBatchIndex * tokenBatchSize;
+      const batchEnd = Math.min(batchStart + tokenBatchSize, totalTokensToProcess);
+      const tokenBatch = tokensToProcess.slice(batchStart, batchEnd);
       
-      // Perform a real database upsert to simulate write load
-      const appRecord = {
-        name: appName,
-        organization_id: organizationId,
-        risk_level: determineRiskLevel(Array.from(allScopes) as string[]),
-        total_permissions: allScopes.size,
-        all_scopes: Array.from(allScopes),
-        category: 'Simulated Stress Test',
-        provider: 'google',
-        notes: `stress_test_${syncId}` // Tag for easy cleanup
-      };
-
-      // Check if application already exists
-      const { data: existingApp } = await supabaseAdmin
-        .from('applications')
-        .select('id')
-        .eq('name', appName)
-        .eq('organization_id', organizationId)
-        .maybeSingle();
-
-      let applicationId: string;
-      if (existingApp) {
-        // Update existing application
-        const { data: updatedApp, error: updateError } = await supabaseAdmin
-          .from('applications')
-          .update(appRecord)
-          .eq('id', existingApp.id)
-          .select('id')
-          .single();
-        
-        if (updateError || !updatedApp) {
-          console.error(`[CPU STRESS] Error updating application ${appName}:`, updateError);
-          continue;
-        }
-        applicationId = updatedApp.id;
-      } else {
-        // Insert new application
-        const { data: newApp, error: insertError } = await supabaseAdmin
-          .from('applications')
-          .insert(appRecord)
-          .select('id')
-          .single();
-        
-        if (insertError || !newApp) {
-          console.error(`[CPU STRESS] Error inserting application ${appName}:`, insertError);
-          continue;
-        }
-        applicationId = newApp.id;
-      }
-
-      // Simulate creation of user-application relations
-      if (applicationId && userIds.length > 0) {
-        const userAppRelationsToUpsert: any[] = [];
-        const usersForThisApp = new Set<string>();
-        
-        tokensInGroup.forEach((token: any) => {
-          if (token.userId) {
-            usersForThisApp.add(token.userId);
+      // Create a promise for processing this batch
+      const batchPromise = (async () => {
+        // Simulate grouping by application (CPU-intensive operation)
+        const appGroups = new Map<string, any[]>();
+        for (const token of tokenBatch) {
+          const appName = token.displayText;
+          if (!appName) {
+            continue;
           }
-        });
-
-        usersForThisApp.forEach(userId => {
-          userAppRelationsToUpsert.push({
-            user_id: userId,
-            application_id: applicationId,
-            scopes: Array.from(allScopes), // Use aggregated scopes
-            first_seen: new Date().toISOString(),
-            last_used: new Date().toISOString(),
+          if (!appGroups.has(appName)) {
+            appGroups.set(appName, []);
+          }
+          appGroups.get(appName)!.push(token);
+        }
+        
+        // Process all app groups in this batch in parallel
+        const appProcessingPromises = Array.from(appGroups.entries()).map(async ([appName, tokensInGroup]) => {
+          // Simulate scope aggregation and risk analysis
+          const allScopes = new Set<string>();
+          tokensInGroup.forEach((token: any) => {
+            if(token.scopes && Array.isArray(token.scopes)) {
+                token.scopes.forEach((scope: string) => allScopes.add(scope));
+            }
           });
-        });
+          
+          // Check if application already exists
+          const { data: existingApp } = await supabaseAdmin
+            .from('applications')
+            .select('id')
+            .eq('name', appName)
+            .eq('organization_id', organizationId)
+            .maybeSingle();
 
-        if (userAppRelationsToUpsert.length > 0) {
-          // Process each user-app relationship individually to avoid constraint issues
-          for (const relation of userAppRelationsToUpsert) {
-            // Check if relationship already exists
-            const { data: existingRelation } = await supabaseAdmin
-              .from('user_applications')
-              .select('id, scopes')
-              .eq('user_id', relation.user_id)
-              .eq('application_id', relation.application_id)
-              .maybeSingle();
+          let applicationId: string;
+          if (existingApp) {
+            // Update existing application
+            const appRecord = {
+              name: appName,
+              organization_id: organizationId,
+              risk_level: determineRiskLevel(Array.from(allScopes) as string[]),
+              total_permissions: allScopes.size,
+              all_scopes: Array.from(allScopes),
+              category: 'Simulated Stress Test',
+              provider: 'google',
+              notes: `stress_test_${syncId}` // Tag for easy cleanup
+            };
+            
+            const { data: updatedApp, error: updateError } = await supabaseAdmin
+              .from('applications')
+              .update(appRecord)
+              .eq('id', existingApp.id)
+              .select('id')
+              .single();
+            
+            if (updateError || !updatedApp) {
+              console.error(`[CPU STRESS] Error updating application ${appName}:`, updateError);
+              return;
+            }
+            applicationId = updatedApp.id;
+          } else {
+            // Insert new application
+            const appRecord = {
+              name: appName,
+              organization_id: organizationId,
+              risk_level: determineRiskLevel(Array.from(allScopes) as string[]),
+              total_permissions: allScopes.size,
+              all_scopes: Array.from(allScopes),
+              category: 'Simulated Stress Test',
+              provider: 'google',
+              notes: `stress_test_${syncId}` // Tag for easy cleanup
+            };
+            
+            const { data: newApp, error: insertError } = await supabaseAdmin
+              .from('applications')
+              .insert(appRecord)
+              .select('id')
+              .single();
+            
+            if (insertError || !newApp) {
+              console.error(`[CPU STRESS] Error inserting application ${appName}:`, insertError);
+              return;
+            }
+            applicationId = newApp.id;
+          }
 
-            if (existingRelation) {
-              // Update existing relationship, merging scopes
-              const mergedScopes = [...new Set([...(existingRelation.scopes || []), ...relation.scopes])];
-              await supabaseAdmin
-                .from('user_applications')
-                .update({
-                  scopes: mergedScopes,
-                  last_used: relation.last_used
-                })
-                .eq('id', existingRelation.id);
-            } else {
-              // Insert new relationship
-              await supabaseAdmin
-                .from('user_applications')
-                .insert(relation);
+          // Simulate creation of user-application relations
+          if (applicationId && userIds.length > 0) {
+            const userAppRelationsToUpsert: any[] = [];
+            const usersForThisApp = new Set<string>();
+            
+            tokensInGroup.forEach((token: any) => {
+              if (token.userId) {
+                usersForThisApp.add(token.userId);
+              }
+            });
+
+            usersForThisApp.forEach(userId => {
+              userAppRelationsToUpsert.push({
+                user_id: userId,
+                application_id: applicationId,
+                scopes: Array.from(allScopes), // Use aggregated scopes
+                first_seen: new Date().toISOString(),
+                last_used: new Date().toISOString(),
+              });
+            });
+
+            if (userAppRelationsToUpsert.length > 0) {
+              // Process user-app relationships in parallel too
+              const relationPromises = userAppRelationsToUpsert.map(async (relation) => {
+                // Check if relationship already exists
+                const { data: existingRelation } = await supabaseAdmin
+                  .from('user_applications')
+                  .select('id, scopes')
+                  .eq('user_id', relation.user_id)
+                  .eq('application_id', relation.application_id)
+                  .maybeSingle();
+
+                if (existingRelation) {
+                  // Update existing relationship, merging scopes
+                  const mergedScopes = [...new Set([...(existingRelation.scopes || []), ...relation.scopes])];
+                  await supabaseAdmin
+                    .from('user_applications')
+                    .update({
+                      scopes: mergedScopes,
+                      last_used: relation.last_used
+                    })
+                    .eq('id', existingRelation.id);
+                } else {
+                  // Insert new relationship
+                  await supabaseAdmin
+                    .from('user_applications')
+                    .insert(relation);
+                }
+              });
+              
+              await Promise.all(relationPromises);
             }
           }
-        }
-      }
 
-      // Simulate a small delay as the real system has it
-      await sleep(CPU_STRESS_CONFIG.DB_OPERATION_DELAY);
+          // No delay for maximum stress
+          if (CPU_STRESS_CONFIG.DB_OPERATION_DELAY > 0) {
+            await sleep(CPU_STRESS_CONFIG.DB_OPERATION_DELAY);
+          }
+        });
+        
+        // Wait for all apps in this batch to be processed
+        await Promise.all(appProcessingPromises);
+        
+        // Clear batch data to prevent memory buildup
+        tokenBatch.length = 0;
+        appGroups.clear();
+      })();
+      
+      concurrentBatches.push(batchPromise);
     }
     
+    // Wait for this group of concurrent batches to complete
+    await Promise.all(concurrentBatches);
+    
     // Update progress
-    const progress = 10 + Math.floor(((batchIndex + 1) / totalBatches) * 80);
+    const progress = 10 + Math.floor(((batchIndex + concurrency) / totalBatches) * 80);
     await updateSyncStatus(
       syncId, 
-      progress, 
-      `🧪 CPU STRESS: Processed batch ${batchIndex + 1}/${totalBatches} (${tokenBatch.length} tokens)`
+      Math.min(progress, 90), 
+      `🧪 CPU STRESS: Processed batches ${batchIndex + 1}-${Math.min(batchIndex + concurrency, totalBatches)}/${totalBatches} (parallel processing)`
     );
     
     // Memory cleanup every N operations
@@ -255,12 +294,10 @@ async function simulateTokenProcessing(
       forceMemoryCleanup();
     }
     
-    // Delay between batches
-    await sleep(CPU_STRESS_CONFIG.DELAY_BETWEEN_BATCHES);
-    
-    // Clear batch data to prevent memory buildup
-    tokenBatch.length = 0;
-    appGroups.clear();
+    // No delay between batch groups for maximum stress
+    if (CPU_STRESS_CONFIG.DELAY_BETWEEN_BATCHES > 0) {
+      await sleep(CPU_STRESS_CONFIG.DELAY_BETWEEN_BATCHES);
+    }
   }
   
   console.log(`✅ [CPU STRESS] Completed simulation of ${totalTokensToProcess} token operations`);
@@ -314,9 +351,7 @@ export async function POST(request: NextRequest) {
         'email',
         'https://www.googleapis.com/auth/admin.directory.user.readonly',
         'https://www.googleapis.com/auth/admin.directory.domain.readonly',
-        'https://www.googleapis.com/auth/admin.directory.user.security',
-        // // Also include token readonly scope, which is essential for the sync
-        // 'https://www.googleapis.com/auth/admin.directory.token.readonly'
+        'https://www.googleapis.com/auth/admin.directory.user.security'
       ].join(' ')
     });
 
@@ -343,19 +378,8 @@ export async function POST(request: NextRequest) {
       throw new Error(`Token refresh failed during stress test: ${refreshError.message}`);
     }
 
-    // Fetch real OAuth tokens to use as a baseline for the simulation
-    await updateSyncStatus(sync_id, 8, '🧪 CPU STRESS: Fetching real tokens from Google for baseline...');
-    let realTokens: any[] = [];
-    try {
-      realTokens = await googleService.getOAuthTokens();
-      console.log(`✅ [CPU STRESS] Fetched ${realTokens.length} real tokens from Google.`);
-      if (realTokens.length === 0) {
-        console.warn(`[CPU STRESS] No tokens returned from Google. The stress test will run on purely simulated data.`);
-      }
-    } catch (tokenError: any) {
-      console.error(`❌ [CPU STRESS] Failed to fetch real tokens from Google:`, tokenError.message);
-      // Don't fail the whole test, proceed with simulation.
-    }
+    // Skip real token fetching to avoid scope issues - use simulated data instead
+    console.log('🧪 [CPU STRESS] Using simulated token data for stress test (no additional OAuth scopes required)');
 
     // Simulate the main token processing workload
     await simulateTokenProcessing(
@@ -365,7 +389,7 @@ export async function POST(request: NextRequest) {
       baseline_data,
       access_token,
       refresh_token,
-      realTokens
+      [] // Empty array - will use simulated data
     );
 
     // Cleanup the data created during the stress test

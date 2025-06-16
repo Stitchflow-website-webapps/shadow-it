@@ -52,6 +52,9 @@ CREATE TABLE IF NOT EXISTS sync_status (
     message TEXT,
     access_token TEXT,
     refresh_token TEXT,
+    scope TEXT,
+    token_expiry TIMESTAMP WITH TIME ZONE,
+    provider TEXT DEFAULT 'google',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

@@ -354,6 +354,26 @@ export async function GET(request: Request) {
       console.log('Marked consent flow as completed for:', userInfo.email);
     }
 
+    // CRITICAL: Validate that we have the correct tokens before proceeding
+    console.log('🔍 Token validation check:', {
+      hasRefreshToken: !!oauthTokens.refresh_token,
+      hasAdminScopes: hasRequiredAdminScopes,
+      tokenScopes: oauthTokens.scope,
+      accessTokenPrefix: oauthTokens.access_token?.substring(0, 20) + '...',
+      refreshTokenPrefix: oauthTokens.refresh_token?.substring(0, 20) + '...',
+      requiredScopes: requiredAdminScopes
+    });
+
+    // Validate token-scope consistency
+    if (hasRequiredAdminScopes && !oauthTokens.refresh_token) {
+      console.error('❌ CRITICAL: Have admin scopes but no refresh token - this should not happen!');
+      return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=token_scope_mismatch', request.url));
+    }
+
+    if (oauthTokens.refresh_token && !hasRequiredAdminScopes) {
+      console.warn('⚠️ WARNING: Have refresh token but missing admin scopes - token may not work for background sync');
+    }
+
     // At this point:
     // 1. User exists and has admin access, OR
     // 2. New user who just granted admin access with refresh token
@@ -464,7 +484,7 @@ export async function GET(request: Request) {
       // Check if there's an existing sync_status record for this org
       const { data: existingSyncStatus } = await supabaseAdmin
         .from('sync_status')
-        .select('id')
+        .select('id, status, progress')
         .eq('organization_id', org.id)
         .eq('user_email', userInfo.email)
         .order('created_at', { ascending: false })
@@ -473,6 +493,7 @@ export async function GET(request: Request) {
       
       if (existingSyncStatus) {
         // Update existing record with fresh admin-scoped tokens
+        // IMPORTANT: Only update if we have better tokens (admin scopes + refresh token)
         const { data: updatedSyncStatus, error: updateError } = await supabaseAdmin
           .from('sync_status')
           .update({
@@ -480,7 +501,13 @@ export async function GET(request: Request) {
             refresh_token: oauthTokens.refresh_token,
             scope: oauthTokens.scope,
             token_expiry: oauthTokens.expiry_date ? new Date(oauthTokens.expiry_date).toISOString() : null,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            // Don't change status/progress if it's already completed
+            ...(existingSyncStatus.status !== 'COMPLETED' && {
+              status: (!existingUser || !hasExistingData) ? 'IN_PROGRESS' : 'COMPLETED',
+              progress: (!existingUser || !hasExistingData) ? 0 : 100,
+              message: (!existingUser || !hasExistingData) ? 'Started Google Workspace data sync with admin tokens' : 'Admin tokens updated for background sync'
+            })
           })
           .eq('id', existingSyncStatus.id)
           .select()
@@ -504,7 +531,7 @@ export async function GET(request: Request) {
             user_email: userInfo.email,
             status: shouldCreateSync ? 'IN_PROGRESS' : 'COMPLETED',
             progress: shouldCreateSync ? 0 : 100,
-            message: shouldCreateSync ? 'Started Google Workspace data sync' : 'Admin tokens stored for background sync',
+            message: shouldCreateSync ? 'Started Google Workspace data sync with admin tokens' : 'Admin tokens stored for background sync',
             access_token: oauthTokens.access_token,
             refresh_token: oauthTokens.refresh_token,
             scope: oauthTokens.scope,
@@ -531,7 +558,7 @@ export async function GET(request: Request) {
           user_email: userInfo.email,
           status: 'IN_PROGRESS',
           progress: 0,
-          message: 'Started Google Workspace data sync',
+          message: 'Started Google Workspace data sync - admin tokens needed',
           access_token: oauthTokens.access_token,
           refresh_token: oauthTokens.refresh_token || null,
           scope: oauthTokens.scope,

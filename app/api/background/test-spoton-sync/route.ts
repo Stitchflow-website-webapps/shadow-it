@@ -29,31 +29,65 @@ export async function POST(request: NextRequest) {
     
     // Get the latest ADMIN-SCOPED tokens for the test org from sync_status
     console.log('🔍 [CPU TEST] Fetching admin tokens from sync_status...');
-    const { data: syncStatus, error: syncError } = await supabaseAdmin
+    const { data: syncTokens, error: syncError } = await supabaseAdmin
       .from('sync_status')
-      .select('access_token, refresh_token, user_email')
+      .select('access_token, refresh_token, user_email, scope')
       .eq('organization_id', organization_id)
       .eq('user_email', user_email)
       .not('refresh_token', 'is', null) // Ensure we have a refresh token
+      .not('scope', 'is', null) // Ensure we have scopes
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(5); // Get multiple records to find the best one
 
-    if (syncError || !syncStatus) {
-      console.error('❌ [CPU TEST] Could not find admin tokens in sync_status:', syncError);
+    if (syncError || !syncTokens || syncTokens.length === 0) {
+      console.error('❌ [CPU TEST] Could not find any tokens in sync_status:', syncError);
       return NextResponse.json({ 
-        error: 'Could not find admin-scoped tokens in sync_status',
-        details: 'The user needs to complete the admin consent flow first. Only admin-scoped tokens can run the background sync.',
+        error: 'Could not find any tokens in sync_status',
+        details: 'The user needs to complete the admin consent flow first.',
         suggestion: `Have ${user_email} log in with admin consent at https://stitchflow.com/tools/shadow-it-scan/`,
         debugInfo: syncError?.message 
       }, { status: 404 });
     }
 
-    if (!syncStatus.access_token || !syncStatus.refresh_token) {
-      console.error('❌ [CPU TEST] Missing admin tokens in sync_status');
+    // Find the best admin-scoped token
+    const requiredAdminScopes = [
+      'https://www.googleapis.com/auth/admin.directory.user.readonly',
+      'https://www.googleapis.com/auth/admin.directory.domain.readonly',
+      'https://www.googleapis.com/auth/admin.directory.user.security'
+    ];
+
+    let syncStatus = null;
+    for (const token of syncTokens) {
+      if (!token.refresh_token || !token.access_token) continue;
+      
+      // Check if this token has admin scopes
+      const tokenScopes = token.scope ? token.scope.split(' ') : [];
+      const hasRequiredAdminScopes = requiredAdminScopes.every(scope => 
+        tokenScopes.includes(scope)
+      );
+      
+      if (hasRequiredAdminScopes) {
+        syncStatus = token;
+        console.log('✅ [CPU TEST] Found admin-scoped token with scopes:', token.scope);
+        break; // Found admin-scoped token, use it
+      }
+    }
+
+    if (!syncStatus) {
+      console.error('❌ [CPU TEST] Could not find admin-scoped tokens in sync_status');
+      console.error('Available tokens:', syncTokens.map(t => ({
+        hasRefresh: !!t.refresh_token,
+        hasAccess: !!t.access_token,
+        scopes: t.scope
+      })));
       return NextResponse.json({ 
-        error: 'Missing admin access or refresh token',
-        details: 'The sync_status record exists but lacks proper admin tokens.'
+        error: 'Could not find admin-scoped tokens in sync_status',
+        details: 'The sync_status records exist but lack proper admin scopes.',
+        availableTokens: syncTokens.map(t => ({
+          hasRefresh: !!t.refresh_token,
+          hasAccess: !!t.access_token,
+          scopes: t.scope
+        }))
       }, { status: 400 });
     }
 
