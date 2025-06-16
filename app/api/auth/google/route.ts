@@ -3,6 +3,7 @@ import { GoogleWorkspaceService } from '@/lib/google-workspace';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendSuccessSignupWebhook, sendFailedSignupWebhook } from '@/lib/webhook';
 import { determineRiskLevel } from '@/lib/risk-assessment';
+import { getAdminScopedTokens } from '@/lib/token-utils';
 import crypto from 'crypto';
 
 // Helper function to safely format date
@@ -318,7 +319,8 @@ export async function GET(request: Request) {
       authUrl.searchParams.append('scope', adminScopes);
       authUrl.searchParams.append('access_type', 'offline');
       // Only request consent when we need it for admin scopes
-      authUrl.searchParams.append('prompt', 'consent');
+      // Forcing consent AND account selection is a strong signal to Google to issue a new refresh token.
+      authUrl.searchParams.append('prompt', 'consent select_account');
       // Pre-select the account with the login_hint
       authUrl.searchParams.append('login_hint', userInfo.email);
       authUrl.searchParams.append('state', state);
@@ -354,6 +356,33 @@ export async function GET(request: Request) {
       console.log('Marked consent flow as completed for:', userInfo.email);
     }
 
+    // CRITICAL FIX: Handle cases where admin scopes are granted but no refresh token is issued (e.g., re-authentication)
+    if (hasRequiredAdminScopes && !oauthTokens.refresh_token) {
+        console.warn('⚠️ Have admin scopes but no refresh token. This can happen on re-authentication. Checking DB for existing admin-scoped refresh token...');
+
+        // First, find the organization_id from the user's domain.
+        // We use maybeSingle() to avoid throwing an error if no organization exists yet.
+        const { data: orgData } = await supabaseAdmin
+            .from('organizations')
+            .select('id')
+            .eq('domain', userInfo.hd)
+            .maybeSingle();
+
+        if (orgData && orgData.id) {
+            // If an organization exists, try to find a stored admin token for this user.
+            const adminTokens = await getAdminScopedTokens(orgData.id, userInfo.email, 'google');
+
+            if (adminTokens && adminTokens.refresh_token) {
+                console.log('✅ Found existing admin-scoped refresh token in DB. Re-using it for this session.');
+                oauthTokens.refresh_token = adminTokens.refresh_token;
+            } else {
+                 console.log(`Could not find a stored admin-scoped refresh token for user ${userInfo.email} in org ${orgData.id}.`);
+            }
+        } else {
+            console.log(`No existing organization found for domain ${userInfo.hd}, so no refresh token to find.`);
+        }
+    }
+
     // CRITICAL: Validate that we have the correct tokens before proceeding
     console.log('🔍 Token validation check:', {
       hasRefreshToken: !!oauthTokens.refresh_token,
@@ -361,13 +390,15 @@ export async function GET(request: Request) {
       tokenScopes: oauthTokens.scope,
       accessTokenPrefix: oauthTokens.access_token?.substring(0, 20) + '...',
       refreshTokenPrefix: oauthTokens.refresh_token?.substring(0, 20) + '...',
-      requiredScopes: requiredAdminScopes
     });
 
-    // Validate token-scope consistency
+    // Final validation: if we need admin scopes for background jobs, we MUST have a refresh token.
     if (hasRequiredAdminScopes && !oauthTokens.refresh_token) {
-      console.error('❌ CRITICAL: Have admin scopes but no refresh token - this should not happen!');
-      return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=token_scope_mismatch', request.url));
+      console.error('❌ CRITICAL: Have admin scopes but no refresh token, and could not find a stored one. Background sync will fail.');
+      // Add a more user-friendly error and instructions.
+      const error_message = 'no_refresh_token&cause=reauth_failed&hint=revoke_google_access';
+      await sendFailedSignupEmail(userInfo.email, 'Could not get a refresh token from Google. Please revoke app access in your Google account settings and try again.', userInfo.name);
+      return NextResponse.redirect(new URL(`https://www.stitchflow.com/tools/shadow-it-scan/?error=${error_message}`, request.url));
     }
 
     if (oauthTokens.refresh_token && !hasRequiredAdminScopes) {
