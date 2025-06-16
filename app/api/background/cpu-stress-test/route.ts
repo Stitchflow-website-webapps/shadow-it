@@ -148,17 +148,43 @@ async function simulateTokenProcessing(
         notes: `stress_test_${syncId}` // Tag for easy cleanup
       };
 
-      const { data: appData, error: appError } = await supabaseAdmin
+      // Check if application already exists
+      const { data: existingApp } = await supabaseAdmin
         .from('applications')
-        .upsert(appRecord, { onConflict: 'name, organization_id' })
         .select('id')
-        .single();
+        .eq('name', appName)
+        .eq('organization_id', organizationId)
+        .maybeSingle();
 
-      if (appError || !appData) {
-        console.error(`[CPU STRESS] Error upserting application ${appName}:`, appError);
-        continue;
+      let applicationId: string;
+      if (existingApp) {
+        // Update existing application
+        const { data: updatedApp, error: updateError } = await supabaseAdmin
+          .from('applications')
+          .update(appRecord)
+          .eq('id', existingApp.id)
+          .select('id')
+          .single();
+        
+        if (updateError || !updatedApp) {
+          console.error(`[CPU STRESS] Error updating application ${appName}:`, updateError);
+          continue;
+        }
+        applicationId = updatedApp.id;
+      } else {
+        // Insert new application
+        const { data: newApp, error: insertError } = await supabaseAdmin
+          .from('applications')
+          .insert(appRecord)
+          .select('id')
+          .single();
+        
+        if (insertError || !newApp) {
+          console.error(`[CPU STRESS] Error inserting application ${appName}:`, insertError);
+          continue;
+        }
+        applicationId = newApp.id;
       }
-      const applicationId = appData.id;
 
       // Simulate creation of user-application relations
       if (applicationId && userIds.length > 0) {
@@ -182,9 +208,33 @@ async function simulateTokenProcessing(
         });
 
         if (userAppRelationsToUpsert.length > 0) {
-          await supabaseAdmin
-            .from('user_applications')
-            .upsert(userAppRelationsToUpsert, { onConflict: 'user_id, application_id' });
+          // Process each user-app relationship individually to avoid constraint issues
+          for (const relation of userAppRelationsToUpsert) {
+            // Check if relationship already exists
+            const { data: existingRelation } = await supabaseAdmin
+              .from('user_applications')
+              .select('id, scopes')
+              .eq('user_id', relation.user_id)
+              .eq('application_id', relation.application_id)
+              .maybeSingle();
+
+            if (existingRelation) {
+              // Update existing relationship, merging scopes
+              const mergedScopes = [...new Set([...(existingRelation.scopes || []), ...relation.scopes])];
+              await supabaseAdmin
+                .from('user_applications')
+                .update({
+                  scopes: mergedScopes,
+                  last_used: relation.last_used
+                })
+                .eq('id', existingRelation.id);
+            } else {
+              // Insert new relationship
+              await supabaseAdmin
+                .from('user_applications')
+                .insert(relation);
+            }
+          }
         }
       }
 
