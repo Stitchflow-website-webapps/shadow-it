@@ -11,9 +11,9 @@ export const runtime = 'nodejs';
 const CPU_STRESS_CONFIG = {
   MAX_CONCURRENT_OPERATIONS: 1, // Sequential only for single CPU
   BATCH_SIZE: 25, // Optimized batch size
-  DELAY_BETWEEN_BATCHES: 100, // Reduced delay for stress testing
+  DELAY_BETWEEN_BATCHES: 1, // Reduced delay for stress testing
   MAX_TOKENS_PER_BATCH: 75,
-  DB_OPERATION_DELAY: 50,
+  DB_OPERATION_DELAY: 1,
   MEMORY_CLEANUP_INTERVAL: 150,
 };
 
@@ -58,80 +58,146 @@ async function simulateTokenProcessing(
   multiplier: number,
   baselineData: any,
   accessToken: string,
-  refreshToken: string
+  refreshToken: string,
+  realTokens: any[] = []
 ) {
-  console.log(`🧪 [CPU STRESS] Starting simulated token processing with ${multiplier}x multiplier`);
+  console.log(`🧪 [CPU STRESS] Starting token processing with ${multiplier}x multiplier`);
   
-  // Simulate the computational load without actual API calls
-  const simulatedUsers = baselineData.users * multiplier;
-  const simulatedApps = baselineData.applications * multiplier;
-  const simulatedTokens = baselineData.userAppRelations * multiplier;
+  // Fetch real user IDs to create valid relationships
+  const { data: users, error: usersError } = await supabaseAdmin
+    .from('users')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .limit(1000); // Limit to 1000 users for the test
+
+  if (usersError || !users || users.length === 0) {
+    console.warn(`[CPU STRESS] No users found for org ${organizationId}. Skipping user_applications stress test.`);
+  }
+  const userIds = users ? users.map(u => u.id) : [];
+
+  let tokensToProcess: any[] = [];
+  if (realTokens.length > 0) {
+    console.log(`[CPU STRESS] Using ${realTokens.length} real tokens as a baseline. Amplifying ${multiplier}x.`);
+    for (let i = 0; i < multiplier; i++) {
+      // Create copies of tokens to ensure they are unique objects
+      tokensToProcess.push(...realTokens.map(token => ({ ...token })));
+    }
+  } else {
+    console.warn('[CPU STRESS] No real tokens fetched. Falling back to purely simulated data based on baseline.');
+    const simulatedTokenCount = (baselineData.userAppRelations || 100) * multiplier;
+    for (let i = 0; i < simulatedTokenCount; i++) {
+      tokensToProcess.push({
+        displayText: `SimulatedApp_${Math.floor(i / 10)}`,
+        scopes: SIMULATED_TOKEN_SCOPES,
+      });
+    }
+  }
+
+  // Assign real user IDs to all tokens that will be processed
+  if (userIds.length > 0) {
+    tokensToProcess.forEach(token => {
+      const randomUserIndex = Math.floor(Math.random() * userIds.length);
+      token.userId = userIds[randomUserIndex];
+    });
+  }
   
-  await updateSyncStatus(syncId, 10, `🧪 CPU STRESS: Processing ${simulatedUsers} users, ${simulatedApps} apps, ${simulatedTokens} tokens`);
-  
-  // Simulate memory-intensive operations that would happen in real token processing
-  console.log(`🧪 [CPU STRESS] Simulating ${simulatedTokens} token operations...`);
+  const totalTokensToProcess = tokensToProcess.length;
+  await updateSyncStatus(syncId, 10, `🧪 CPU STRESS: Processing ${totalTokensToProcess} total tokens (real data amplified)`);
+  console.log(`🧪 [CPU STRESS] Processing ${totalTokensToProcess} token operations...`);
   
   const tokenBatchSize = CPU_STRESS_CONFIG.MAX_TOKENS_PER_BATCH;
-  const totalBatches = Math.ceil(simulatedTokens / tokenBatchSize);
+  const totalBatches = Math.ceil(totalTokensToProcess / tokenBatchSize);
   
   for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
     const batchStart = batchIndex * tokenBatchSize;
-    const batchEnd = Math.min(batchStart + tokenBatchSize, simulatedTokens);
-    const currentBatchSize = batchEnd - batchStart;
-    
-    // Simulate processing each token in the batch
-    const simulatedTokenBatch = [];
-    for (let i = 0; i < currentBatchSize; i++) {
-      // Create realistic token simulation with memory allocation
-      // Using more realistic scopes that would be found in actual OAuth tokens
-      const simulatedToken = {
-        id: `simulated_token_${batchStart + i}`,
-        displayText: `SimulatedApp_${Math.floor((batchStart + i) / 10)}`,
-        userKey: `simulated_user_${Math.floor(Math.random() * simulatedUsers)}`,
-        scopes: SIMULATED_TOKEN_SCOPES,
-        clientId: `client_${Math.floor(Math.random() * 100)}`,
-        userId: `user_${Math.floor(Math.random() * simulatedUsers)}`
-      };
-      
-      // Simulate risk assessment computation
-      const riskLevel = determineRiskLevel(simulatedToken.scopes);
-      
-      simulatedTokenBatch.push({
-        ...simulatedToken,
-        riskLevel,
-        processedAt: new Date().toISOString()
-      });
-    }
+    const batchEnd = Math.min(batchStart + tokenBatchSize, totalTokensToProcess);
+    const tokenBatch = tokensToProcess.slice(batchStart, batchEnd);
     
     // Simulate grouping by application (CPU-intensive operation)
-    const appGroups = new Map();
-    for (const token of simulatedTokenBatch) {
+    const appGroups = new Map<string, any[]>();
+    for (const token of tokenBatch) {
       const appName = token.displayText;
+      if (!appName) {
+        continue;
+      }
       if (!appGroups.has(appName)) {
         appGroups.set(appName, []);
       }
-      appGroups.get(appName).push(token);
+      appGroups.get(appName)!.push(token);
     }
     
     // Simulate processing each app group
-    for (const [appName, tokens] of appGroups.entries()) {
+    for (const [appName, tokensInGroup] of appGroups.entries()) {
       // Simulate scope aggregation and risk analysis
-      const allScopes = new Set();
-      tokens.forEach((token: any) => {
-        token.scopes.forEach((scope: string) => allScopes.add(scope));
+      const allScopes = new Set<string>();
+      tokensInGroup.forEach((token: any) => {
+        if(token.scopes && Array.isArray(token.scopes)) {
+            token.scopes.forEach((scope: string) => allScopes.add(scope));
+        }
       });
       
-      // Simulate database operations (without actually writing)
+      // Perform a real database upsert to simulate write load
+      const appRecord = {
+        name: appName,
+        organization_id: organizationId,
+        risk_level: determineRiskLevel(Array.from(allScopes) as string[]),
+        total_permissions: allScopes.size,
+        all_scopes: Array.from(allScopes),
+        category: 'Simulated Stress Test',
+        provider: 'google',
+        notes: `stress_test_${syncId}` // Tag for easy cleanup
+      };
+
+      const { data: appData, error: appError } = await supabaseAdmin
+        .from('applications')
+        .upsert(appRecord, { onConflict: 'name, organization_id' })
+        .select('id')
+        .single();
+
+      if (appError || !appData) {
+        console.error(`[CPU STRESS] Error upserting application ${appName}:`, appError);
+        continue;
+      }
+      const applicationId = appData.id;
+
+      // Simulate creation of user-application relations
+      if (applicationId && userIds.length > 0) {
+        const userAppRelationsToUpsert: any[] = [];
+        const usersForThisApp = new Set<string>();
+        
+        tokensInGroup.forEach((token: any) => {
+          if (token.userId) {
+            usersForThisApp.add(token.userId);
+          }
+        });
+
+        usersForThisApp.forEach(userId => {
+          userAppRelationsToUpsert.push({
+            user_id: userId,
+            application_id: applicationId,
+            scopes: Array.from(allScopes), // Use aggregated scopes
+            first_seen: new Date().toISOString(),
+            last_used: new Date().toISOString(),
+          });
+        });
+
+        if (userAppRelationsToUpsert.length > 0) {
+          await supabaseAdmin
+            .from('user_applications')
+            .upsert(userAppRelationsToUpsert, { onConflict: 'user_id, application_id' });
+        }
+      }
+
+      // Simulate a small delay as the real system has it
       await sleep(CPU_STRESS_CONFIG.DB_OPERATION_DELAY);
     }
     
     // Update progress
-    const progress = 10 + Math.floor((batchIndex / totalBatches) * 80);
+    const progress = 10 + Math.floor(((batchIndex + 1) / totalBatches) * 80);
     await updateSyncStatus(
       syncId, 
       progress, 
-      `🧪 CPU STRESS: Processed batch ${batchIndex + 1}/${totalBatches} (${currentBatchSize} tokens)`
+      `🧪 CPU STRESS: Processed batch ${batchIndex + 1}/${totalBatches} (${tokenBatch.length} tokens)`
     );
     
     // Memory cleanup every N operations
@@ -143,11 +209,13 @@ async function simulateTokenProcessing(
     await sleep(CPU_STRESS_CONFIG.DELAY_BETWEEN_BATCHES);
     
     // Clear batch data to prevent memory buildup
-    simulatedTokenBatch.length = 0;
+    tokenBatch.length = 0;
     appGroups.clear();
   }
   
-  console.log(`✅ [CPU STRESS] Completed simulation of ${simulatedTokens} token operations`);
+  console.log(`✅ [CPU STRESS] Completed simulation of ${totalTokensToProcess} token operations`);
+  // Clear the large token array
+  tokensToProcess.length = 0;
 }
 
 export async function POST(request: NextRequest) {
@@ -225,6 +293,20 @@ export async function POST(request: NextRequest) {
       throw new Error(`Token refresh failed during stress test: ${refreshError.message}`);
     }
 
+    // Fetch real OAuth tokens to use as a baseline for the simulation
+    await updateSyncStatus(sync_id, 8, '🧪 CPU STRESS: Fetching real tokens from Google for baseline...');
+    let realTokens: any[] = [];
+    try {
+      realTokens = await googleService.getOAuthTokens();
+      console.log(`✅ [CPU STRESS] Fetched ${realTokens.length} real tokens from Google.`);
+      if (realTokens.length === 0) {
+        console.warn(`[CPU STRESS] No tokens returned from Google. The stress test will run on purely simulated data.`);
+      }
+    } catch (tokenError: any) {
+      console.error(`❌ [CPU STRESS] Failed to fetch real tokens from Google:`, tokenError.message);
+      // Don't fail the whole test, proceed with simulation.
+    }
+
     // Simulate the main token processing workload
     await simulateTokenProcessing(
       organization_id,
@@ -232,8 +314,34 @@ export async function POST(request: NextRequest) {
       simulation_multiplier,
       baseline_data,
       access_token,
-      refresh_token
+      refresh_token,
+      realTokens
     );
+
+    // Cleanup the data created during the stress test
+    const { data: testApps, error: findError } = await supabaseAdmin
+      .from('applications')
+      .select('id')
+      .eq('notes', `stress_test_${sync_id}`);
+
+    if (findError) {
+      console.error('[CPU STRESS] Error finding test applications for cleanup:', findError);
+    } else if (testApps && testApps.length > 0) {
+      const testAppIds = testApps.map(a => a.id);
+      console.log(`[CPU STRESS] Cleaning up user_application relations for ${testAppIds.length} apps...`);
+      await supabaseAdmin
+        .from('user_applications')
+        .delete()
+        .in('application_id', testAppIds);
+      
+      console.log(`[CPU STRESS] Cleaning up ${testApps.length} simulated application records...`);
+      await supabaseAdmin
+        .from('applications')
+        .delete()
+        .in('id', testAppIds);
+      
+      console.log(`[CPU STRESS] Cleanup complete.`);
+    }
 
     // Final memory check
     const endMemory = process.memoryUsage();

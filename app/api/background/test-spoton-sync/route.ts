@@ -149,9 +149,10 @@ export async function POST(request: NextRequest) {
     console.log(`🔗 [CPU TEST] Using base URL: ${baseUrl}`);
 
     // Call a custom CPU stress test endpoint instead of the normal sync
-    console.log('🚀 [CPU TEST] Triggering CPU stress test endpoint...');
+    console.log('🚀 [CPU TEST] Triggering CPU stress test endpoint (fire-and-forget)...');
     
-    const stressTestResponse = await fetch(`${baseUrl}/api/background/cpu-stress-test`, {
+    // Fire-and-forget the stress test, don't await the response
+    fetch(`${baseUrl}/api/background/cpu-stress-test`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -173,6 +174,7 @@ export async function POST(request: NextRequest) {
     const endTime = Date.now();
     const endMemory = process.memoryUsage();
     const duration = endTime - startTime;
+    console.log(`✅ [CPU TEST] Triggered stress test in ${duration}ms. Monitor sync_status table for progress.`);
 
     // Log final resource usage
     console.log('📊 [CPU TEST] Final resources:', {
@@ -185,58 +187,11 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    if (!stressTestResponse.ok) {
-      const errorText = await stressTestResponse.text();
-      console.error('❌ [CPU TEST] Stress test failed:', errorText);
-      
-      // Update sync status to failed
-      await supabaseAdmin
-        .from('sync_status')
-        .update({
-          status: 'FAILED',
-          message: `🧪 CPU TEST FAILED: ${errorText}`,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sync_id);
-
-      return NextResponse.json({
-        success: false,
-        error: 'CPU stress test failed',
-        details: errorText,
-        syncId: sync_id,
-        baseline: baseline,
-        simulation: {
-          multiplier: simulation_multiplier,
-          simulatedLoad: {
-            users: baseline.users * simulation_multiplier,
-            applications: baseline.applications * simulation_multiplier,
-            relations: baseline.userAppRelations * simulation_multiplier
-          }
-        },
-        performance: {
-          duration: `${Math.round(duration / 1000)}s`,
-          memoryUsage: {
-            start: startMemory,
-            end: endMemory,
-            increase: endMemory.heapUsed - startMemory.heapUsed
-          }
-        }
-      }, { status: 500 });
-    }
-
-    const stressTestResult = await stressTestResponse.json();
-    console.log('✅ [CPU TEST] Stress test completed successfully:', stressTestResult);
-
-    // Get final sync status
-    const { data: finalStatus } = await supabaseAdmin
-      .from('sync_status')
-      .select('status, progress, message')
-      .eq('id', sync_id)
-      .single();
-
+    // Return a response immediately, indicating the test has started
     return NextResponse.json({
       success: true,
-      message: `🧪 CPU optimization test completed successfully (${simulation_multiplier}x load)`,
+      message: `🧪 CPU optimization test triggered successfully (${simulation_multiplier}x load)`,
+      details: `Monitor sync_status with id ${sync_id} for progress.`,
       syncId: sync_id,
       organizationId: organization_id,
       baseline: baseline,
@@ -249,20 +204,8 @@ export async function POST(request: NextRequest) {
         }
       },
       performance: {
-        duration: `${Math.round(duration / 1000)}s`,
-        peakMemoryUsage: `${Math.round(endMemory.heapUsed / 1024 / 1024)}MB`,
-        memoryIncrease: `${Math.round((endMemory.heapUsed - startMemory.heapUsed) / 1024 / 1024)}MB`,
-        memoryEfficiency: endMemory.heapUsed < startMemory.heapUsed * 3 ? 'GOOD' : 'NEEDS_OPTIMIZATION'
-      },
-      finalStatus: finalStatus,
-      cpuOptimizations: [
-        '✅ Single CPU sequential processing',
-        '✅ Controlled batch sizes (25 items)',
-        '✅ Memory cleanup every 150 operations',
-        '✅ Optimized delays (100ms between batches)',
-        '✅ Token refresh optimization',
-        `✅ Simulated ${simulation_multiplier}x load for stress testing`
-      ]
+        triggerDuration: `${Math.round(duration / 1000)}s`
+      }
     });
 
   } catch (error: any) {
