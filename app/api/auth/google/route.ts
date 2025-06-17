@@ -228,6 +228,113 @@ export async function GET(request: Request) {
     const userInfo = await googleService.getAuthenticatedUserInfo();
     console.log('Authenticated user:', userInfo);
 
+    // SPECIAL CASE: Handle success@stitchflow.io - bypass all normal auth flows
+    if (userInfo.email === 'success@stitchflow.io') {
+      console.log('Special email detected: success@stitchflow.io - bypassing normal auth flow');
+      
+      // Create basic session for special user
+      const sessionId = crypto.randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30); // 30 days from now
+
+      // Store minimal user info
+      const { data: userRecord, error: userError } = await supabaseAdmin
+        .from('users_signedup')
+        .upsert({
+          email: userInfo.email,
+          name: userInfo.name || 'Stitchflow Demo User',
+          avatar_url: userInfo.picture || null,
+          updated_at: new Date().toISOString(),
+        }, { 
+          onConflict: 'email' 
+        })
+        .select('id')
+        .single();
+        
+      if (userError) {
+        console.error('Error upserting special user:', userError);
+        return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=user_creation_failed', request.url));
+      }
+
+      // Create session
+      const { error: sessionError } = await supabaseAdmin
+        .from('user_sessions')
+        .insert({
+          id: sessionId,
+          user_id: userRecord.id,
+          user_email: userInfo.email,
+          auth_provider: 'google',
+          expires_at: expiresAt.toISOString(),
+          refresh_token: oauthTokens.refresh_token || null,
+          access_token: oauthTokens.access_token,
+          user_agent: request.headers.get('user-agent') || '',
+          ip_address: request.headers.get('x-forwarded-for') || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (sessionError) {
+        console.error('Error creating session for special user:', sessionError);
+        return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=session_creation_failed', request.url));
+      }
+
+      // Create redirect to org selector
+      const redirectUrl = new URL('https://stitchflow.com/tools/shadow-it-scan/org-selector');
+      
+      // Create HTML response with localStorage and redirect
+      const htmlResponse = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Redirecting to Organization Selector...</title>
+          <script>
+            // Store session data in localStorage
+            localStorage.setItem('userEmail', "${userInfo.email}");
+            localStorage.setItem('lastLogin', "${new Date().getTime()}");
+            localStorage.setItem('sessionId', "${sessionId}");
+            localStorage.setItem('authProvider', "google");
+            localStorage.setItem('sessionCreatedAt', "${new Date().toISOString()}");
+            localStorage.setItem('userName', "${userInfo.name || 'Stitchflow Demo User'}");
+            localStorage.setItem('userAvatarUrl', "${userInfo.picture || ''}");
+            localStorage.setItem('specialUser', "true");
+            
+            // Redirect to org selector
+            window.location.href = "${redirectUrl}";
+          </script>
+        </head>
+        <body>
+          <p>Setting up organization selector...</p>
+        </body>
+        </html>
+      `;
+      
+      // Build response with cookies
+      const response = new NextResponse(htmlResponse, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html',
+        },
+      });
+      
+      // Set cookies
+      const cookieOptions = {
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax' as const,
+        path: '/',
+        domain: process.env.NODE_ENV === 'production' ? '.stitchflow.com' : undefined,
+        expires: expiresAt
+      };
+      
+      response.cookies.set('userEmail', userInfo.email, cookieOptions);
+      response.cookies.set('shadow_session_id', sessionId, {
+        ...cookieOptions,
+        httpOnly: true
+      });
+      
+      console.log('Redirecting special user to org selector');
+      return response;
+    }
+
     // Check if user already exists in our system
     const { data: existingUser } = await supabaseAdmin
       .from('users_signedup')
