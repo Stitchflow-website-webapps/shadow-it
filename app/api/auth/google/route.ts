@@ -505,6 +505,10 @@ export async function GET(request: Request) {
     const hasExistingData = existingData && existingData.length > 0;
     console.log('Existing data check:', { hasExistingData, orgId: org.id });
 
+    // A sync is required only if the organization has no data yet.
+    // A new user signing up for an existing organization does not trigger a new sync.
+    const isNewSyncRequired = !hasExistingData;
+
     // CRITICAL FIX: Always ensure we have admin-scoped tokens in sync_status for cron job
     let syncStatus = null;
     
@@ -535,9 +539,9 @@ export async function GET(request: Request) {
             updated_at: new Date().toISOString(),
             // Don't change status/progress if it's already completed
             ...(existingSyncStatus.status !== 'COMPLETED' && {
-              status: (!existingUser || !hasExistingData) ? 'IN_PROGRESS' : 'COMPLETED',
-              progress: (!existingUser || !hasExistingData) ? 0 : 100,
-              message: (!existingUser || !hasExistingData) ? 'Started Google Workspace data sync with admin tokens' : 'Admin tokens updated for background sync'
+              status: isNewSyncRequired ? 'IN_PROGRESS' : 'COMPLETED',
+              progress: isNewSyncRequired ? 0 : 100,
+              message: isNewSyncRequired ? 'Started Google Workspace data sync with admin tokens' : 'Admin tokens updated for background sync'
             })
           })
           .eq('id', existingSyncStatus.id)
@@ -554,15 +558,14 @@ export async function GET(request: Request) {
       
       // If no existing record or update failed, create new one
       if (!syncStatus) {
-        const shouldCreateSync = !existingUser || !hasExistingData;
         const { data: newSyncStatus, error: syncStatusError } = await supabaseAdmin
           .from('sync_status')
           .insert({
             organization_id: org.id,
             user_email: userInfo.email,
-            status: shouldCreateSync ? 'IN_PROGRESS' : 'COMPLETED',
-            progress: shouldCreateSync ? 0 : 100,
-            message: shouldCreateSync ? 'Started Google Workspace data sync with admin tokens' : 'Admin tokens stored for background sync',
+            status: isNewSyncRequired ? 'IN_PROGRESS' : 'COMPLETED',
+            progress: isNewSyncRequired ? 0 : 100,
+            message: isNewSyncRequired ? 'Started Google Workspace data sync with admin tokens' : 'Admin tokens stored for background sync',
             access_token: oauthTokens.access_token,
             refresh_token: oauthTokens.refresh_token,
             scope: oauthTokens.scope,
@@ -579,7 +582,7 @@ export async function GET(request: Request) {
         syncStatus = newSyncStatus;
         console.log('Created new sync_status with admin tokens');
       }
-    } else if (!existingUser || !hasExistingData) {
+    } else if (isNewSyncRequired) {
       // Legacy path: only create sync for new users without admin tokens (shouldn't happen with two-step auth)
       console.log('Creating sync status without admin tokens (legacy path)');
       const { data: newSyncStatus, error: syncStatusError } = await supabaseAdmin
@@ -657,7 +660,7 @@ export async function GET(request: Request) {
 
     // Determine where to redirect based on user status
     let redirectUrl;
-    if (!existingUser || !hasExistingData) {
+    if (isNewSyncRequired) {
       // For new users or users without data, redirect to loading page with sync status
       redirectUrl = new URL('https://stitchflow.com/tools/shadow-it-scan/loading');
       if (syncStatus) {
