@@ -11,6 +11,12 @@ const PROCESSING_CONFIG = {
   MEMORY_CLEANUP_INTERVAL: 75, // Increased from 50 for better speed
 };
 
+// **NEW: Emergency limits for huge organizations**
+const EMERGENCY_LIMITS = {
+  MAX_USERS_IN_MEMORY: 25000, // Hard limit on users processed at once
+  FORCE_CLEANUP_THRESHOLD: 1200, // Force cleanup at 1.2GB (75% of 1.6GB limit)
+};
+
 // Helper function to sleep
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -198,6 +204,12 @@ async function processUsers(
     try {
       users = await googleService.getUsersListPaginated();
       console.log(`[Users ${sync_id}] Successfully fetched ${users.length} users`);
+      
+      // **NEW: Emergency check for huge organizations**
+      if (users.length > EMERGENCY_LIMITS.MAX_USERS_IN_MEMORY) {
+        console.warn(`[Users ${sync_id}] 🚨 HUGE ORG DETECTED: ${users.length} users exceeds limit of ${EMERGENCY_LIMITS.MAX_USERS_IN_MEMORY}`);
+        throw new Error(`Organization too large for current memory configuration. Please contact support for enterprise processing of ${users.length} users.`);
+      }
       
       // Log resource usage after fetching
       monitor.logResourceUsage(`Users ${sync_id} FETCH COMPLETE`);

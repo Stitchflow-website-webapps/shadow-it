@@ -7,12 +7,20 @@ import crypto from 'crypto';
 
 // Configuration optimized for 1 CPU + 2GB RAM - Balanced for speed vs stability
 const PROCESSING_CONFIG = {
-  MAX_CONCURRENT_OPERATIONS: 1, // Sequential processing only for single CPU
+  MAX_CONCURRENT_OPERATIONS: 2, // Sequential processing only for single CPU
   BATCH_SIZE: 25, // Increased from 15 for better throughput
   DELAY_BETWEEN_BATCHES: 100, // Reduced from 150ms for faster processing
   MAX_TOKENS_PER_BATCH: 75, // Increased from 50 for better throughput
   DB_OPERATION_DELAY: 50, // Reduced from 75ms for faster DB operations
   MEMORY_CLEANUP_INTERVAL: 150, // Less frequent cleanup (from 100) for better speed
+};
+
+// **NEW: Emergency memory management for huge organizations**
+const EMERGENCY_LIMITS = {
+  MAX_TOKENS_IN_MEMORY: 10000, // Hard limit on tokens loaded at once
+  MAX_APPS_IN_MEMORY: 2000,    // Hard limit on applications processed at once
+  MAX_RELATIONS_IN_MEMORY: 15000, // Hard limit on relations in memory
+  FORCE_CLEANUP_THRESHOLD: 1400,  // Force cleanup at 1.4GB (87.5% of 1.6GB limit)
 };
 
 // Helper function to sleep
@@ -337,6 +345,12 @@ async function processTokens(
       applicationTokens = await googleService.getOAuthTokens();
       console.log(`[Tokens ${sync_id}] Fetched ${applicationTokens.length} application tokens`);
       
+      // **NEW: Emergency check for huge organizations**
+      if (applicationTokens.length > EMERGENCY_LIMITS.MAX_TOKENS_IN_MEMORY) {
+        console.warn(`[Tokens ${sync_id}] 🚨 HUGE ORG DETECTED: ${applicationTokens.length} tokens exceeds limit of ${EMERGENCY_LIMITS.MAX_TOKENS_IN_MEMORY}`);
+        throw new Error(`Organization too large for current memory configuration. Please contact support for enterprise processing of ${applicationTokens.length} tokens.`);
+      }
+      
       // Log resource usage after token fetch
       monitor.logResourceUsage(`Tokens ${sync_id} FETCH COMPLETE`);
     } catch (tokenError) {
@@ -398,12 +412,28 @@ async function processTokens(
     
     console.log(`[Tokens ${sync_id}] Processing ${totalApps} applications with resource-aware concurrency`);
     
+    // **NEW: Emergency check for huge app count**
+    if (totalApps > EMERGENCY_LIMITS.MAX_APPS_IN_MEMORY) {
+      console.warn(`[Tokens ${sync_id}] 🚨 HUGE ORG DETECTED: ${totalApps} apps exceeds limit of ${EMERGENCY_LIMITS.MAX_APPS_IN_MEMORY}`);
+      throw new Error(`Organization has too many applications (${totalApps}) for current memory configuration. Please contact support for enterprise processing.`);
+    }
+    
     // Process applications in concurrent batches with resource monitoring
     await processConcurrentlyWithResourceControl(
       appEntries,
       async ([appName, tokens]: [string, any[]]) => {
         appCount++;
         const progressPercent = 50 + Math.floor((appCount / totalApps) * 25);
+        
+        // **NEW: Force memory cleanup every 100 apps or when memory is high**
+        if (appCount % 100 === 0) {
+          const usage = monitor.getCurrentUsage();
+          if (usage.heapUsed > EMERGENCY_LIMITS.FORCE_CLEANUP_THRESHOLD) {
+            console.log(`[Tokens ${sync_id}] 🧹 Force cleanup at app ${appCount}/${totalApps} - Memory: ${usage.heapUsed}MB`);
+            monitor.forceCleanup();
+            await new Promise(resolve => setTimeout(resolve, 500)); // Allow GC to run
+          }
+        }
         
         if (appCount % 10 === 0 || appCount === totalApps) {
           await updateSyncStatus(
@@ -529,6 +559,12 @@ async function processTokens(
               userEmail: userEmail || '',
               token: simplifiedToken
             });
+            
+            // **NEW: Emergency check for relations array size**
+            if (userAppRelationsToProcess.length > EMERGENCY_LIMITS.MAX_RELATIONS_IN_MEMORY) {
+              console.warn(`[Tokens ${sync_id}] 🚨 HUGE ORG DETECTED: ${userAppRelationsToProcess.length} relations exceeds limit`);
+              throw new Error(`Organization has too many user-app relationships (${userAppRelationsToProcess.length}) for current memory configuration. Please contact support for enterprise processing.`);
+            }
           }
         }
         

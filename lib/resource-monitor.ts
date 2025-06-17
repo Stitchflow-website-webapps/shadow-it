@@ -27,7 +27,7 @@ export class ResourceMonitor {
       maxHeapUsageMB: limits?.maxHeapUsageMB || 1600, // 80% of 2GB
       maxRSSUsageMB: limits?.maxRSSUsageMB || 1600,   // 80% of 2GB
       maxConcurrency: limits?.maxConcurrency || 2,     // Conservative for 1 CPU
-      emergencyThresholdMB: limits?.emergencyThresholdMB || 1800, // 90% emergency threshold
+      emergencyThresholdMB: limits?.emergencyThresholdMB || 1700, // Reduced from 1800 for more aggressive protection
     };
   }
 
@@ -81,9 +81,9 @@ export class ResourceMonitor {
     const rssRatio = usage.rss / this.limits.maxRSSUsageMB;
     const maxRatio = Math.max(heapRatio, rssRatio);
     
-    if (maxRatio > 0.8) {
+    if (maxRatio > 0.75) {
       return 1; // Single threaded when near limits
-    } else if (maxRatio > 0.6) {
+    } else if (maxRatio > 0.55) {
       return Math.min(2, this.limits.maxConcurrency);
     } else {
       return this.limits.maxConcurrency;

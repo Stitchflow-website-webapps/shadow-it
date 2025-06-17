@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       maxHeapUsageMB: 1600,     // 80% of 2GB
       maxRSSUsageMB: 1600,      // 80% of 2GB
       maxConcurrency: 2,        // Conservative for 1 CPU
-      emergencyThresholdMB: 1800 // 90% emergency threshold
+      emergencyThresholdMB: 1700 // More aggressive emergency threshold (85% instead of 90%)
     });
 
     // Parse the request data once and store it for reuse
@@ -114,7 +114,14 @@ export async function POST(request: NextRequest) {
       
       console.log(`📊 [MAIN SYNC] Using concurrency level: ${concurrency}`);
       
-      if (concurrency >= 2 && endpoints.length >= 2) {
+      // **NEW: Additional safety check - ensure we have enough memory headroom**
+      const currentUsage = monitor.getCurrentUsage();
+      const memoryRatio = Math.max(currentUsage.heapUsed / 1600, currentUsage.rss / 1600);
+      
+      if (memoryRatio > 0.6) {
+        console.log(`⚠️ [MAIN SYNC] Memory usage already at ${(memoryRatio * 100).toFixed(1)}% - forcing sequential processing`);
+        await processEndpointsSequentially(endpoints, baseUrl, headers, requestPayload, monitor);
+      } else if (concurrency >= 2 && endpoints.length >= 2) {
         // Run first two endpoints (users and tokens) in parallel
         const parallelEndpoints = endpoints.slice(0, 2);
         const sequentialEndpoints = endpoints.slice(2);
