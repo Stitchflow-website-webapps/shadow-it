@@ -34,7 +34,7 @@ export default function OrgSelectorPage() {
 
   const fetchOrganizations = async () => {
     try {
-      const response = await fetch('/api/organizations', {
+      const response = await fetch('/tools/shadow-it-scan/api/organizations', {
         method: 'GET',
         credentials: 'include',
       });
@@ -55,7 +55,7 @@ export default function OrgSelectorPage() {
   const selectOrganization = async (orgId: string) => {
     setSelecting(orgId);
     try {
-      const response = await fetch('/api/org-selector/select', {
+      const response = await fetch('/tools/shadow-it-scan/api/org-selector/select', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
