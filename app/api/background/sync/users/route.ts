@@ -1,34 +1,160 @@
 import { NextResponse } from 'next/server';
 import { GoogleWorkspaceService } from '@/lib/google-workspace';
 import { supabaseAdmin } from '@/lib/supabase';
+import { ResourceMonitor, resourceAwareSleep, calculateOptimalBatchSize } from '@/lib/resource-monitor';
 
-// Configuration optimized for 1 CPU + 2GB RAM - Balanced for speed vs stability
+// Resource-aware configuration - Balanced settings for single CPU with controlled parallelism
 const PROCESSING_CONFIG = {
-  BATCH_SIZE: 40, // Increased from 25 for better throughput
-  DELAY_BETWEEN_BATCHES: 100, // Reduced from 150ms for faster processing
-  DB_OPERATION_DELAY: 50, // Reduced from 75ms for faster DB operations
-  MEMORY_CLEANUP_INTERVAL: 75, // Increased from 50 for better speed
+  BASE_BATCH_SIZE: 25, // Base batch size - will be adjusted dynamically
+  MIN_BATCH_SIZE: 5,   // Minimum batch size when resources are high
+  MAX_BATCH_SIZE: 50,  // Maximum batch size when resources are low
+  BASE_DELAY_BETWEEN_BATCHES: 100, // Reduced from 150 for better throughput
+  MIN_DELAY_BETWEEN_BATCHES: 50,   // Minimum delay
+  MAX_DELAY_BETWEEN_BATCHES: 1000, // Maximum delay when throttling
+  DB_OPERATION_DELAY: 75, // Base delay for DB operations
+  MEMORY_CLEANUP_INTERVAL: 50, // Cleanup every N operations
+  RESOURCE_CHECK_INTERVAL: 10, // Check resources every N batches
+  // NEW: Concurrency settings for single CPU
+  MAX_CONCURRENT_OPERATIONS: 3, // Maximum parallel operations for single CPU
+  MIN_CONCURRENT_OPERATIONS: 1, // Minimum when resources are high
+  ADAPTIVE_CONCURRENCY: true,   // Enable dynamic concurrency adjustment
+  CONCURRENCY_REDUCTION_THRESHOLD: 75, // CPU/Memory % to reduce concurrency
+  CONCURRENCY_INCREASE_THRESHOLD: 50,  // CPU/Memory % to allow more concurrency
 };
 
-// Helper function to sleep
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Resource limits
+const RESOURCE_LIMITS = {
+  maxCpuPercent: 80,
+  maxMemoryPercent: 80,
+  warningCpuPercent: 70,
+  warningMemoryPercent: 70,
+};
 
-// Helper function to process in controlled batches
-async function processInBatches<T>(
-  items: T[], 
+// Helper function to calculate optimal concurrency based on resources
+function calculateOptimalConcurrency(resourceMonitor: ResourceMonitor): number {
+  const usage = resourceMonitor.getCurrentUsage();
+  const maxUsage = Math.max(usage.cpuPercent, usage.memoryPercent);
+  
+  if (maxUsage > PROCESSING_CONFIG.CONCURRENCY_REDUCTION_THRESHOLD) {
+    return PROCESSING_CONFIG.MIN_CONCURRENT_OPERATIONS; // Drop to 1 when high usage
+  } else if (maxUsage < PROCESSING_CONFIG.CONCURRENCY_INCREASE_THRESHOLD) {
+    return PROCESSING_CONFIG.MAX_CONCURRENT_OPERATIONS; // Allow max when low usage
+  } else {
+    // Linear scaling between min and max based on resource usage
+    const usageRatio = (maxUsage - PROCESSING_CONFIG.CONCURRENCY_INCREASE_THRESHOLD) / 
+                      (PROCESSING_CONFIG.CONCURRENCY_REDUCTION_THRESHOLD - PROCESSING_CONFIG.CONCURRENCY_INCREASE_THRESHOLD);
+    const concurrencyRange = PROCESSING_CONFIG.MAX_CONCURRENT_OPERATIONS - PROCESSING_CONFIG.MIN_CONCURRENT_OPERATIONS;
+    return Math.max(PROCESSING_CONFIG.MIN_CONCURRENT_OPERATIONS, 
+                   PROCESSING_CONFIG.MAX_CONCURRENT_OPERATIONS - Math.floor(usageRatio * concurrencyRange));
+  }
+}
+
+// Helper function to process in resource-aware parallel batches
+async function processInResourceAwareParallelBatches<T>(
+  items: T[],
   processor: (batch: T[]) => Promise<void>,
-  batchSize: number = PROCESSING_CONFIG.BATCH_SIZE,
-  delay: number = PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
+  resourceMonitor: ResourceMonitor,
+  syncId: string
 ): Promise<void> {
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    await processor(batch);
+  let processedCount = 0;
+  let consecutiveThrottles = 0;
+  
+  // Split items into work chunks
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += PROCESSING_CONFIG.BASE_BATCH_SIZE) {
+    const optimalBatchSize = calculateOptimalBatchSize(
+      PROCESSING_CONFIG.BASE_BATCH_SIZE,
+      resourceMonitor,
+      PROCESSING_CONFIG.MIN_BATCH_SIZE,
+      PROCESSING_CONFIG.MAX_BATCH_SIZE
+    );
+    chunks.push(items.slice(i, i + optimalBatchSize));
+  }
+  
+  console.log(`🔄 [Users ${syncId}] Processing ${chunks.length} chunks with adaptive parallelism`);
+  
+  // Process chunks with controlled parallelism
+  for (let i = 0; i < chunks.length; i += PROCESSING_CONFIG.MAX_CONCURRENT_OPERATIONS) {
+    // Check if system is overloaded
+    if (resourceMonitor.isOverloaded()) {
+      console.warn(`🚨 [Users ${syncId}] System overloaded, waiting for recovery...`);
+      
+      let waitTime = 0;
+      const maxWaitTime = 30000; // 30 seconds max wait
+      
+      while (resourceMonitor.isOverloaded() && waitTime < maxWaitTime) {
+        await resourceAwareSleep(1000, resourceMonitor);
+        waitTime += 1000;
+      }
+      
+      if (resourceMonitor.isOverloaded()) {
+        throw new Error('System resources remain critically high after 30 seconds');
+      }
+    }
     
-    // Add delay between batches to prevent overwhelming the system
-    if (i + batchSize < items.length) {
-      await sleep(delay);
+    // Calculate optimal concurrency for this batch
+    const optimalConcurrency = PROCESSING_CONFIG.ADAPTIVE_CONCURRENCY ? 
+      calculateOptimalConcurrency(resourceMonitor) : 
+      PROCESSING_CONFIG.MAX_CONCURRENT_OPERATIONS;
+    
+    // Get the parallel batch (up to optimal concurrency)
+    const parallelBatch = chunks.slice(i, i + optimalConcurrency);
+    
+    // Log resource usage and concurrency
+    if (processedCount % (PROCESSING_CONFIG.RESOURCE_CHECK_INTERVAL * PROCESSING_CONFIG.BASE_BATCH_SIZE) === 0) {
+      const usage = resourceMonitor.getCurrentUsage();
+      console.log(`🔍 [Users ${syncId}] Resource usage: CPU: ${usage.cpuPercent.toFixed(1)}%, Memory: ${usage.memoryPercent.toFixed(1)}%, Concurrency: ${parallelBatch.length}`);
+    }
+    
+    // Process batches in parallel with resource monitoring
+    try {
+      await Promise.all(parallelBatch.map(async (chunk) => {
+        try {
+          await processor(chunk);
+          processedCount += chunk.length;
+        } catch (chunkError) {
+          console.error(`[Users ${syncId}] Error processing chunk:`, chunkError);
+          // Continue with other chunks
+        }
+      }));
+    } catch (parallelError) {
+      console.error(`[Users ${syncId}] Error in parallel processing:`, parallelError);
+      // Continue with next set of chunks
+    }
+    
+    // Memory cleanup
+    if (processedCount % PROCESSING_CONFIG.MEMORY_CLEANUP_INTERVAL === 0) {
+      resourceMonitor.forceMemoryCleanup();
+    }
+    
+    // Calculate appropriate delay
+    let delay = PROCESSING_CONFIG.BASE_DELAY_BETWEEN_BATCHES;
+    
+    if (resourceMonitor.shouldThrottle()) {
+      const throttleDelay = resourceMonitor.getThrottleDelay();
+      delay = Math.min(PROCESSING_CONFIG.MAX_DELAY_BETWEEN_BATCHES, delay + throttleDelay);
+      consecutiveThrottles++;
+      
+      console.log(`⚠️  [Users ${syncId}] Throttling: ${throttleDelay}ms additional delay (consecutive: ${consecutiveThrottles})`);
+    } else {
+      consecutiveThrottles = 0;
+      delay = Math.max(PROCESSING_CONFIG.MIN_DELAY_BETWEEN_BATCHES, delay);
+    }
+    
+    // Emergency brake if too many consecutive throttles
+    if (consecutiveThrottles > 5) {
+      console.warn(`🚨 [Users ${syncId}] Emergency brake: Too many consecutive throttles, forcing extended pause`);
+      await resourceAwareSleep(5000, resourceMonitor);
+      consecutiveThrottles = 0;
+    }
+    
+    // Apply delay if not the last parallel batch
+    if (i + optimalConcurrency < chunks.length) {
+      await resourceAwareSleep(delay, resourceMonitor);
     }
   }
+  
+  console.log(`✅ [Users ${syncId}] Completed parallel processing of ${processedCount} items`);
 }
 
 // Helper function to update sync status
@@ -55,21 +181,6 @@ async function updateSyncStatus(syncId: string, progress: number, message: strin
   }
 }
 
-// Helper function to force garbage collection and memory cleanup
-const forceMemoryCleanup = () => {
-  if (global.gc) {
-    global.gc();
-  }
-  // Clear any lingering references
-  if (typeof process !== 'undefined' && process.memoryUsage) {
-    const memUsage = process.memoryUsage();
-    if (memUsage.heapUsed > 800 * 1024 * 1024) { // If using > 800MB heap (conservative for 2GB total)
-      console.log(`Memory usage: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB, forcing cleanup`);
-      if (global.gc) global.gc();
-    }
-  }
-};
-
 export const maxDuration = 300; // Set max duration to 300 seconds (5 minutes)
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs'; // Enable Fluid Compute by using nodejs runtime
@@ -77,9 +188,24 @@ export const runtime = 'nodejs'; // Enable Fluid Compute by using nodejs runtime
 export async function POST(request: Request) {
   const requestData = await request.json(); // Moved up for error handling access
   const { organization_id, sync_id, access_token, refresh_token } = requestData;
+  
+  let resourceMonitor: ResourceMonitor | undefined;
 
   try {
-    console.log('Starting user fetch processing');
+    console.log('[Users API] Starting user fetch processing with resource monitoring');
+    
+    // Initialize resource monitoring
+    resourceMonitor = ResourceMonitor.getInstance(RESOURCE_LIMITS);
+    resourceMonitor.startMonitoring(1000); // Check every second
+    
+    // Set up resource monitoring event handlers
+    resourceMonitor.on('overload', (usage) => {
+      console.warn(`🚨 [Users ${sync_id}] RESOURCE OVERLOAD: CPU: ${usage.cpuPercent.toFixed(1)}%, Memory: ${usage.memoryPercent.toFixed(1)}%`);
+    });
+    
+    resourceMonitor.on('warning', (usage) => {
+      console.warn(`⚠️  [Users ${sync_id}] RESOURCE WARNING: CPU: ${usage.cpuPercent.toFixed(1)}%, Memory: ${usage.memoryPercent.toFixed(1)}%`);
+    });
     
     // Validate required fields
     if (!organization_id || !sync_id || !access_token || !refresh_token) {
@@ -89,18 +215,30 @@ export async function POST(request: Request) {
       );
     }
     
+    // Log initial resource state
+    const initialUsage = resourceMonitor.getCurrentUsage();
+    console.log(`🔍 [Users ${sync_id}] Initial resource usage: CPU: ${initialUsage.cpuPercent.toFixed(1)}%, Memory: ${initialUsage.memoryPercent.toFixed(1)}%`);
+    
     // Await the processing
-    await processUsers(organization_id, sync_id, access_token, refresh_token, request);
+    await processUsers(organization_id, sync_id, access_token, refresh_token, request, resourceMonitor);
+    
+    // Log final resource state
+    const finalUsage = resourceMonitor.getCurrentUsage();
+    console.log(`🔍 [Users ${sync_id}] Final resource usage: CPU: ${finalUsage.cpuPercent.toFixed(1)}%, Memory: ${finalUsage.memoryPercent.toFixed(1)}%`);
     
     // Return success response after processing is done
     return NextResponse.json({ 
       message: 'User fetch completed successfully',
       syncId: sync_id,
-      organizationId: organization_id
+      organizationId: organization_id,
+      resourceUsage: {
+        initial: initialUsage,
+        final: finalUsage
+      }
     });
 
   } catch (error: any) {
-    console.error('Error in user fetch API:', error);
+    console.error('[Users API] Error in user fetch API:', error);
     // Ensure sync status is updated on failure if processUsers throws
     if (sync_id) { // Check if sync_id is available
         await updateSyncStatus(
@@ -114,6 +252,11 @@ export async function POST(request: Request) {
       { error: 'Failed to process users', details: error.message },
       { status: 500 }
     );
+  } finally {
+    // Always stop monitoring when done
+    if (resourceMonitor) {
+      resourceMonitor.stopMonitoring();
+    }
   }
 }
 
@@ -122,7 +265,8 @@ async function processUsers(
   sync_id: string, 
   access_token: string, 
   refresh_token: string,
-  originalRequest: Request
+  originalRequest: Request,
+  resourceMonitor: ResourceMonitor
 ) {
   try {
     console.log(`[Users ${sync_id}] Starting user fetch for organization: ${organization_id}`);
@@ -150,11 +294,11 @@ async function processUsers(
     });
     
     // Attempt to refresh tokens before making API calls
-    console.log(`🔄 Refreshing tokens before API calls...`);
+    console.log(`🔄 [Users ${sync_id}] Refreshing tokens before API calls...`);
     try {
       const refreshedTokens = await googleService.refreshAccessToken(true); // Force refresh
       if (refreshedTokens) {
-        console.log(`✅ Successfully refreshed tokens`);
+        console.log(`✅ [Users ${sync_id}] Successfully refreshed tokens`);
         
         // Reinitialize the service with the refreshed tokens to ensure they're used
         await googleService.setCredentials({
@@ -175,7 +319,7 @@ async function processUsers(
           .eq('id', sync_id);
       }
     } catch (refreshError) {
-      console.error(`❌ Token refresh failed:`, refreshError);
+      console.error(`❌ [Users ${sync_id}] Token refresh failed:`, refreshError);
       await updateSyncStatus(
         sync_id, 
         0, // Use 0 instead of -1 to avoid constraint violation
@@ -204,14 +348,14 @@ async function processUsers(
       throw new Error(errorMessage);
     }
     
-    await updateSyncStatus(sync_id, 20, `Processing ${users.length} users in batches`);
+    await updateSyncStatus(sync_id, 20, `Processing ${users.length} users with resource monitoring`);
     
-    // Process users in batches to prevent memory issues and database overload
-    console.log(`[Users ${sync_id}] Processing ${users.length} users in batches of ${PROCESSING_CONFIG.BATCH_SIZE}`);
+    // Process users with resource awareness
+    console.log(`[Users ${sync_id}] Processing ${users.length} users with dynamic batching and resource monitoring`);
     
     let processedCount = 0;
     
-    await processInBatches(
+    await processInResourceAwareParallelBatches(
       users,
       async (userBatch) => {
         // Create a batch of users to upsert
@@ -266,12 +410,7 @@ async function processUsers(
         processedCount += userBatch.length;
         if (processedCount % 100 === 0 || processedCount === users.length) {
           const progress = 20 + Math.floor((processedCount / users.length) * 10);
-          await updateSyncStatus(sync_id, progress, `Processed ${processedCount}/${users.length} users`);
-        }
-
-        // Force memory cleanup periodically
-        if (processedCount % PROCESSING_CONFIG.MEMORY_CLEANUP_INTERVAL === 0) {
-          forceMemoryCleanup();
+          await updateSyncStatus(sync_id, progress, `Processed ${processedCount}/${users.length} users (Resource-Aware)`);
         }
 
         // Process this batch with optimized upsert strategy
@@ -333,9 +472,9 @@ async function processUsers(
                 }
               }
               
-              // Small delay between update sub-batches
+              // Small delay between update sub-batches with resource awareness
               if (i + updateBatchSize < usersToUpdate.length) {
-                await sleep(PROCESSING_CONFIG.DB_OPERATION_DELAY);
+                await resourceAwareSleep(PROCESSING_CONFIG.DB_OPERATION_DELAY, resourceMonitor);
               }
             }
           }
@@ -348,17 +487,14 @@ async function processUsers(
         // Clear processed data from memory
         usersToUpsert.length = 0;
         userBatch.length = 0;
-        
-        // Add delay between database operations
-        await sleep(PROCESSING_CONFIG.DB_OPERATION_DELAY);
       },
-      PROCESSING_CONFIG.BATCH_SIZE,
-      PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
+      resourceMonitor,
+      sync_id
     );
     
-    await updateSyncStatus(sync_id, 30, `User sync completed - processed ${users.length} users`);
+    await updateSyncStatus(sync_id, 30, `User sync completed - processed ${users.length} users (Resource-Optimized)`);
     
-    console.log(`[Users ${sync_id}] User processing completed successfully`);
+    console.log(`[Users ${sync_id}] User processing completed successfully with resource monitoring`);
     
   } catch (error: any) {
     console.error(`[Users ${sync_id}] Error in user processing:`, error);

@@ -352,6 +352,26 @@ async function processNewAppNotifications() {
     for (const org of organizations) {
       console.log(`Processing organization: ${org.id}`);
       
+      // Check how many syncs have completed for this organization
+      const { count, error: countError } = await supabaseAdmin
+        .from('sync_status')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', org.id)
+        .eq('status', 'COMPLETED');
+
+      if (countError) {
+        console.error(`Error checking sync status count for org ${org.id}:`, countError);
+        continue; // Skip this organization on error
+      }
+      
+      // If there has been less than one completed sync, it's likely the first run.
+      // Skip new app notifications to avoid flooding users after initial setup.
+      // We check for < 2 because the first sync should complete before we consider sending notifications.
+      if (count === null || count < 2) {
+        console.log(`Skipping new app notifications for org ${org.id} as it has had ${count} completed syncs. Waiting for at least 2 completed syncs.`);
+        continue;
+      }
+      
       // Get all applications created recently (within the last 24 hours)
       const oneDayAgo = new Date();
       oneDayAgo.setDate(oneDayAgo.getDate() - 1);

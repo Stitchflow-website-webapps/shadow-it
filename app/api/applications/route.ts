@@ -133,7 +133,8 @@ export async function GET(request: Request) {
           )
         )
       `)
-      .eq('organization_id', orgId);
+      .eq('organization_id', orgId)
+      .limit(10000);
 
     if (error) {
       throw error;
@@ -146,7 +147,6 @@ export async function GET(request: Request) {
     // Transform the data to match the frontend structure
     const transformedApplications = (applications as ApplicationType[]).map(app => {
       // Get valid user applications (where user exists)
-      console.log(app.management_status);
       const validUserApplications = (app.user_applications || [])
         .filter(ua => ua.user != null && ua.scopes != null);
 
