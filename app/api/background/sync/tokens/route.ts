@@ -2,174 +2,38 @@ import { NextResponse } from 'next/server';
 import { GoogleWorkspaceService } from '@/lib/google-workspace';
 import { supabaseAdmin } from '@/lib/supabase';
 import { determineRiskLevel } from '@/lib/risk-assessment';
-import { ResourceMonitor, resourceAwareSleep, calculateOptimalBatchSize } from '@/lib/resource-monitor';
+import { ResourceMonitor, processInBatchesWithResourceControl, processConcurrentlyWithResourceControl } from '@/lib/resource-monitor';
 import crypto from 'crypto';
 
-// Resource-aware configuration - Balanced settings for single CPU with controlled parallelism
+// Configuration optimized for 1 CPU + 2GB RAM - Balanced for speed vs stability
 const PROCESSING_CONFIG = {
-  BASE_BATCH_SIZE: 15, // Base batch size for token processing
-  MIN_BATCH_SIZE: 5,   // Minimum batch size when resources are high
-  MAX_BATCH_SIZE: 30,  // Maximum batch size when resources are low
-  BASE_DELAY_BETWEEN_BATCHES: 150, // Base delay for controlled processing
-  MIN_DELAY_BETWEEN_BATCHES: 75,
-  MAX_DELAY_BETWEEN_BATCHES: 2000, // Maximum delay when throttling
-  MAX_TOKENS_PER_BATCH: 50, // Maximum tokens per batch
-  DB_OPERATION_DELAY: 100, // Delay for DB operations
-  MEMORY_CLEANUP_INTERVAL: 75, // More frequent cleanup
-  RESOURCE_CHECK_INTERVAL: 5, // Check resources every 5 batches
-  EMERGENCY_BRAKE_THRESHOLD: 3, // Trigger emergency brake after 3 consecutive throttles
-  // NEW: Concurrency settings for single CPU
-  MAX_CONCURRENT_OPERATIONS: 2, // Conservative for token processing on single CPU
-  MIN_CONCURRENT_OPERATIONS: 1, // Minimum when resources are high
-  ADAPTIVE_CONCURRENCY: true,   // Enable dynamic concurrency adjustment
-  CONCURRENCY_REDUCTION_THRESHOLD: 70, // Lower threshold for token processing
-  CONCURRENCY_INCREASE_THRESHOLD: 45,  // CPU/Memory % to allow more concurrency
-};
-
-// Resource limits - Conservative for single CPU
-const RESOURCE_LIMITS = {
-  maxCpuPercent: 80,
-  maxMemoryPercent: 80,
-  warningCpuPercent: 70,
-  warningMemoryPercent: 70,
+  MAX_CONCURRENT_OPERATIONS: 1, // Sequential processing only for single CPU
+  BATCH_SIZE: 25, // Increased from 15 for better throughput
+  DELAY_BETWEEN_BATCHES: 100, // Reduced from 150ms for faster processing
+  MAX_TOKENS_PER_BATCH: 75, // Increased from 50 for better throughput
+  DB_OPERATION_DELAY: 50, // Reduced from 75ms for faster DB operations
+  MEMORY_CLEANUP_INTERVAL: 150, // Less frequent cleanup (from 100) for better speed
 };
 
 // Helper function to sleep
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper function to calculate optimal concurrency based on resources
-function calculateOptimalConcurrency(resourceMonitor: ResourceMonitor): number {
-  const usage = resourceMonitor.getCurrentUsage();
-  const maxUsage = Math.max(usage.cpuPercent, usage.memoryPercent);
-  
-  if (maxUsage > PROCESSING_CONFIG.CONCURRENCY_REDUCTION_THRESHOLD) {
-    return PROCESSING_CONFIG.MIN_CONCURRENT_OPERATIONS; // Drop to 1 when high usage
-  } else if (maxUsage < PROCESSING_CONFIG.CONCURRENCY_INCREASE_THRESHOLD) {
-    return PROCESSING_CONFIG.MAX_CONCURRENT_OPERATIONS; // Allow max when low usage
-  } else {
-    // Linear scaling between min and max based on resource usage
-    const usageRatio = (maxUsage - PROCESSING_CONFIG.CONCURRENCY_INCREASE_THRESHOLD) / 
-                      (PROCESSING_CONFIG.CONCURRENCY_REDUCTION_THRESHOLD - PROCESSING_CONFIG.CONCURRENCY_INCREASE_THRESHOLD);
-    const concurrencyRange = PROCESSING_CONFIG.MAX_CONCURRENT_OPERATIONS - PROCESSING_CONFIG.MIN_CONCURRENT_OPERATIONS;
-    return Math.max(PROCESSING_CONFIG.MIN_CONCURRENT_OPERATIONS, 
-                   PROCESSING_CONFIG.MAX_CONCURRENT_OPERATIONS - Math.floor(usageRatio * concurrencyRange));
-  }
-}
-
-// Helper function to process in resource-aware parallel batches
-async function processInResourceAwareParallelBatches<T>(
-  items: T[],
+// Helper function to process in controlled batches
+async function processInBatches<T>(
+  items: T[], 
   processor: (batch: T[]) => Promise<void>,
-  resourceMonitor: ResourceMonitor,
-  syncId: string,
-  batchType: string = 'items'
+  batchSize: number = PROCESSING_CONFIG.BATCH_SIZE,
+  delay: number = PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
 ): Promise<void> {
-  let processedCount = 0;
-  let consecutiveThrottles = 0;
-  let emergencyBrakeCount = 0;
-  
-  // Split items into work chunks
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += PROCESSING_CONFIG.BASE_BATCH_SIZE) {
-    const optimalBatchSize = calculateOptimalBatchSize(
-      PROCESSING_CONFIG.BASE_BATCH_SIZE,
-      resourceMonitor,
-      PROCESSING_CONFIG.MIN_BATCH_SIZE,
-      PROCESSING_CONFIG.MAX_BATCH_SIZE
-    );
-    chunks.push(items.slice(i, i + optimalBatchSize));
-  }
-  
-  console.log(`🔄 [Tokens ${syncId}] Processing ${chunks.length} chunks of ${batchType} with adaptive parallelism`);
-  
-  // Process chunks with controlled parallelism
-  for (let i = 0; i < chunks.length; i += PROCESSING_CONFIG.MAX_CONCURRENT_OPERATIONS) {
-    // Check if system is overloaded
-    if (resourceMonitor.isOverloaded()) {
-      console.warn(`🚨 [Tokens ${syncId}] System overloaded while processing ${batchType}, waiting for recovery...`);
-      
-      let waitTime = 0;
-      const maxWaitTime = 45000; // 45 seconds max wait
-      
-      while (resourceMonitor.isOverloaded() && waitTime < maxWaitTime) {
-        await resourceAwareSleep(2000, resourceMonitor);
-        waitTime += 2000;
-      }
-      
-      if (resourceMonitor.isOverloaded()) {
-        throw new Error(`System resources remain critically high after ${maxWaitTime/1000} seconds while processing ${batchType}`);
-      }
-    }
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    await processor(batch);
     
-    // Calculate optimal concurrency for this batch
-    const optimalConcurrency = PROCESSING_CONFIG.ADAPTIVE_CONCURRENCY ? 
-      calculateOptimalConcurrency(resourceMonitor) : 
-      PROCESSING_CONFIG.MAX_CONCURRENT_OPERATIONS;
-    
-    // Get the parallel batch (up to optimal concurrency)
-    const parallelBatch = chunks.slice(i, i + optimalConcurrency);
-    
-    // Log resource usage and concurrency
-    if (processedCount % (PROCESSING_CONFIG.RESOURCE_CHECK_INTERVAL * PROCESSING_CONFIG.BASE_BATCH_SIZE) === 0) {
-      const usage = resourceMonitor.getCurrentUsage();
-      console.log(`🔍 [Tokens ${syncId}] Resource usage: CPU: ${usage.cpuPercent.toFixed(1)}%, Memory: ${usage.memoryPercent.toFixed(1)}%, Concurrency: ${parallelBatch.length} (${batchType})`);
-    }
-    
-    // Process batches in parallel with resource monitoring
-    try {
-      await Promise.all(parallelBatch.map(async (chunk) => {
-        try {
-          await processor(chunk);
-          processedCount += chunk.length;
-        } catch (chunkError) {
-          console.error(`[Tokens ${syncId}] Error processing ${batchType} chunk:`, chunkError);
-          // Continue with other chunks
-        }
-      }));
-    } catch (parallelError) {
-      console.error(`[Tokens ${syncId}] Error in parallel ${batchType} processing:`, parallelError);
-      // Continue with next set of chunks
-    }
-    
-    // Memory cleanup
-    if (processedCount % PROCESSING_CONFIG.MEMORY_CLEANUP_INTERVAL === 0) {
-      resourceMonitor.forceMemoryCleanup();
-    }
-    
-    // Calculate appropriate delay
-    let delay = PROCESSING_CONFIG.BASE_DELAY_BETWEEN_BATCHES;
-    
-    if (resourceMonitor.shouldThrottle()) {
-      const throttleDelay = resourceMonitor.getThrottleDelay();
-      delay = Math.min(PROCESSING_CONFIG.MAX_DELAY_BETWEEN_BATCHES, delay + throttleDelay);
-      consecutiveThrottles++;
-      
-      console.log(`⚠️  [Tokens ${syncId}] Throttling ${batchType}: ${throttleDelay}ms additional delay (consecutive: ${consecutiveThrottles})`);
-    } else {
-      consecutiveThrottles = 0;
-      delay = Math.max(PROCESSING_CONFIG.MIN_DELAY_BETWEEN_BATCHES, delay);
-    }
-    
-    // Emergency brake if too many consecutive throttles
-    if (consecutiveThrottles > PROCESSING_CONFIG.EMERGENCY_BRAKE_THRESHOLD) {
-      emergencyBrakeCount++;
-      console.warn(`🚨 [Tokens ${syncId}] Emergency brake #${emergencyBrakeCount}: Too many consecutive throttles for ${batchType}, forcing extended pause`);
-      await resourceAwareSleep(8000, resourceMonitor); // 8 second pause
-      consecutiveThrottles = 0;
-      
-      // If we hit emergency brake too many times, something is wrong
-      if (emergencyBrakeCount > 3) {
-        throw new Error(`Emergency brake triggered ${emergencyBrakeCount} times for ${batchType} - system may be overloaded`);
-      }
-    }
-    
-    // Apply delay if not the last parallel batch
-    if (i + optimalConcurrency < chunks.length) {
-      await resourceAwareSleep(delay, resourceMonitor);
+    // Add delay between batches to prevent overwhelming the system
+    if (i + batchSize < items.length) {
+      await sleep(delay);
     }
   }
-  
-  console.log(`✅ [Tokens ${syncId}] Completed parallel processing of ${processedCount} ${batchType} (Emergency brakes: ${emergencyBrakeCount})`);
 }
 
 // Helper function to update sync status
@@ -334,8 +198,6 @@ export const runtime = 'nodejs'; // Enable Fluid Compute by using nodejs runtime
 export async function POST(request: Request) {
   // Declare requestData here to make sync_id available in catch
   let requestData; 
-  let resourceMonitor: ResourceMonitor | undefined;
-  
   try {
     requestData = await request.json();
     const { organization_id, sync_id, access_token, refresh_token, users } = requestData;
@@ -347,23 +209,6 @@ export async function POST(request: Request) {
     if (isTestMode) {
       console.log(`[Tokens API ${sync_id}] 🧪 Running in TEST MODE - emails will be skipped`);
     }
-    
-    // Initialize resource monitoring
-    resourceMonitor = ResourceMonitor.getInstance(RESOURCE_LIMITS);
-    resourceMonitor.startMonitoring(1000); // Check every second
-    
-    // Set up resource monitoring event handlers
-    resourceMonitor.on('overload', (usage) => {
-      console.warn(`🚨 [Tokens ${sync_id}] RESOURCE OVERLOAD: CPU: ${usage.cpuPercent.toFixed(1)}%, Memory: ${usage.memoryPercent.toFixed(1)}%`);
-    });
-    
-    resourceMonitor.on('warning', (usage) => {
-      console.warn(`⚠️  [Tokens ${sync_id}] RESOURCE WARNING: CPU: ${usage.cpuPercent.toFixed(1)}%, Memory: ${usage.memoryPercent.toFixed(1)}%`);
-    });
-    
-    // Log initial resource state
-    const initialUsage = resourceMonitor.getCurrentUsage();
-    console.log(`🔍 [Tokens ${sync_id}] Initial resource usage: CPU: ${initialUsage.cpuPercent.toFixed(1)}%, Memory: ${initialUsage.memoryPercent.toFixed(1)}%`);
     
     console.log(`[Tokens API ${sync_id}] Starting token fetch processing with resource monitoring`);
     
@@ -377,22 +222,14 @@ export async function POST(request: Request) {
     }
 
     // Await the processTokens function
-    await processTokens(organization_id, sync_id, access_token, refresh_token, users, request, skipEmail, resourceMonitor);
-    
-    // Log final resource state
-    const finalUsage = resourceMonitor.getCurrentUsage();
-    console.log(`🔍 [Tokens ${sync_id}] Final resource usage: CPU: ${finalUsage.cpuPercent.toFixed(1)}%, Memory: ${finalUsage.memoryPercent.toFixed(1)}%`);
+    await processTokens(organization_id, sync_id, access_token, refresh_token, users, request, skipEmail);
     
     console.log(`[Tokens API ${sync_id}] Token fetch completed successfully`);
     return NextResponse.json({ 
       message: 'Token fetch completed successfully',
       syncId: sync_id,
       organizationId: organization_id,
-      testMode: isTestMode,
-      resourceUsage: {
-        initial: initialUsage,
-        final: finalUsage
-      }
+      testMode: isTestMode
     });
 
   } catch (error: any) {
@@ -404,13 +241,23 @@ export async function POST(request: Request) {
       { error: 'Failed to process tokens', details: error.message },
       { status: 500 }
     );
-  } finally {
-    // Always stop monitoring when done
-    if (resourceMonitor) {
-      resourceMonitor.stopMonitoring();
-    }
   }
 }
+
+// Helper function to force garbage collection and memory cleanup
+const forceMemoryCleanup = () => {
+  if (global.gc) {
+    global.gc();
+  }
+  // Clear any lingering references
+  if (typeof process !== 'undefined' && process.memoryUsage) {
+    const memUsage = process.memoryUsage();
+    if (memUsage.heapUsed > 1024 * 1024 * 1024) { // If using > 1GB heap
+      console.log(`Memory usage high: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB, forcing cleanup`);
+      if (global.gc) global.gc();
+    }
+  }
+};
 
 async function processTokens(
   organization_id: string, 
@@ -419,11 +266,15 @@ async function processTokens(
   refresh_token: string,
   users: Array<{googleId: string, userId: string}> | undefined,
   request: Request,
-  skipEmail: boolean,
-  resourceMonitor: ResourceMonitor
+  skipEmail: boolean
 ) {
+  const monitor = ResourceMonitor.getInstance();
+  
   try {
-    console.log(`[Tokens ${sync_id}] Starting token fetch for organization: ${organization_id} with resource monitoring`);
+    console.log(`[Tokens ${sync_id}] Starting token fetch for organization: ${organization_id}`);
+    
+    // Log initial resource usage
+    monitor.logResourceUsage(`Tokens ${sync_id} START`);
     
     // Define the required scopes for background Google sync
     const GOOGLE_SYNC_SCOPES = [
@@ -485,22 +336,32 @@ async function processTokens(
       await updateSyncStatus(sync_id, 40, 'Fetching application tokens from Google Workspace');
       applicationTokens = await googleService.getOAuthTokens();
       console.log(`[Tokens ${sync_id}] Fetched ${applicationTokens.length} application tokens`);
+      
+      // Log resource usage after token fetch
+      monitor.logResourceUsage(`Tokens ${sync_id} FETCH COMPLETE`);
     } catch (tokenError) {
       console.error(`[Tokens ${sync_id}] Error fetching OAuth tokens:`, tokenError);
       await updateSyncStatus(sync_id, 0, 'Failed to fetch application tokens from Google Workspace', 'FAILED');
       throw tokenError;
     }
     
-    await updateSyncStatus(sync_id, 50, `Processing ${applicationTokens.length} application tokens with resource monitoring`);
+    await updateSyncStatus(sync_id, 50, `Processing ${applicationTokens.length} application tokens with resource-aware batching`);
     
-    // Process tokens in resource-aware parallel batches
-    console.log(`[Tokens ${sync_id}] Processing tokens with resource monitoring and adaptive parallelism`);
+    // **NEW: Process tokens with resource-aware grouping**
+    console.log(`[Tokens ${sync_id}] Processing tokens with resource-aware batching`);
     
-    // Group applications by display name with resource awareness
+    // Group applications by display name (process in resource-aware batches)
     const appNameMap = new Map<string, any[]>();
     
-    // Process tokens in resource-aware parallel batches to avoid memory overload
-    await processInResourceAwareParallelBatches(
+    // Determine optimal batch size based on current resources
+    const usage = monitor.getCurrentUsage();
+    const memoryRatio = Math.max(usage.heapUsed / 1600, usage.rss / 1600);
+    const dynamicBatchSize = memoryRatio > 0.7 ? 25 : memoryRatio > 0.5 ? 50 : 75;
+    
+    console.log(`[Tokens ${sync_id}] Using dynamic batch size: ${dynamicBatchSize} (memory ratio: ${(memoryRatio * 100).toFixed(1)}%)`);
+    
+    // Process tokens in resource-aware batches
+    await processInBatchesWithResourceControl(
       applicationTokens,
       async (tokenBatch) => {
         for (const token of tokenBatch) {
@@ -519,9 +380,9 @@ async function processTokens(
           appNameMap.get(appName)!.push(token);
         }
       },
-      resourceMonitor,
-      sync_id,
-      'tokens'
+      `Tokens ${sync_id} GROUPING`,
+      dynamicBatchSize,
+      50 // Base delay
     );
     
     console.log(`[Tokens ${sync_id}] Grouped tokens into ${appNameMap.size} applications`);
@@ -530,162 +391,161 @@ async function processTokens(
     const applicationsToUpsert: any[] = [];
     const userAppRelationsToProcess: { appName: string, userId: string, userEmail: string, token: any }[] = [];
     
-    // Process each application with resource awareness
+    // **NEW: Process applications with concurrent resource-aware processing**
     let appCount = 0;
     const totalApps = appNameMap.size;
     const appEntries = Array.from(appNameMap.entries());
     
-    // Process applications in resource-aware parallel batches
-    await processInResourceAwareParallelBatches(
+    console.log(`[Tokens ${sync_id}] Processing ${totalApps} applications with resource-aware concurrency`);
+    
+    // Process applications in concurrent batches with resource monitoring
+    await processConcurrentlyWithResourceControl(
       appEntries,
-      async (appBatch) => {
-        for (const [appName, tokens] of appBatch) {
-          appCount++;
-          const progressPercent = 50 + Math.floor((appCount / totalApps) * 25);
-          
-          if (appCount % 10 === 0 || appCount === totalApps) {
-            await updateSyncStatus(
-              sync_id, 
-              progressPercent, 
-              `Processing application ${appCount}/${totalApps} (Resource-Aware)`
-            );
-          }
-          
-          // Determine highest risk level based on ALL scopes combined
-          const allScopesForRiskEvaluation = new Set<string>();
-          tokens.forEach((token: any) => {
-            if (token.scopes && Array.isArray(token.scopes)) {
-              token.scopes.forEach((scope: string) => allScopesForRiskEvaluation.add(scope));
-            }
-          });
-
-          // Now evaluate risk based on the combined set of scopes
-          const highestRiskLevel = determineRiskLevel(Array.from(allScopesForRiskEvaluation));
-          
-          // Check if app already exists
-          const { data: existingApp } = await supabaseAdmin
-            .from('applications')
-            .select('id')
-            .eq('name', appName)
-            .eq('organization_id', organization_id)
-            .maybeSingle();
-          
-          // Add to batch of applications to upsert
-          const appRecord: any = {
-            google_app_id: tokens.map(t => t.clientId).join(','),
-            name: appName,
-            category: 'Unknown',
-            risk_level: highestRiskLevel,
-            total_permissions: allScopesForRiskEvaluation.size,
-            all_scopes: Array.from(allScopesForRiskEvaluation),
-            organization_id: organization_id,
-            updated_at: new Date().toISOString()
-          };
-          
-          if (existingApp) {
-            // Update existing app with its ID
-            appRecord.id = existingApp.id;
-          } else {
-            // Generate a new UUID for new applications
-            appRecord.id = crypto.randomUUID();
-          }
-          
-          applicationsToUpsert.push(appRecord);
-          
-          // Process each token to create user-application relationships
-          for (const token of tokens) {
-            const userKey = token.userKey;
-            const userEmail = token.userEmail;
-            
-            // Try to get user ID from map using different keys
-            let userId = null;
-            
-            // Try by Google user ID first
-            if (userKey && userMap.has(userKey)) {
-              userId = userMap.get(userKey);
-            }
-            
-            // Fall back to email if available
-            if (!userId && userEmail) {
-              // Try normalized email
-              const normalizedEmail = userEmail.toLowerCase();
-              if (userMap.has(normalizedEmail)) {
-                userId = userMap.get(normalizedEmail);
-              }
-            }
-            
-            if (!userId) {
-              // Log the missing user details for debugging
-              console.warn('No matching user found for token:', {
-                userKey: userKey || 'missing',
-                userEmail: userEmail || 'missing',
-                appName: appName
-              });
-              continue;
-            }
-            
-            // Extract only the necessary parts of the token to avoid serialization issues
-            const simplifiedToken = {
-              scopes: token.scopes || [],
-              scopeData: token.scopeData || [],
-              scope: token.scope || '',
-              permissions: token.permissions || [],
-              displayText: token.displayText || ''
-            };
-            
-            // Check if this user-app relationship already exists in our processing list
-            const existingRelationIndex = userAppRelationsToProcess.findIndex(rel => 
-              rel.appName === appName && rel.userId === userId
-            );
-            
-            if (existingRelationIndex !== -1) {
-              // Merge token scopes with existing record instead of duplicating
-              const existingToken = userAppRelationsToProcess[existingRelationIndex].token;
-              existingToken.scopes = [...new Set([...(existingToken.scopes || []), ...(simplifiedToken.scopes || [])])];
-              
-              // Merge other scope data if needed
-              if (simplifiedToken.scopeData && simplifiedToken.scopeData.length > 0) {
-                existingToken.scopeData = [...(existingToken.scopeData || []), ...simplifiedToken.scopeData];
-              }
-              
-              // Update the scope string if needed
-              if (simplifiedToken.scope) {
-                existingToken.scope = existingToken.scope 
-                  ? `${existingToken.scope} ${simplifiedToken.scope}`
-                  : simplifiedToken.scope;
-              }
-              
-              // Update permissions if needed
-              if (simplifiedToken.permissions && simplifiedToken.permissions.length > 0) {
-                existingToken.permissions = [...(existingToken.permissions || []), ...simplifiedToken.permissions];
-              }
-            } else {
-              // Add a new relationship if none exists
-              userAppRelationsToProcess.push({
-                appName,
-                userId,
-                userEmail: userEmail || '',
-                token: simplifiedToken
-              });
-            }
-          }
-          
-          // Clear processed tokens from memory to prevent buildup
-          tokens.length = 0;
+      async ([appName, tokens]: [string, any[]]) => {
+        appCount++;
+        const progressPercent = 50 + Math.floor((appCount / totalApps) * 25);
+        
+        if (appCount % 10 === 0 || appCount === totalApps) {
+          await updateSyncStatus(
+            sync_id, 
+            progressPercent, 
+            `Processing application ${appCount}/${totalApps} with resource monitoring`
+          );
         }
         
-        // Clear the batch from memory
-        appBatch.length = 0;
+        // Determine highest risk level based on ALL scopes combined
+        const allScopesForRiskEvaluation = new Set<string>();
+        tokens.forEach((token: any) => {
+          if (token.scopes && Array.isArray(token.scopes)) {
+            token.scopes.forEach((scope: string) => allScopesForRiskEvaluation.add(scope));
+          }
+        });
+
+        // Now evaluate risk based on the combined set of scopes
+        const highestRiskLevel = determineRiskLevel(Array.from(allScopesForRiskEvaluation));
+        
+        // Check if app already exists
+        const { data: existingApp } = await supabaseAdmin
+          .from('applications')
+          .select('id')
+          .eq('name', appName)
+          .eq('organization_id', organization_id)
+          .maybeSingle();
+        
+        // Add to batch of applications to upsert
+        const appRecord: any = {
+          google_app_id: tokens.map(t => t.clientId).join(','),
+          name: appName,
+          category: 'Unknown',
+          risk_level: highestRiskLevel,
+          total_permissions: allScopesForRiskEvaluation.size,
+          all_scopes: Array.from(allScopesForRiskEvaluation),
+          organization_id: organization_id,
+          updated_at: new Date().toISOString()
+        };
+        
+        if (existingApp) {
+          // Update existing app with its ID
+          appRecord.id = existingApp.id;
+        } else {
+          // Generate a new UUID for new applications
+          appRecord.id = crypto.randomUUID();
+        }
+        
+        applicationsToUpsert.push(appRecord);
+        
+        // Process each token to create user-application relationships
+        for (const token of tokens) {
+          const userKey = token.userKey;
+          const userEmail = token.userEmail;
+          
+          // Try to get user ID from map using different keys
+          let userId = null;
+          
+          // Try by Google user ID first
+          if (userKey && userMap.has(userKey)) {
+            userId = userMap.get(userKey);
+          }
+          
+          // Fall back to email if available
+          if (!userId && userEmail) {
+            // Try normalized email
+            const normalizedEmail = userEmail.toLowerCase();
+            if (userMap.has(normalizedEmail)) {
+              userId = userMap.get(normalizedEmail);
+            }
+          }
+          
+          if (!userId) {
+            // Log the missing user details for debugging
+            console.warn('No matching user found for token:', {
+              userKey: userKey || 'missing',
+              userEmail: userEmail || 'missing',
+              appName: appName
+            });
+            continue;
+          }
+          
+          // Extract only the necessary parts of the token to avoid serialization issues
+          const simplifiedToken = {
+            scopes: token.scopes || [],
+            scopeData: token.scopeData || [],
+            scope: token.scope || '',
+            permissions: token.permissions || [],
+            displayText: token.displayText || ''
+          };
+          
+          // Check if this user-app relationship already exists in our processing list
+          const existingRelationIndex = userAppRelationsToProcess.findIndex(rel => 
+            rel.appName === appName && rel.userId === userId
+          );
+          
+          if (existingRelationIndex !== -1) {
+            // Merge token scopes with existing record instead of duplicating
+            const existingToken = userAppRelationsToProcess[existingRelationIndex].token;
+            existingToken.scopes = [...new Set([...(existingToken.scopes || []), ...(simplifiedToken.scopes || [])])];
+            
+            // Merge other scope data if needed
+            if (simplifiedToken.scopeData && simplifiedToken.scopeData.length > 0) {
+              existingToken.scopeData = [...(existingToken.scopeData || []), ...simplifiedToken.scopeData];
+            }
+            
+            // Update the scope string if needed
+            if (simplifiedToken.scope) {
+              existingToken.scope = existingToken.scope 
+                ? `${existingToken.scope} ${simplifiedToken.scope}`
+                : simplifiedToken.scope;
+            }
+            
+            // Update permissions if needed
+            if (simplifiedToken.permissions && simplifiedToken.permissions.length > 0) {
+              existingToken.permissions = [...(existingToken.permissions || []), ...simplifiedToken.permissions];
+            }
+          } else {
+            // Add a new relationship if none exists
+            userAppRelationsToProcess.push({
+              appName,
+              userId,
+              userEmail: userEmail || '',
+              token: simplifiedToken
+            });
+          }
+        }
+        
+        // Clear processed tokens from memory to prevent buildup
+        tokens.length = 0;
       },
-      resourceMonitor,
-      sync_id,
-      'applications'
+      `Tokens ${sync_id} APPS`,
+      undefined // Let the resource monitor determine optimal concurrency
     );
     
-    // Save applications in resource-aware parallel batches
-    await updateSyncStatus(sync_id, 75, `Saving ${applicationsToUpsert.length} applications (Resource-Aware)`);
+    // Log resource usage after app processing
+    monitor.logResourceUsage(`Tokens ${sync_id} APPS COMPLETE`);
     
-    await processInResourceAwareParallelBatches(
+    // Save applications in resource-aware batches
+    await updateSyncStatus(sync_id, 75, `Saving ${applicationsToUpsert.length} applications with resource monitoring`);
+    
+    await processInBatchesWithResourceControl(
       applicationsToUpsert,
       async (appBatch) => {
         try {
@@ -695,16 +555,14 @@ async function processTokens(
           
           if (error) {
             console.error(`[Tokens ${sync_id}] Error upserting application batch:`, error);
-            // Continue processing other batches instead of failing completely
           }
         } catch (err) {
           console.error('Error during application batch upsert:', err);
-          // Continue processing other batches
         }
       },
-      resourceMonitor,
-      sync_id,
-      'application records'
+      `Tokens ${sync_id} APPS SAVE`,
+      25, // Conservative batch size for database operations
+      100 // Base delay
     );
     
     // Get the latest application IDs for the relationship mapping
@@ -731,15 +589,15 @@ async function processTokens(
     console.log(`[Tokens ${sync_id}] Triggering app categorization at: ${categorizeUrl}`);
     
     // Prepare user app relationships for the next phase
-    await updateSyncStatus(sync_id, 80, `Preparing user-application relationships (Resource-Aware)`);
+    await updateSyncStatus(sync_id, 80, `Preparing user-application relationships with resource monitoring`);
     // Construct a data structure for relations processing
     const appMap = Array.from(appNameToIdMap.entries()).map(([appName, appId]) => ({ appName, appId }));
     // Trigger the final phase - the relationships processing
-    await updateSyncStatus(sync_id, 80, 'Saving application token relationships (Resource-Aware)');
+    await updateSyncStatus(sync_id, 80, 'Saving application token relationships');
     
     const nextUrl = `${protocol}${selfUrl}/api/background/sync/relations`;
-    console.log(`[Tokens ${sync_id}] Triggering relations processing at: ${nextUrl}`);
-    console.log(`[Tokens ${sync_id}] Prepared ${userAppRelationsToProcess.length} user-app relations and ${appMap.length} app mappings`);
+    console.log(`Triggering relations processing at: ${nextUrl}`);
+    console.log(`Prepared ${userAppRelationsToProcess.length} user-app relations and ${appMap.length} app mappings`);
     
     if (userAppRelationsToProcess.length === 0) {
       console.warn(`[Tokens ${sync_id}] No user-application relations to process - check user mapping and token data`);
@@ -774,8 +632,8 @@ async function processTokens(
 
       if (!nextResponse.ok) {
         const errorText = await nextResponse.text();
-        console.error(`[Tokens ${sync_id}] Failed to trigger relations processing: ${nextResponse.status} ${nextResponse.statusText}`);
-        console.error(`[Tokens ${sync_id}] Response details: ${errorText}`);
+        console.error(`Failed to trigger relations processing: ${nextResponse.status} ${nextResponse.statusText}`);
+        console.error(`Response details: ${errorText}`);
         await updateSyncStatus(
           sync_id, 
           100, 
@@ -786,7 +644,7 @@ async function processTokens(
         await updateSyncStatus(
           sync_id, 
           100, 
-          `Token processing complete, finalizing data... (Resource-Aware)`,
+          `Token processing complete, finalizing data...`,
           'COMPLETED'
         );
       }
@@ -817,7 +675,10 @@ async function processTokens(
         console.warn(`[Tokens ${sync_id}] Error triggering categorization:`, error);
       });
 
-      console.log(`[Tokens ${sync_id}] Token processing completed successfully with resource monitoring`);
+      // Log final resource usage
+      monitor.logResourceUsage(`Tokens ${sync_id} COMPLETE`);
+
+      console.log(`[Tokens ${sync_id}] Token processing completed successfully`);
     } catch (relationError) {
       console.error(`[Tokens ${sync_id}] Error triggering relations processing:`, relationError);
       await updateSyncStatus(
@@ -837,6 +698,10 @@ async function processTokens(
     }
   } catch (error: any) {
     console.error(`[Tokens ${sync_id}] Error in token processing:`, error);
+    
+    // Log resource usage on error
+    monitor.logResourceUsage(`Tokens ${sync_id} ERROR`);
+    
     await updateSyncStatus(
       sync_id,
       0,

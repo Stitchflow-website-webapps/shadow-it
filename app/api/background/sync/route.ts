@@ -1,178 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { ResourceMonitor, CircuitBreaker, resourceAwareSleep } from '@/lib/resource-monitor';
+import { ResourceMonitor } from '@/lib/resource-monitor';
 
 export const maxDuration = 300; // Set max duration to 300 seconds (5 minutes)
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs'; // Enable Fluid Compute by using nodejs runtime
 
-// Resource-aware configuration - Balanced for single CPU with controlled endpoint parallelism
-const SYNC_CONFIG = {
-  MAX_CPU_PERCENT: 80,
-  MAX_MEMORY_PERCENT: 80,
-  WARNING_CPU_PERCENT: 70,
-  WARNING_MEMORY_PERCENT: 70,
-  BASE_DELAY_BETWEEN_ENDPOINTS: 2000, // 2 seconds base delay
-  MAX_DELAY_BETWEEN_ENDPOINTS: 10000, // 10 seconds max delay
-  MEMORY_CLEANUP_INTERVAL: 30000, // 30 seconds
-  // NEW: Controlled endpoint parallelism for larger organizations
-  ENABLE_ENDPOINT_PARALLELISM: true, // Enable parallel endpoint processing
-  MAX_PARALLEL_ENDPOINTS: 2, // Maximum 2 endpoints in parallel for single CPU
-  SEQUENTIAL_FALLBACK_THRESHOLD: 75, // CPU/Memory % to fall back to sequential
-};
-
-// Helper function to determine if we should use parallel processing
-function shouldUseParallelProcessing(resourceMonitor: ResourceMonitor): boolean {
-  if (!SYNC_CONFIG.ENABLE_ENDPOINT_PARALLELISM) return false;
-  
-  const usage = resourceMonitor.getCurrentUsage();
-  const maxUsage = Math.max(usage.cpuPercent, usage.memoryPercent);
-  
-  return maxUsage < SYNC_CONFIG.SEQUENTIAL_FALLBACK_THRESHOLD;
-}
-
-// Helper function to process endpoints with adaptive parallelism
-async function processEndpointsWithAdaptiveParallelism(
-  endpoints: string[],
-  requestData: any,
-  headers: Record<string, string>,
-  baseUrl: string,
-  resourceMonitor: ResourceMonitor,
-  circuitBreaker: CircuitBreaker,
-  syncId: string
-): Promise<void> {
-  console.log(`[MAIN SYNC ${syncId}] Processing ${endpoints.length} endpoints with adaptive parallelism`);
-  
-  for (let i = 0; i < endpoints.length; i += SYNC_CONFIG.MAX_PARALLEL_ENDPOINTS) {
-    // Check resource usage before each batch
-    if (resourceMonitor.isOverloaded()) {
-      console.warn(`🚨 [MAIN SYNC ${syncId}] System overloaded, waiting for recovery...`);
-      
-      let waitTime = 0;
-      const maxWaitTime = 30000; // 30 seconds max wait
-      
-      while (resourceMonitor.isOverloaded() && waitTime < maxWaitTime) {
-        await resourceAwareSleep(1000, resourceMonitor);
-        waitTime += 1000;
-      }
-      
-      if (resourceMonitor.isOverloaded()) {
-        throw new Error('System resources remain overloaded after 30 seconds');
-      }
-    }
-    
-    // Determine processing mode based on current resources
-    const useParallel = shouldUseParallelProcessing(resourceMonitor);
-    const currentUsage = resourceMonitor.getCurrentUsage();
-    
-    console.log(`🔍 [MAIN SYNC ${syncId}] Resource usage: CPU: ${currentUsage.cpuPercent.toFixed(1)}%, Memory: ${currentUsage.memoryPercent.toFixed(1)}%, Mode: ${useParallel ? 'PARALLEL' : 'SEQUENTIAL'}`);
-    
-    if (useParallel && endpoints.length > 1) {
-      // Process endpoints in parallel (up to MAX_PARALLEL_ENDPOINTS)
-      const parallelBatch = endpoints.slice(i, i + SYNC_CONFIG.MAX_PARALLEL_ENDPOINTS);
-      
-      console.log(`⚡ [MAIN SYNC ${syncId}] Processing ${parallelBatch.length} endpoints in parallel`);
-      
-      await Promise.all(parallelBatch.map(async (endpoint) => {
-        try {
-          await processEndpoint(endpoint, requestData, headers, baseUrl, circuitBreaker, syncId);
-        } catch (endpointError) {
-          console.error(`[MAIN SYNC ${syncId}] Error in parallel endpoint ${endpoint}:`, endpointError);
-          throw endpointError; // Still throw to maintain error handling
-        }
-      }));
-    } else {
-      // Process endpoints sequentially
-      const sequentialBatch = endpoints.slice(i, i + SYNC_CONFIG.MAX_PARALLEL_ENDPOINTS);
-      
-      console.log(`🔄 [MAIN SYNC ${syncId}] Processing ${sequentialBatch.length} endpoints sequentially`);
-      
-      for (const endpoint of sequentialBatch) {
-        try {
-          await processEndpoint(endpoint, requestData, headers, baseUrl, circuitBreaker, syncId);
-          
-          // Add delay between sequential endpoints
-          if (endpoint !== sequentialBatch[sequentialBatch.length - 1]) {
-            await resourceAwareSleep(SYNC_CONFIG.BASE_DELAY_BETWEEN_ENDPOINTS / 2, resourceMonitor);
-          }
-        } catch (endpointError) {
-          console.error(`[MAIN SYNC ${syncId}] Error in sequential endpoint ${endpoint}:`, endpointError);
-          throw endpointError;
-        }
-      }
-    }
-    
-    // Force memory cleanup between batches
-    resourceMonitor.forceMemoryCleanup();
-    
-    // Resource-aware delay between endpoint batches (not for last batch)
-    if (i + SYNC_CONFIG.MAX_PARALLEL_ENDPOINTS < endpoints.length) {
-      console.log(`[MAIN SYNC ${syncId}] Waiting before next endpoint batch with resource-aware delay...`);
-      
-      // Calculate delay based on resource usage
-      const delayUsage = resourceMonitor.getCurrentUsage();
-      let baseDelay = SYNC_CONFIG.BASE_DELAY_BETWEEN_ENDPOINTS;
-      
-      // Increase delay if resources are high
-      if (delayUsage.cpuPercent > 60 || delayUsage.memoryPercent > 60) {
-        baseDelay = Math.min(SYNC_CONFIG.MAX_DELAY_BETWEEN_ENDPOINTS, baseDelay * 1.5);
-      }
-      
-      await resourceAwareSleep(baseDelay, resourceMonitor);
-    }
-  }
-}
-
-// Helper function to process a single endpoint
-async function processEndpoint(
-  endpoint: string,
-  requestData: any,
-  headers: Record<string, string>,
-  baseUrl: string,
-  circuitBreaker: CircuitBreaker,
-  syncId: string
-): Promise<void> {
-  console.log(`[MAIN SYNC ${syncId}] Processing endpoint: ${endpoint}`);
-  
-  // Try first with the prefixed URL
-  const prefixedUrl = `${baseUrl}/${endpoint}`;
-  let response;
-  
-  // Execute with circuit breaker protection
-  await circuitBreaker.execute(async () => {
-    try {
-      response = await fetch(prefixedUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestData),
-      });
-    } catch (fetchError) {
-      console.log(`[MAIN SYNC ${syncId}] Error with ${prefixedUrl}, trying direct URL...`);
-      // If the first attempt fails, try without the prefix
-      const directUrl = `${baseUrl}/${endpoint}`;
-      response = await fetch(directUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestData),
-      });
-    }
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error(`[MAIN SYNC ${syncId}] Error from ${endpoint}:`, error);
-      throw new Error(`${endpoint} failed: ${error}`);
-    }
-  });
-
-  console.log(`[MAIN SYNC ${syncId}] ✅ Successfully completed ${endpoint}`);
-}
-
 export async function POST(request: NextRequest) {
   let requestData;
-  let resourceMonitor: ResourceMonitor | undefined;
-  let circuitBreaker: CircuitBreaker;
-
   try {
+    // Initialize resource monitor with conservative limits for 1 CPU + 2GB RAM
+    const monitor = ResourceMonitor.getInstance({
+      maxHeapUsageMB: 1600,     // 80% of 2GB
+      maxRSSUsageMB: 1600,      // 80% of 2GB
+      maxConcurrency: 2,        // Conservative for 1 CPU
+      emergencyThresholdMB: 1800 // 90% emergency threshold
+    });
+
     // Parse the request data once and store it for reuse
     requestData = await request.json();
     const { 
@@ -182,29 +26,6 @@ export async function POST(request: NextRequest) {
       refresh_token,
       provider 
     } = requestData;
-
-    // Initialize resource monitoring
-    resourceMonitor = ResourceMonitor.getInstance({
-      maxCpuPercent: SYNC_CONFIG.MAX_CPU_PERCENT,
-      maxMemoryPercent: SYNC_CONFIG.MAX_MEMORY_PERCENT,
-      warningCpuPercent: SYNC_CONFIG.WARNING_CPU_PERCENT,
-      warningMemoryPercent: SYNC_CONFIG.WARNING_MEMORY_PERCENT
-    });
-    
-    // Start monitoring resources
-    resourceMonitor.startMonitoring(1000); // Check every second
-    
-    // Initialize circuit breaker
-    circuitBreaker = new CircuitBreaker(3, 120000, 15000); // 3 failures, 2min timeout, 15s monitoring
-    
-    // Set up resource monitoring event handlers
-    resourceMonitor.on('overload', (usage) => {
-      console.warn(`🚨 RESOURCE OVERLOAD: CPU: ${usage.cpuPercent.toFixed(1)}%, Memory: ${usage.memoryPercent.toFixed(1)}%`);
-    });
-    
-    resourceMonitor.on('warning', (usage) => {
-      console.warn(`⚠️  RESOURCE WARNING: CPU: ${usage.cpuPercent.toFixed(1)}%, Memory: ${usage.memoryPercent.toFixed(1)}%`);
-    });
 
     // Check for test mode headers
     const isTestMode = request.headers.get('X-Test-Mode') === 'true';
@@ -221,9 +42,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Initial resource check
-    const initialUsage = resourceMonitor.getCurrentUsage();
-    console.log(`🔍 [MAIN SYNC] Initial resource usage: CPU: ${initialUsage.cpuPercent.toFixed(1)}%, Memory: ${initialUsage.memoryPercent.toFixed(1)}%`);
+    // Log initial resource usage
+    monitor.logResourceUsage('MAIN SYNC START');
 
     // Update sync status to indicate progress
     const statusMessage = isTestMode 
@@ -244,8 +64,8 @@ export async function POST(request: NextRequest) {
       ? [
           'api/background/sync/users',
           'api/background/sync/tokens',
-          // 'api/background/sync/relations', - handled by tokens endpoint
-          // 'api/background/sync/categorize' - handled by tokens endpoint
+          // 'api/background/sync/relations',
+          // 'api/background/sync/categorize'
         ]
       : [
           'api/background/sync/microsoft'
@@ -259,44 +79,136 @@ export async function POST(request: NextRequest) {
     const protocol = host.includes('localhost') ? 'http://' : 'https://';
     const baseUrl = `${protocol}${host}`;
     
-    console.log(`[MAIN SYNC] Using base URL: ${baseUrl}`);
+    console.log(`Using base URL: ${baseUrl}`);
+
+    // Prepare request data
+    const requestPayload = {
+      organization_id,
+      sync_id,
+      access_token,
+      refresh_token,
+      provider
+    };
 
     // Prepare headers with test mode flags
-    const syncHeaders: Record<string, string> = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
     
     if (isTestMode) {
-      syncHeaders['X-Test-Mode'] = 'true';
+      headers['X-Test-Mode'] = 'true';
     }
     if (skipEmail) {
-      syncHeaders['X-Skip-Email'] = 'true';
+      headers['X-Skip-Email'] = 'true';
     }
 
-    // Process endpoints with adaptive parallelism
-    await processEndpointsWithAdaptiveParallelism(
-      endpoints, 
-      {
-        organization_id,
-        sync_id,
-        access_token,
-        refresh_token,
-        provider
-      }, 
-      syncHeaders, 
-      baseUrl, 
-      resourceMonitor, 
-      circuitBreaker, 
-      sync_id
-    );
-
-    // Final resource check and cleanup
-    const finalUsage = resourceMonitor.getCurrentUsage();
-    console.log(`🔍 [MAIN SYNC] Final resource usage: CPU: ${finalUsage.cpuPercent.toFixed(1)}%, Memory: ${finalUsage.memoryPercent.toFixed(1)}%`);
+    // **NEW: Enable parallel processing with resource-aware concurrency**
+    const enableParallel = process.env.ENABLE_PARALLEL_SYNC !== 'false' && endpoints.length > 1;
     
-    // Wait additional time for any background processes to complete with resource awareness
-    console.log('[MAIN SYNC] Main sync completed, waiting for background processes with resource monitoring...');
-    await resourceAwareSleep(5000, resourceMonitor); // 5 second delay with throttling
+    if (enableParallel && provider === 'google') {
+      console.log(`🚀 [MAIN SYNC] Starting parallel processing of ${endpoints.length} endpoints`);
+      
+      // For Google sync, we can run users and tokens in parallel since tokens waits for users anyway
+      // But we'll use adaptive concurrency based on current resource usage
+      const concurrency = monitor.getOptimalConcurrency();
+      
+      console.log(`📊 [MAIN SYNC] Using concurrency level: ${concurrency}`);
+      
+      if (concurrency >= 2 && endpoints.length >= 2) {
+        // Run first two endpoints (users and tokens) in parallel
+        const parallelEndpoints = endpoints.slice(0, 2);
+        const sequentialEndpoints = endpoints.slice(2);
+        
+        try {
+          // Wait for resources before starting parallel operations
+          await monitor.waitForResources();
+          
+          const parallelPromises = parallelEndpoints.map(async (endpoint) => {
+            const url = `${baseUrl}/${endpoint}`;
+            console.log(`🔄 [PARALLEL] Starting ${endpoint}...`);
+            
+            try {
+              const response = await fetch(url, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(requestPayload),
+              });
+
+              if (!response.ok) {
+                const error = await response.text();
+                console.error(`❌ [PARALLEL] Error from ${endpoint}:`, error);
+                throw new Error(`${endpoint} failed: ${error}`);
+              }
+
+              console.log(`✅ [PARALLEL] Successfully completed ${endpoint}`);
+              return { endpoint, success: true };
+            } catch (error) {
+              console.error(`❌ [PARALLEL] Error processing ${endpoint}:`, error);
+              throw error;
+            }
+          });
+
+          // Wait for both parallel operations to complete
+          const results = await Promise.allSettled(parallelPromises);
+          
+          // Check if any parallel operations failed
+          const failures = results.filter(result => result.status === 'rejected');
+          if (failures.length > 0) {
+            console.error(`❌ [PARALLEL] ${failures.length} parallel operations failed`);
+            throw new Error(`Parallel sync operations failed: ${failures.map(f => f.status === 'rejected' ? f.reason.message : 'unknown').join(', ')}`);
+          }
+
+          console.log(`✅ [PARALLEL] All parallel operations completed successfully`);
+          
+          // Log resource usage after parallel operations
+          monitor.logResourceUsage('PARALLEL SYNC COMPLETE');
+          
+          // Continue with any remaining sequential endpoints
+          for (const endpoint of sequentialEndpoints) {
+            await monitor.waitForResources();
+            
+            const url = `${baseUrl}/${endpoint}`;
+            console.log(`🔄 [SEQUENTIAL] Processing ${endpoint}...`);
+            
+            const response = await fetch(url, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(requestPayload),
+            });
+
+            if (!response.ok) {
+              const error = await response.text();
+              console.error(`❌ [SEQUENTIAL] Error from ${endpoint}:`, error);
+              throw new Error(`${endpoint} failed: ${error}`);
+            }
+
+            console.log(`✅ [SEQUENTIAL] Successfully completed ${endpoint}`);
+            
+            // Small delay between sequential operations
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+        } catch (parallelError) {
+          console.error(`❌ [PARALLEL] Parallel sync failed, falling back to sequential:`, parallelError);
+          
+          // Fallback to sequential processing
+          console.log(`🔄 [FALLBACK] Switching to sequential processing...`);
+          await processEndpointsSequentially(endpoints, baseUrl, headers, requestPayload, monitor);
+        }
+      } else {
+        // Resource constraints - use sequential processing
+        console.log(`📉 [MAIN SYNC] Resource constraints detected, using sequential processing`);
+        await processEndpointsSequentially(endpoints, baseUrl, headers, requestPayload, monitor);
+      }
+    } else {
+      // Sequential processing (fallback or single endpoint)
+      console.log(`🔄 [MAIN SYNC] Using sequential processing`);
+      await processEndpointsSequentially(endpoints, baseUrl, headers, requestPayload, monitor);
+    }
+
+    // Wait additional time for any background processes to complete
+    console.log('Main sync completed, waiting for background processes...');
+    await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay
     
     // Update sync status to 95% while we wait for final background tasks
     const finalizeMessage = isTestMode 
@@ -312,13 +224,13 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', sync_id);
       
-    // Wait a bit longer to ensure all background processes finish with resource monitoring
-    await resourceAwareSleep(5000, resourceMonitor); // Another 5 second delay with throttling
+    // Wait a bit longer to ensure all background processes finish
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Another 5 second delay
 
     // Mark sync as completed
     const completedMessage = isTestMode 
-      ? `🧪 TEST: ${provider} data sync completed (Resource-Aware)`
-      : `${provider} data sync completed (Resource-Aware)`;
+      ? `🧪 TEST: ${provider} data sync completed`
+      : `${provider} data sync completed`;
       
     await supabaseAdmin
       .from('sync_status')
@@ -330,18 +242,18 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', sync_id);
 
+    // Log final resource usage
+    monitor.logResourceUsage('MAIN SYNC COMPLETE');
+
     return NextResponse.json({ 
       success: true,
       testMode: isTestMode,
       emailsSkipped: skipEmail,
-      resourceUsage: {
-        initial: initialUsage,
-        final: finalUsage,
-        circuitBreakerState: circuitBreaker.getState()
-      }
+      parallelProcessing: enableParallel,
+      finalResourceUsage: monitor.getCurrentUsage()
     });
   } catch (error) {
-    console.error('[MAIN SYNC] ❌ Background sync error:', error);
+    console.error('Background sync error:', error);
     
     // Update sync status to failed
     if (requestData && requestData.sync_id) {
@@ -364,10 +276,69 @@ export async function POST(request: NextRequest) {
       { error: 'Failed to sync data' },
       { status: 500 }
     );
-  } finally {
-    // Always stop monitoring when done
-    if (resourceMonitor) {
-      resourceMonitor.stopMonitoring();
+  }
+}
+
+// Helper function for sequential processing with resource monitoring
+async function processEndpointsSequentially(
+  endpoints: string[],
+  baseUrl: string,
+  headers: Record<string, string>,
+  requestPayload: any,
+  monitor: ResourceMonitor
+): Promise<void> {
+  for (const endpoint of endpoints) {
+    try {
+      // Wait for resources before each endpoint
+      await monitor.waitForResources();
+      
+      // Try first with the /tools/shadow-it-scan prefix as per next.config.js assetPrefix
+      const prefixedUrl = `${baseUrl}/${endpoint}`;
+      console.log(`🔄 [SEQUENTIAL] Calling ${prefixedUrl}...`);
+      
+      let response;
+      try {
+        response = await fetch(prefixedUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(requestPayload),
+        });
+      } catch (fetchError) {
+        console.log(`Error with ${prefixedUrl}, trying without /tools/shadow-it-scan/ prefix...`);
+        // If the first attempt fails, try without the prefix
+        const directUrl = `${baseUrl}/${endpoint}`;
+        console.log(`Calling ${directUrl}...`);
+        response = await fetch(directUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(requestPayload),
+        });
+      }
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error(`Error from ${endpoint}:`, error);
+        throw new Error(`${endpoint} failed: ${error}`);
+      }
+
+      console.log(`✅ [SEQUENTIAL] Successfully completed ${endpoint}`);
+      
+      // Log resource usage after each endpoint
+      monitor.logResourceUsage(`SEQUENTIAL ${endpoint.split('/').pop()?.toUpperCase()}`);
+      
+      // Add a delay between endpoints to ensure database operations complete
+      // Longer delay if resources are constrained
+      const usage = monitor.getCurrentUsage();
+      const memoryRatio = Math.max(usage.heapUsed / 1600, usage.rss / 1600);
+      const delay = memoryRatio > 0.7 ? 3000 : memoryRatio > 0.5 ? 2000 : 1000;
+      
+      if (endpoint.includes('users')) {
+        console.log(`Waiting ${delay}ms for database to process user data...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    } catch (error) {
+      console.error(`Error processing ${endpoint}:`, error);
+      throw error;
     }
   }
 } 

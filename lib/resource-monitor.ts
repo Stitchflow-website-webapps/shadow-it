@@ -1,263 +1,248 @@
-import { EventEmitter } from 'events';
-
+// Resource monitoring and adaptive concurrency control for sync operations
 export interface ResourceUsage {
-  cpuPercent: number;
-  memoryPercent: number;
   heapUsed: number;
   heapTotal: number;
   rss: number;
-  timestamp: number;
+  external: number;
+  arrayBuffers: number;
+  cpuTime?: number;
 }
 
 export interface ResourceLimits {
-  maxCpuPercent: number;
-  maxMemoryPercent: number;
-  warningCpuPercent: number;
-  warningMemoryPercent: number;
+  maxHeapUsageMB: number;
+  maxRSSUsageMB: number;
+  maxConcurrency: number;
+  emergencyThresholdMB: number;
 }
 
-export class ResourceMonitor extends EventEmitter {
+export class ResourceMonitor {
   private static instance: ResourceMonitor;
   private resourceHistory: ResourceUsage[] = [];
-  private isMonitoring = false;
-  private monitoringInterval?: NodeJS.Timeout;
-  private lastCpuUsage?: NodeJS.CpuUsage;
+  private readonly maxHistorySize = 10;
+  private lastCpuTime = process.cpuUsage();
   private limits: ResourceLimits;
-
-  constructor(limits: ResourceLimits = {
-    maxCpuPercent: 80,
-    maxMemoryPercent: 80,
-    warningCpuPercent: 70,
-    warningMemoryPercent: 70
-  }) {
-    super();
-    this.limits = limits;
+  
+  constructor(limits?: Partial<ResourceLimits>) {
+    this.limits = {
+      maxHeapUsageMB: limits?.maxHeapUsageMB || 1600, // 80% of 2GB
+      maxRSSUsageMB: limits?.maxRSSUsageMB || 1600,   // 80% of 2GB
+      maxConcurrency: limits?.maxConcurrency || 2,     // Conservative for 1 CPU
+      emergencyThresholdMB: limits?.emergencyThresholdMB || 1800, // 90% emergency threshold
+    };
   }
 
-  static getInstance(limits?: ResourceLimits): ResourceMonitor {
+  static getInstance(limits?: Partial<ResourceLimits>): ResourceMonitor {
     if (!ResourceMonitor.instance) {
       ResourceMonitor.instance = new ResourceMonitor(limits);
     }
     return ResourceMonitor.instance;
   }
 
-  startMonitoring(intervalMs: number = 1000): void {
-    if (this.isMonitoring) return;
-    
-    this.isMonitoring = true;
-    this.lastCpuUsage = process.cpuUsage();
-    
-    this.monitoringInterval = setInterval(() => {
-      const usage = this.getCurrentUsage();
-      this.resourceHistory.push(usage);
-      
-      // Keep only last 60 readings (1 minute if 1s interval)
-      if (this.resourceHistory.length > 60) {
-        this.resourceHistory.shift();
-      }
-      
-      // Emit events based on usage
-      this.checkThresholds(usage);
-    }, intervalMs);
-  }
-
-  stopMonitoring(): void {
-    if (this.monitoringInterval) {
-      clearInterval(this.monitoringInterval);
-      this.monitoringInterval = undefined;
-    }
-    this.isMonitoring = false;
-  }
-
   getCurrentUsage(): ResourceUsage {
     const memUsage = process.memoryUsage();
-    const cpuUsage = process.cpuUsage(this.lastCpuUsage);
-    this.lastCpuUsage = process.cpuUsage();
+    const cpuUsage = process.cpuUsage(this.lastCpuTime);
     
-    // Calculate CPU percentage (approximation)
-    const cpuPercent = Math.min(100, ((cpuUsage.user + cpuUsage.system) / 1000000) * 100);
-    
-    // Calculate memory percentage (based on RSS vs available system memory)
-    // For containers, we'll use a rough estimate based on heap limits
-    const memoryPercent = Math.min(100, (memUsage.heapUsed / (memUsage.heapTotal * 2)) * 100);
-    
-    return {
-      cpuPercent,
-      memoryPercent,
-      heapUsed: memUsage.heapUsed,
-      heapTotal: memUsage.heapTotal,
-      rss: memUsage.rss,
-      timestamp: Date.now()
+    const usage: ResourceUsage = {
+      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+      heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+      rss: Math.round(memUsage.rss / 1024 / 1024),
+      external: Math.round(memUsage.external / 1024 / 1024),
+      arrayBuffers: Math.round(memUsage.arrayBuffers / 1024 / 1024),
+      cpuTime: (cpuUsage.user + cpuUsage.system) / 1000 // Convert to milliseconds
     };
+
+    // Update history
+    this.resourceHistory.push(usage);
+    if (this.resourceHistory.length > this.maxHistorySize) {
+      this.resourceHistory.shift();
+    }
+    
+    this.lastCpuTime = process.cpuUsage();
+    return usage;
   }
 
-  getAverageUsage(windowMs: number = 5000): ResourceUsage | null {
-    const cutoff = Date.now() - windowMs;
-    const recentReadings = this.resourceHistory.filter(r => r.timestamp >= cutoff);
-    
-    if (recentReadings.length === 0) return null;
-    
-    const avg = recentReadings.reduce((acc, curr) => ({
-      cpuPercent: acc.cpuPercent + curr.cpuPercent,
-      memoryPercent: acc.memoryPercent + curr.memoryPercent,
-      heapUsed: acc.heapUsed + curr.heapUsed,
-      heapTotal: acc.heapTotal + curr.heapTotal,
-      rss: acc.rss + curr.rss,
-      timestamp: curr.timestamp
-    }), {
-      cpuPercent: 0,
-      memoryPercent: 0,
-      heapUsed: 0,
-      heapTotal: 0,
-      rss: 0,
-      timestamp: Date.now()
-    });
-    
-    const count = recentReadings.length;
-    return {
-      cpuPercent: avg.cpuPercent / count,
-      memoryPercent: avg.memoryPercent / count,
-      heapUsed: avg.heapUsed / count,
-      heapTotal: avg.heapTotal / count,
-      rss: avg.rss / count,
-      timestamp: avg.timestamp
-    };
+  isResourceAvailable(): boolean {
+    const usage = this.getCurrentUsage();
+    return usage.heapUsed < this.limits.maxHeapUsageMB && 
+           usage.rss < this.limits.maxRSSUsageMB;
   }
 
-  isOverloaded(): boolean {
-    const current = this.getCurrentUsage();
-    const avg = this.getAverageUsage(3000); // 3 second average
+  getOptimalConcurrency(): number {
+    const usage = this.getCurrentUsage();
     
-    if (!avg) return current.cpuPercent > this.limits.maxCpuPercent || 
-                   current.memoryPercent > this.limits.maxMemoryPercent;
+    // Emergency mode - severely limit concurrency
+    if (usage.heapUsed > this.limits.emergencyThresholdMB || 
+        usage.rss > this.limits.emergencyThresholdMB) {
+      return 1;
+    }
     
-    return avg.cpuPercent > this.limits.maxCpuPercent || 
-           avg.memoryPercent > this.limits.maxMemoryPercent;
+    // Calculate dynamic concurrency based on current usage
+    const heapRatio = usage.heapUsed / this.limits.maxHeapUsageMB;
+    const rssRatio = usage.rss / this.limits.maxRSSUsageMB;
+    const maxRatio = Math.max(heapRatio, rssRatio);
+    
+    if (maxRatio > 0.8) {
+      return 1; // Single threaded when near limits
+    } else if (maxRatio > 0.6) {
+      return Math.min(2, this.limits.maxConcurrency);
+    } else {
+      return this.limits.maxConcurrency;
+    }
   }
 
-  shouldThrottle(): boolean {
-    const current = this.getCurrentUsage();
-    const avg = this.getAverageUsage(3000);
-    
-    if (!avg) return current.cpuPercent > this.limits.warningCpuPercent || 
-                   current.memoryPercent > this.limits.warningMemoryPercent;
-    
-    return avg.cpuPercent > this.limits.warningCpuPercent || 
-           avg.memoryPercent > this.limits.warningMemoryPercent;
+  shouldPause(): boolean {
+    const usage = this.getCurrentUsage();
+    return usage.heapUsed > this.limits.maxHeapUsageMB || 
+           usage.rss > this.limits.maxRSSUsageMB;
   }
 
-  getThrottleDelay(): number {
-    if (!this.shouldThrottle()) return 0;
-    
-    const current = this.getCurrentUsage();
-    const cpuOverage = Math.max(0, current.cpuPercent - this.limits.warningCpuPercent);
-    const memOverage = Math.max(0, current.memoryPercent - this.limits.warningMemoryPercent);
-    
-    // Exponential backoff based on overage
-    const maxOverage = Math.max(cpuOverage, memOverage);
-    return Math.min(5000, Math.max(100, maxOverage * 50)); // 100ms to 5s delay
-  }
-
-  forceMemoryCleanup(): void {
+  forceCleanup(): void {
     if (global.gc) {
       global.gc();
     }
     
-    // Clear resource history if it's getting too large
-    if (this.resourceHistory.length > 100) {
-      this.resourceHistory = this.resourceHistory.slice(-30);
-    }
+    // Clear resource history to free memory
+    this.resourceHistory = this.resourceHistory.slice(-3);
   }
 
-  private checkThresholds(usage: ResourceUsage): void {
-    if (usage.cpuPercent > this.limits.maxCpuPercent || 
-        usage.memoryPercent > this.limits.maxMemoryPercent) {
-      this.emit('overload', usage);
-    } else if (usage.cpuPercent > this.limits.warningCpuPercent || 
-               usage.memoryPercent > this.limits.warningMemoryPercent) {
-      this.emit('warning', usage);
+  logResourceUsage(operation: string): void {
+    const usage = this.getCurrentUsage();
+    console.log(`📊 [${operation}] Resources:`, {
+      heap: `${usage.heapUsed}MB/${this.limits.maxHeapUsageMB}MB`,
+      rss: `${usage.rss}MB/${this.limits.maxRSSUsageMB}MB`,
+      external: `${usage.external}MB`,
+      concurrency: this.getOptimalConcurrency()
+    });
+  }
+
+  async waitForResources(timeoutMs: number = 30000): Promise<void> {
+    const startTime = Date.now();
+    
+    while (!this.isResourceAvailable() && (Date.now() - startTime) < timeoutMs) {
+      console.log('⏳ Waiting for resources to become available...');
+      this.forceCleanup();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    if (!this.isResourceAvailable()) {
+      throw new Error('Timeout waiting for resources to become available');
     }
   }
 }
 
-// Circuit breaker for preventing cascading failures
-export class CircuitBreaker {
-  private failures = 0;
-  private lastFailureTime = 0;
-  private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
+// Helper functions for batch processing with resource awareness
+export async function processInBatchesWithResourceControl<T>(
+  items: T[],
+  processor: (batch: T[]) => Promise<void>,
+  operation: string,
+  baseBatchSize: number = 25,
+  baseDelay: number = 100
+): Promise<void> {
+  const monitor = ResourceMonitor.getInstance();
   
-  constructor(
-    private failureThreshold: number = 5,
-    private timeout: number = 60000, // 1 minute
-    private monitoringPeriod: number = 10000 // 10 seconds
-  ) {}
-
-  async execute<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.state === 'OPEN') {
-      if (Date.now() - this.lastFailureTime > this.timeout) {
-        this.state = 'HALF_OPEN';
-      } else {
-        throw new Error('Circuit breaker is OPEN - too many failures');
-      }
+  for (let i = 0; i < items.length; i += baseBatchSize) {
+    // Check resources before processing each batch
+    await monitor.waitForResources();
+    
+    // Adjust batch size based on current resource usage
+    const usage = monitor.getCurrentUsage();
+    const memoryRatio = Math.max(
+      usage.heapUsed / 1600, // Assuming 1600MB limit
+      usage.rss / 1600
+    );
+    
+    // Reduce batch size if memory usage is high
+    let adjustedBatchSize = baseBatchSize;
+    if (memoryRatio > 0.7) {
+      adjustedBatchSize = Math.max(5, Math.floor(baseBatchSize * 0.5));
+    } else if (memoryRatio > 0.5) {
+      adjustedBatchSize = Math.max(10, Math.floor(baseBatchSize * 0.75));
     }
-
+    
+    const batch = items.slice(i, i + adjustedBatchSize);
+    
     try {
-      const result = await operation();
-      this.onSuccess();
-      return result;
+      await processor(batch);
+      monitor.logResourceUsage(operation);
     } catch (error) {
-      this.onFailure();
+      console.error(`Error processing batch in ${operation}:`, error);
+      // Force cleanup on error
+      monitor.forceCleanup();
       throw error;
     }
-  }
-
-  private onSuccess(): void {
-    this.failures = 0;
-    this.state = 'CLOSED';
-  }
-
-  private onFailure(): void {
-    this.failures++;
-    this.lastFailureTime = Date.now();
-
-    if (this.failures >= this.failureThreshold) {
-      this.state = 'OPEN';
+    
+    // Adaptive delay based on resource usage
+    let delay = baseDelay;
+    if (memoryRatio > 0.7) {
+      delay = baseDelay * 3; // Longer delay when memory is high
+    } else if (memoryRatio > 0.5) {
+      delay = baseDelay * 2;
+    }
+    
+    if (i + adjustedBatchSize < items.length) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    // Force cleanup every few batches
+    if (i % (baseBatchSize * 5) === 0) {
+      monitor.forceCleanup();
     }
   }
-
-  getState(): string {
-    return this.state;
-  }
 }
 
-// Helper function to wait with resource awareness
-export async function resourceAwareSleep(baseMs: number, resourceMonitor: ResourceMonitor): Promise<void> {
-  const throttleDelay = resourceMonitor.getThrottleDelay();
-  const totalDelay = baseMs + throttleDelay;
+// Concurrent processing with resource limits
+export async function processConcurrentlyWithResourceControl<T>(
+  items: T[],
+  processor: (item: T) => Promise<void>,
+  operation: string,
+  maxConcurrency?: number
+): Promise<void> {
+  const monitor = ResourceMonitor.getInstance();
   
-  if (throttleDelay > 0) {
-    console.log(`🔧 Throttling: Adding ${throttleDelay}ms delay due to resource usage`);
+  // Use adaptive concurrency if not specified
+  const concurrency = maxConcurrency || monitor.getOptimalConcurrency();
+  
+  console.log(`🚀 [${operation}] Starting concurrent processing with max concurrency: ${concurrency}`);
+  
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    chunks.push(items.slice(i, i + concurrency));
   }
   
-  return new Promise(resolve => setTimeout(resolve, totalDelay));
-}
-
-// Dynamic batch size calculator
-export function calculateOptimalBatchSize(
-  baseBatchSize: number, 
-  resourceMonitor: ResourceMonitor,
-  minBatchSize: number = 5,
-  maxBatchSize: number = 100
-): number {
-  const usage = resourceMonitor.getCurrentUsage();
-  
-  // Reduce batch size if resources are high
-  let multiplier = 1;
-  if (usage.cpuPercent > 70) multiplier *= 0.7;
-  if (usage.memoryPercent > 70) multiplier *= 0.7;
-  if (usage.cpuPercent > 50) multiplier *= 0.8;
-  if (usage.memoryPercent > 50) multiplier *= 0.8;
-  
-  const adjustedSize = Math.floor(baseBatchSize * multiplier);
-  return Math.max(minBatchSize, Math.min(maxBatchSize, adjustedSize));
+  for (const chunk of chunks) {
+    // Wait for resources before processing each chunk
+    await monitor.waitForResources();
+    
+    // Check if we should reduce concurrency due to high resource usage
+    const currentConcurrency = Math.min(chunk.length, monitor.getOptimalConcurrency());
+    
+    if (currentConcurrency < chunk.length) {
+      console.log(`📉 [${operation}] Reducing concurrency from ${chunk.length} to ${currentConcurrency} due to resource constraints`);
+      
+      // Process with reduced concurrency
+      const reducedChunks = [];
+      for (let i = 0; i < chunk.length; i += currentConcurrency) {
+        reducedChunks.push(chunk.slice(i, i + currentConcurrency));
+      }
+      
+      for (const reducedChunk of reducedChunks) {
+        await Promise.all(reducedChunk.map(processor));
+        monitor.logResourceUsage(operation);
+        
+        // Small delay between reduced chunks
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    } else {
+      // Process with full concurrency
+      await Promise.all(chunk.map(processor));
+      monitor.logResourceUsage(operation);
+    }
+    
+    // Delay between chunks, longer if resources are stressed
+    const usage = monitor.getCurrentUsage();
+    const memoryRatio = Math.max(usage.heapUsed / 1600, usage.rss / 1600);
+    const delay = memoryRatio > 0.7 ? 500 : memoryRatio > 0.5 ? 300 : 100;
+    
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
 } 
