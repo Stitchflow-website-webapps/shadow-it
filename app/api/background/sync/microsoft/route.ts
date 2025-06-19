@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { MicrosoftWorkspaceService } from '@/lib/microsoft-workspace';
 import { updateCategorizationStatus } from '@/app/api/background/sync/categorize/route';
+import { determineRiskLevel } from '@/lib/risk-assessment';
 
 // Configuration optimized for 1 CPU + 2GB RAM - Balanced for speed vs stability
 const PROCESSING_CONFIG = {
@@ -41,62 +42,6 @@ async function processInBatches<T>(
   }
 }
 
-// Helper function to classify Microsoft Graph permissions by risk level
-function classifyPermissionRisk(permission: string): 'high' | 'medium' | 'low' {
-  // High risk permissions - full admin access or write permissions
-  const highRiskPatterns = [
-    'ReadWrite.All',
-    'Write.All',
-    '.ReadWrite',
-    '.Write',
-    'FullControl.All',
-    'AccessAsUser.All',
-    'Directory.ReadWrite',
-    'Files.ReadWrite',
-    'Mail.ReadWrite',
-    'Mail.Send',
-    'Group.ReadWrite',
-    'User.ReadWrite',
-    'Application.ReadWrite',
-    'Sites.FullControl',
-    'User.Export',
-    'User.Invite',
-    'User.ManageIdentities',
-    'User.EnableDisableAccount',
-    'DelegatedPermissionGrant.ReadWrite'
-  ];
-
-  // Medium risk permissions - read access to sensitive data
-  const mediumRiskPatterns = [
-    'Read.All',
-    '.Read',
-    'Directory.Read',
-    'Files.Read',
-    'User.Read.All',
-    'Mail.Read',
-    'AuditLog.Read',
-    'Reports.Read',
-    'Sites.Read'
-  ];
-
-  // Check for high risk first
-  for (const pattern of highRiskPatterns) {
-    if (permission.includes(pattern)) {
-      return 'high';
-    }
-  }
-
-  // Then check for medium risk
-  for (const pattern of mediumRiskPatterns) {
-    if (permission.includes(pattern)) {
-      return 'medium';
-    }
-  }
-
-  // Default to low risk
-  return 'low';
-}
-
 interface Application {
   id: string;
   category?: string;
@@ -109,6 +54,13 @@ interface Application {
   all_scopes: string[];
   user_count: number;
   updated_at: string;
+}
+
+interface ProcessedApp {
+  id: string;
+  displayText: string;
+  userCount: number;
+  allScopes: Set<string>;
 }
 
 async function sendSyncCompletedEmail(userEmail: string, syncId?: string) {
@@ -460,7 +412,7 @@ export async function GET(request: NextRequest) {
     console.log('⚙️ Processing applications and user permissions in controlled batches...');
     
     // Track unique applications and their users with scopes
-    const processedApps = new Map();
+    const processedApps = new Map<string, ProcessedApp>();
     const userAppScopes = new Map(); // Map to track user-app pairs and their scopes
     const processedUserApps = new Set(); // Track unique user-app combinations
 
@@ -528,7 +480,7 @@ export async function GET(request: NextRequest) {
           if (!processedApps.has(appId)) {
             processedApps.set(appId, {
               id: appId,
-              displayText: token.displayText,
+              displayText: token.displayText || 'Unknown App',
               userCount: 0,
               allScopes: new Set()
             });
@@ -536,10 +488,12 @@ export async function GET(request: NextRequest) {
           
           // Update app scopes
           const app = processedApps.get(appId);
-          token.scopes?.forEach((scope: string) => app.allScopes.add(scope));
-          token.adminScopes?.forEach((scope: string) => app.allScopes.add(scope));
-          token.userScopes?.forEach((scope: string) => app.allScopes.add(scope));
-          token.appRoleScopes?.forEach((scope: string) => app.allScopes.add(scope));
+          if (app) {
+            token.scopes?.forEach((scope: string) => app.allScopes.add(scope));
+            token.adminScopes?.forEach((scope: string) => app.allScopes.add(scope));
+            token.userScopes?.forEach((scope: string) => app.allScopes.add(scope));
+            token.appRoleScopes?.forEach((scope: string) => app.allScopes.add(scope));
+          }
         }
       },
       PROCESSING_CONFIG.MAX_APPS_PER_BATCH,
@@ -577,21 +531,8 @@ export async function GET(request: NextRequest) {
 
             const allAppScopes = Array.from(appInfo.allScopes);
             
-            // Determine risk level based on permissions
-            let riskLevel = 'LOW';
-            // Aggregate scopes to determine risk level
-            const highRiskScopes = allAppScopes.filter(scope => 
-              typeof scope === 'string' && classifyPermissionRisk(scope) === 'high'
-            );
-            const mediumRiskScopes = allAppScopes.filter(scope => 
-              typeof scope === 'string' && classifyPermissionRisk(scope) === 'medium'
-            );
-            
-            if (highRiskScopes.length > 0) {
-              riskLevel = 'HIGH';
-            } else if (mediumRiskScopes.length > 0) {
-              riskLevel = 'MEDIUM';
-            }
+            // Determine risk level based on permissions using centralized function
+            const riskLevel = determineRiskLevel(allAppScopes).toUpperCase();
 
             // Store application data
             const { data: newApp, error: appError } = await supabaseAdmin
@@ -602,7 +543,7 @@ export async function GET(request: NextRequest) {
                 name: appInfo.displayText || 'Unknown App',
                 microsoft_app_id: appId,
                 category: existingApp?.category || 'Unknown',
-                risk_level: existingApp?.risk_level || riskLevel,
+                risk_level: riskLevel,
                 management_status: existingApp?.management_status || 'NEEDS_REVIEW',
                 total_permissions: allAppScopes.length,
                 all_scopes: allAppScopes,
@@ -952,7 +893,7 @@ async function processMicrosoftData(
     console.log(`[Microsoft ${sync_id}] Processing applications and user permissions in controlled batches...`);
     
     // Track unique applications and their users with scopes
-    const processedApps = new Map();
+    const processedApps = new Map<string, ProcessedApp>();
     const userAppScopes = new Map(); // Map to track user-app pairs and their scopes
     const processedUserApps = new Set(); // Track unique user-app combinations
 
@@ -1020,7 +961,7 @@ async function processMicrosoftData(
           if (!processedApps.has(appId)) {
             processedApps.set(appId, {
               id: appId,
-              displayText: token.displayText,
+              displayText: token.displayText || 'Unknown App',
               userCount: 0,
               allScopes: new Set()
             });
@@ -1028,10 +969,12 @@ async function processMicrosoftData(
           
           // Update app scopes
           const app = processedApps.get(appId);
-          token.scopes?.forEach((scope: string) => app.allScopes.add(scope));
-          token.adminScopes?.forEach((scope: string) => app.allScopes.add(scope));
-          token.userScopes?.forEach((scope: string) => app.allScopes.add(scope));
-          token.appRoleScopes?.forEach((scope: string) => app.allScopes.add(scope));
+          if (app) {
+            token.scopes?.forEach((scope: string) => app.allScopes.add(scope));
+            token.adminScopes?.forEach((scope: string) => app.allScopes.add(scope));
+            token.userScopes?.forEach((scope: string) => app.allScopes.add(scope));
+            token.appRoleScopes?.forEach((scope: string) => app.allScopes.add(scope));
+          }
         }
       },
       PROCESSING_CONFIG.MAX_APPS_PER_BATCH,

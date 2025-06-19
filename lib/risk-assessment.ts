@@ -53,15 +53,15 @@ export const MICROSOFT_MEDIUM_RISK_SCOPES = [
 
 // High risk scope patterns
 export const HIGH_RISK_PATTERNS = [
-  '.ReadWrite.All',
-  '.ReadWrite',
+  'ReadWrite.All',
+  'ReadWrite',
   'FullControl',
   'Write.All'
 ];
 
 // Medium risk scope patterns
 export const MEDIUM_RISK_PATTERNS = [
-  '.Read.All',
+  'Read.All',
   'Reports.Read',
   'AuditLog.Read'
 ];
