@@ -5,45 +5,53 @@ import { determineRiskLevel, transformRiskLevel } from '@/lib/risk-assessment';
 import { categorizeApplication } from '@/app/api/background/sync/categorize/route';
 
 /**
- * A test cron job specifically for the Stitchflow organization.
+ * A test cron job for a specific organization.
  * This job fetches and compares user and application data from Google Workspace against the database and logs the differences without sending notifications or triggering a full sync.
  *
  * It does NOT:
  * - Trigger a full background sync.
- * - Write any data to the database.
  * - Send any email notifications.
+ *
+ * @param {Request} request - The incoming request, expected to have an `orgDomain` query parameter.
  */
 export async function POST(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const orgDomain = searchParams.get('orgDomain');
+
+  if (!orgDomain) {
+    return NextResponse.json({ error: 'orgDomain query parameter is required' }, { status: 400 });
+  }
+
   // 1. Authenticate the request using a secret bearer token
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.split(' ')[1];
 
   if (token !== process.env.CRON_SECRET) {
-    console.error('[StitchflowTestCron] Unauthorized request');
+    console.error(`[TestCron:${orgDomain}] Unauthorized request`);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  console.log('🚀 [StitchflowTestCron] Starting Stitchflow test cron job...');
+  console.log(`🚀 [TestCron:${orgDomain}] Starting test cron job for ${orgDomain}...`);
 
   try {
-    // 2. Find the 'stitchflow.io' organization
+    // 2. Find the organization using the provided domain
     const { data: org, error: orgError } = await supabaseAdmin
       .from('organizations')
       .select('id, name, domain, auth_provider')
-      .eq('domain', 'stitchflow.io')
+      .eq('domain', orgDomain)
       .single();
 
     if (orgError || !org) {
-      console.error('[StitchflowTestCron] Could not find organization "stitchflow.io":', orgError);
+      console.error(`[TestCron:${orgDomain}] Could not find organization "${orgDomain}":`, orgError);
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
     if (org.auth_provider !== 'google') {
-      console.error(`[StitchflowTestCron] "stitchflow.io" is not a Google Workspace organization.`);
+      console.error(`[TestCron:${orgDomain}] "${orgDomain}" is not a Google Workspace organization.`);
       return NextResponse.json({ error: 'Organization is not a Google provider' }, { status: 400 });
     }
     
-    console.log(`[StitchflowTestCron] ✅ Found organization: ${org.name} (${org.id})`);
+    console.log(`[TestCron:${orgDomain}] ✅ Found organization: ${org.name} (${org.id})`);
 
     // 3. Get the latest admin-scoped tokens for the organization
     const { data: syncTokens, error: syncError } = await supabaseAdmin
@@ -57,7 +65,7 @@ export async function POST(request: Request) {
 
     if (syncError || !syncTokens || syncTokens.length === 0) {
       const errorMsg = `Could not find any valid tokens in sync_status for org ${org.id}.`;
-      console.error(`[StitchflowTestCron] ❌ ${errorMsg}`, syncError?.message);
+      console.error(`[TestCron:${orgDomain}] ❌ ${errorMsg}`, syncError?.message);
       return NextResponse.json({ error: errorMsg }, { status: 404 });
     }
     
@@ -75,11 +83,11 @@ export async function POST(request: Request) {
 
     if (!bestToken) {
       const errorMsg = `Could not find admin-scoped tokens for org ${org.id}.`;
-      console.error(`[StitchflowTestCron] ❌ ${errorMsg}`);
+      console.error(`[TestCron:${orgDomain}] ❌ ${errorMsg}`);
       return NextResponse.json({ error: errorMsg }, { status: 404 });
     }
 
-    console.log(`[StitchflowTestCron] ✅ Found admin-scoped tokens for user ${bestToken.user_email}.`);
+    console.log(`[TestCron:${orgDomain}] ✅ Found admin-scoped tokens for user ${bestToken.user_email}.`);
 
     // 4. Initialize GoogleWorkspaceService and refresh the access token
     const googleService = new GoogleWorkspaceService({
@@ -93,29 +101,29 @@ export async function POST(request: Request) {
 
     if (!refreshedTokens || !refreshedTokens.access_token) {
       const errorMsg = 'Failed to refresh access token.';
-      console.error(`[StitchflowTestCron] ❌ ${errorMsg}`);
+      console.error(`[TestCron:${orgDomain}] ❌ ${errorMsg}`);
       return NextResponse.json({ error: errorMsg }, { status: 500 });
     }
     
-    console.log('[StitchflowTestCron] ✅ Successfully refreshed access token.');
+    console.log(`[TestCron:${orgDomain}] ✅ Successfully refreshed access token.`);
 
     // 5. Fetch all users and app tokens from Google Workspace
-    console.log('[StitchflowTestCron] Fetching data from Google Workspace API...');
+    console.log(`[TestCron:${orgDomain}] Fetching data from Google Workspace API...`);
     const [allGoogleUsers, allGoogleTokens] = await Promise.all([
       googleService.getUsersListPaginated(),
       googleService.getOAuthTokens()
     ]);
-    console.log(`[StitchflowTestCron] Fetched ${allGoogleUsers.length} users and ${allGoogleTokens.length} total app tokens from Google.`);
+    console.log(`[TestCron:${orgDomain}] Fetched ${allGoogleUsers.length} users and ${allGoogleTokens.length} total app tokens from Google.`);
 
     // 6. Sync users from Google to our DB to ensure all users exist before we process relationships
-    console.log('[StitchflowTestCron] Syncing users table...');
+    console.log(`[TestCron:${orgDomain}] Syncing users table...`);
     const { data: existingDbUsers, error: existingUsersError } = await supabaseAdmin
       .from('users')
       .select('email') // Check against email to support all providers
       .eq('organization_id', org.id);
 
     if (existingUsersError) {
-      console.error('[StitchflowTestCron] ❌ Error fetching existing users from Supabase:', existingUsersError);
+      console.error(`[TestCron:${orgDomain}] ❌ Error fetching existing users from Supabase:`, existingUsersError);
       return NextResponse.json({ error: 'DB fetch error while getting users' }, { status: 500 });
     }
 
@@ -123,7 +131,7 @@ export async function POST(request: Request) {
     const newGoogleUsers = allGoogleUsers.filter((u: any) => !existingUserEmails.has(u.primaryEmail));
 
     if (newGoogleUsers.length > 0) {
-      console.log(`[StitchflowTestCron] Found ${newGoogleUsers.length} new users to add to the database.`);
+      console.log(`[TestCron:${orgDomain}] Found ${newGoogleUsers.length} new users to add to the database.`);
       const usersToInsert = newGoogleUsers.map((u: any) => ({
         organization_id: org.id,
         google_user_id: u.id,
@@ -137,20 +145,20 @@ export async function POST(request: Request) {
         .insert(usersToInsert);
 
       if (insertUsersError) {
-        console.error('[StitchflowTestCron] ❌ Error inserting new users:', insertUsersError);
+        console.error(`[TestCron:${orgDomain}] ❌ Error inserting new users:`, insertUsersError);
         // We log the error but continue, as some relationships might still be processable
       } else {
-        console.log(`[StitchflowTestCron] ✅ Successfully inserted ${newGoogleUsers.length} new users.`);
+        console.log(`[TestCron:${orgDomain}] ✅ Successfully inserted ${newGoogleUsers.length} new users.`);
       }
     } else {
-      console.log('[StitchflowTestCron] ✅ Users table is already up to date.');
+      console.log(`[TestCron:${orgDomain}] ✅ Users table is already up to date.`);
     }
 
     // Create a lookup map for user email/name by Google ID for easier logging
     const googleUserMap = new Map(allGoogleUsers.map((u: any) => [u.id, { email: u.primaryEmail, name: u.name.fullName }]));
 
     // 7. Process and de-duplicate applications from the raw token list
-    console.log('[StitchflowTestCron] De-duplicating application list...');
+    console.log(`[TestCron:${orgDomain}] De-duplicating application list...`);
     const googleAppsMap = new Map<string, { id: string; name: string; users: Set<string>; scopes: Set<string>; }>();
     const userAppScopesMap = new Map<string, Set<string>>();
 
@@ -179,11 +187,11 @@ export async function POST(request: Request) {
     });
 
     const uniqueGoogleApps = Array.from(googleAppsMap.values());
-    console.log(`[StitchflowTestCron] Found ${uniqueGoogleApps.length} unique applications.`);
+    console.log(`[TestCron:${orgDomain}] Found ${uniqueGoogleApps.length} unique applications.`);
 
 
     // 8. Fetch existing data from the Supabase database
-    console.log('[StitchflowTestCron] Fetching existing data from Supabase DB...');
+    console.log(`[TestCron:${orgDomain}] Fetching existing data from Supabase DB...`);
     const { data: existingDbApps, error: appError } = await supabaseAdmin
         .from('applications')
         .select('name')
@@ -198,12 +206,12 @@ export async function POST(request: Request) {
         .eq('application.organization_id', org.id);
 
     if (appError || relError) {
-      console.error('[StitchflowTestCron] ❌ Error fetching existing data from Supabase:', { appError, relError });
+      console.error(`[TestCron:${orgDomain}] ❌ Error fetching existing data from Supabase:`, { appError, relError });
       return NextResponse.json({ error: 'DB fetch error' }, { status: 500 });
     }
 
     // 9. Compare datasets to find what's new
-    console.log('[StitchflowTestCron] 🔍 Comparing datasets to find new entries...');
+    console.log(`[TestCron:${orgDomain}] 🔍 Comparing datasets to find new entries...`);
 
     // Find new applications by name
     const existingAppNames = new Set(existingDbApps?.map((a: any) => a.name) || []);
@@ -239,9 +247,9 @@ export async function POST(request: Request) {
 
     // 10. Write new entries to the database
     if (newApps.length === 0 && newRelationships.length === 0) {
-      console.log('[StitchflowTestCron] ✅ No new applications or relationships to write to the database.');
+      console.log(`[TestCron:${orgDomain}] ✅ No new applications or relationships to write to the database.`);
     } else {
-      console.log(`[StitchflowTestCron] Writing new entries to the database. New apps: ${newApps.length}, New relationships: ${newRelationships.length}`);
+      console.log(`[TestCron:${orgDomain}] Writing new entries to the database. New apps: ${newApps.length}, New relationships: ${newRelationships.length}`);
       
       const appNameToDbIdMap = new Map<string, string>();
 
@@ -269,9 +277,9 @@ export async function POST(request: Request) {
           .select('id, name');
 
         if (insertAppsError) {
-          console.error('[StitchflowTestCron] ❌ Error inserting new applications:', insertAppsError);
+          console.error(`[TestCron:${orgDomain}] ❌ Error inserting new applications:`, insertAppsError);
         } else {
-          console.log(`[StitchflowTestCron] ✅ Successfully inserted ${insertedApps.length} new applications.`);
+          console.log(`[TestCron:${orgDomain}] ✅ Successfully inserted ${insertedApps.length} new applications.`);
           insertedApps.forEach(a => appNameToDbIdMap.set(a.name, a.id));
         }
       }
@@ -298,7 +306,7 @@ export async function POST(request: Request) {
           .eq('organization_id', org.id);
 
         if (involvedAppsError || involvedUsersError) {
-          console.error('[StitchflowTestCron] ❌ Error fetching DB IDs for relationships:', { involvedAppsError, involvedUsersError });
+          console.error(`[TestCron:${orgDomain}] ❌ Error fetching DB IDs for relationships:`, { involvedAppsError, involvedUsersError });
         } else {
           const userEmailToDbIdMap = new Map(involvedUsers?.map(u => [u.email, u.id]) || []);
           
@@ -308,7 +316,7 @@ export async function POST(request: Request) {
             const scopesSet = userAppScopesMap.get(`${rel.userKey}:${rel.app.id}`) || new Set();
 
             if (!application_id || !user_id) {
-              console.warn(`[StitchflowTestCron] ⚠️ Skipping relationship for user ${rel.user.email} and app ${rel.app.name} due to missing DB ID.`);
+              console.warn(`[TestCron:${orgDomain}] ⚠️ Skipping relationship for user ${rel.user.email} and app ${rel.app.name} due to missing DB ID.`);
               return null;
             }
             
@@ -318,9 +326,9 @@ export async function POST(request: Request) {
           if (relsToInsert.length > 0) {
             const { error: insertRelsError } = await supabaseAdmin.from('user_applications').insert(relsToInsert as any);
             if (insertRelsError) {
-              console.error('[StitchflowTestCron] ❌ Error inserting new relationships:', insertRelsError);
+              console.error(`[TestCron:${orgDomain}] ❌ Error inserting new relationships:`, insertRelsError);
             } else {
-              console.log(`[StitchflowTestCron] ✅ Successfully inserted ${relsToInsert.length} new user-app relationships.`);
+              console.log(`[TestCron:${orgDomain}] ✅ Successfully inserted ${relsToInsert.length} new user-app relationships.`);
             }
           }
         }
@@ -329,7 +337,7 @@ export async function POST(request: Request) {
 
 
     // 11. Log the results
-    console.log('--- [StitchflowTestCron] RESULTS ---');
+    console.log(`--- [TestCron:${orgDomain}] RESULTS ---`);
     
     if (newApps.length > 0) {
       console.log(`✅ Found ${newApps.length} new applications:`);
@@ -350,12 +358,12 @@ export async function POST(request: Request) {
         console.log('✅ No new user-app relationships found.');
     }
     
-    console.log('--- [StitchflowTestCron] END RESULTS ---');
-    console.log('[StitchflowTestCron] ✅ Test run completed successfully.');
+    console.log(`--- [TestCron:${orgDomain}] END RESULTS ---`);
+    console.log(`[TestCron:${orgDomain}] ✅ Test run for ${orgDomain} completed successfully.`);
 
     return NextResponse.json({
       success: true,
-      message: 'Test cron for Stitchflow completed successfully.',
+      message: `Test cron for ${orgDomain} completed successfully.`,
       results: {
         newAppsFound: newApps.length,
         newUserAppRelationshipsFound: newRelationships.length,
@@ -366,7 +374,7 @@ export async function POST(request: Request) {
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    console.error('[StitchflowTestCron] ❌ An unexpected error occurred:', error);
+    console.error(`[TestCron:${orgDomain}] ❌ An unexpected error occurred:`, error);
     return NextResponse.json({ 
       error: 'Internal server error',
       details: errorMessage
