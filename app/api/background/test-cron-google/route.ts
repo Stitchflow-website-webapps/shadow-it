@@ -1,160 +1,183 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { GoogleWorkspaceService } from '@/lib/google-workspace';
 
+/**
+ * A test cron job specifically for the Stitchflow organization.
+ * This job fetches and compares user and application data from Google Workspace against the database and logs the differences without sending notifications or triggering a full sync.
+ *
+ * It does NOT:
+ * - Trigger a full background sync.
+ * - Write any data to the database.
+ * - Send any email notifications.
+ */
 export async function POST(request: Request) {
+  // 1. Authenticate the request using a secret bearer token
+  const authHeader = request.headers.get('Authorization');
+  const token = authHeader?.split(' ')[1];
+
+  if (token !== process.env.CRON_SECRET) {
+    console.error('[StitchflowTestCron] Unauthorized request');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  console.log('🚀 [StitchflowTestCron] Starting Stitchflow test cron job...');
+
   try {
-    // 1. Authenticate the request
-    const authHeader = request.headers.get('Authorization');
-    const token = authHeader?.split(' ')[1];
-    
-    if (token !== process.env.CRON_SECRET) {
-      console.error('Unauthorized cron test request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const orgDomain = 'stitchflow.io';
-    console.log(`[CRON TEST] Starting test for organization: ${orgDomain}`);
-
-    // 2. Get the specific organization
-    const { data: organization, error: orgError } = await supabaseAdmin
+    // 2. Find the 'stitchflow.io' organization
+    const { data: org, error: orgError } = await supabaseAdmin
       .from('organizations')
-      .select('id, name, domain, google_org_id, auth_provider')
-      .eq('domain', orgDomain)
+      .select('id, name, domain, auth_provider')
+      .eq('domain', 'stitchflow.io')
       .single();
 
-    if (orgError) {
-      console.error(`[CRON TEST] Error fetching organization ${orgDomain}:`, orgError);
-      return NextResponse.json({ error: `Error fetching organization ${orgDomain}` }, { status: 500 });
+    if (orgError || !org) {
+      console.error('[StitchflowTestCron] Could not find organization "stitchflow.io":', orgError);
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
-    if (!organization) {
-      console.log(`[CRON TEST] Organization ${orgDomain} not found.`);
-      return NextResponse.json({ message: `Organization ${orgDomain} not found` });
+    if (org.auth_provider !== 'google') {
+      console.error(`[StitchflowTestCron] "stitchflow.io" is not a Google Workspace organization.`);
+      return NextResponse.json({ error: 'Organization is not a Google provider' }, { status: 400 });
     }
+    
+    console.log(`[StitchflowTestCron] ✅ Found organization: ${org.name} (${org.id})`);
 
-    if (organization.auth_provider !== 'google') {
-        return NextResponse.json({ message: `Organization ${orgDomain} is not a google provider` });
-    }
-
-    // 3. Trigger background sync for this organization
-    await triggerTestBackgroundSync(organization);
-
-    return NextResponse.json({ 
-      success: true, 
-      message: `Sync triggered for ${orgDomain}`
-    });
-  } catch (error) {
-    console.error('[CRON TEST] Error in test cron job:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
-  }
-}
-
-async function triggerTestBackgroundSync(org: any) {
-  const provider = 'google';
-  try {
-    console.log(`[CRON TEST] ⚙️ Triggering background sync for ${provider} org ${org.id}...`);
-
-    // Get the latest sync record to retrieve the most recent admin-scoped tokens
-    const { data: latestSync, error: syncError } = await supabaseAdmin
+    // 3. Get the latest admin-scoped tokens for the organization
+    const { data: syncTokens, error: syncError } = await supabaseAdmin
       .from('sync_status')
       .select('access_token, refresh_token, user_email, scope')
       .eq('organization_id', org.id)
-      .not('refresh_token', 'is', null) // Ensure we have a refresh token
-      .not('scope', 'is', null) // Ensure we have scopes
+      .not('refresh_token', 'is', null)
+      .not('scope', 'is', null)
       .order('created_at', { ascending: false })
-      .limit(10); // Get multiple records to find the best one
+      .limit(10);
 
-    if (syncError || !latestSync || latestSync.length === 0) {
-      console.error(`[CRON TEST] ❌ Could not find any tokens in sync_status for ${provider} org ${org.id}. Error:`, syncError?.message);
-      console.error(`[CRON TEST] This indicates the user hasn't completed the admin consent flow properly.`);
-      return;
+    if (syncError || !syncTokens || syncTokens.length === 0) {
+      const errorMsg = `Could not find any valid tokens in sync_status for org ${org.id}.`;
+      console.error(`[StitchflowTestCron] ❌ ${errorMsg}`, syncError?.message);
+      return NextResponse.json({ error: errorMsg }, { status: 404 });
     }
-
-    // Find the best admin-scoped token from the results
+    
     const requiredAdminScopes = [
       'https://www.googleapis.com/auth/admin.directory.user.readonly',
       'https://www.googleapis.com/auth/admin.directory.domain.readonly',
       'https://www.googleapis.com/auth/admin.directory.user.security'
     ];
 
-    let bestToken = null;
-    for (const token of latestSync) {
-      if (!token.refresh_token || !token.access_token) continue;
-      
-      const tokenScopes = token.scope ? token.scope.split(' ') : [];
-      const hasRequiredAdminScopes = requiredAdminScopes.every(scope => 
-        tokenScopes.includes(scope)
-      );
-      
-      if (hasRequiredAdminScopes) {
-        bestToken = token;
-        console.log('[CRON TEST] ✅ Found admin-scoped token with scopes:', token.scope);
-        break; 
-      }
-    }
-
-    if (!bestToken) {
-      console.error(`[CRON TEST] ❌ Could not find admin-scoped tokens in sync_status for ${provider} org ${org.id}.`);
-      return;
-    }
-
-    // Create a new sync_status record for this cron-triggered run
-    const { data: newSyncStatus, error: createError } = await supabaseAdmin
-      .from('sync_status')
-      .insert({
-        organization_id: org.id,
-        user_email: bestToken.user_email,
-        status: 'IN_PROGRESS',
-        progress: 5,
-        message: `Background sync initiated by test cron for ${provider}.`,
-        provider: provider,
-        access_token: bestToken.access_token,
-        refresh_token: bestToken.refresh_token,
-      })
-      .select('id')
-      .single();
-
-    if (createError) {
-      console.error(`[CRON TEST] ❌ Failed to create new sync status for cron run (org ${org.id}):`, createError);
-      return;
-    }
-
-    const sync_id = newSyncStatus.id;
-    console.log(`[CRON TEST] ✅ Created new sync record ${sync_id} for org ${org.id}.`);
-
-    const baseUrl = process.env.NODE_ENV === 'production'
-      ? 'https://www.stitchflow.com/tools/shadow-it-scan'
-      : 'http://localhost:3000';
-
-    const syncUrl = `${baseUrl}/api/background/sync`;
-
-    // Fire-and-forget the sync process.
-    fetch(syncUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        organization_id: org.id,
-        sync_id: sync_id,
-        access_token: bestToken.access_token,
-        refresh_token: bestToken.refresh_token,
-        provider: provider,
-      }),
-    }).catch(fetchError => {
-      console.error(`[CRON TEST] ❌ Fetch error triggering background sync for org ${org.id}:`, fetchError);
-      supabaseAdmin
-        .from('sync_status')
-        .update({ status: 'FAILED', message: `Cron failed to trigger sync endpoint: ${fetchError.message}` })
-        .eq('id', sync_id);
+    const bestToken = syncTokens.find(t => {
+      if (!t.refresh_token || !t.scope) return false;
+      const tokenScopes = t.scope.split(' ');
+      return requiredAdminScopes.every(scope => tokenScopes.includes(scope));
     });
 
-    console.log(`[CRON TEST] ▶️ Successfully dispatched sync request for ${provider} org ${org.id}.`);
+    if (!bestToken) {
+      const errorMsg = `Could not find admin-scoped tokens for org ${org.id}.`;
+      console.error(`[StitchflowTestCron] ❌ ${errorMsg}`);
+      return NextResponse.json({ error: errorMsg }, { status: 404 });
+    }
+
+    console.log(`[StitchflowTestCron] ✅ Found admin-scoped tokens for user ${bestToken.user_email}.`);
+
+    // 4. Initialize GoogleWorkspaceService and refresh the access token
+    const googleService = new GoogleWorkspaceService({
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+    });
+
+    googleService.setCredentials({ refresh_token: bestToken.refresh_token });
+    const refreshedTokens = await googleService.refreshAccessToken(true);
+
+    if (!refreshedTokens || !refreshedTokens.access_token) {
+      const errorMsg = 'Failed to refresh access token.';
+      console.error(`[StitchflowTestCron] ❌ ${errorMsg}`);
+      return NextResponse.json({ error: errorMsg }, { status: 500 });
+    }
+    
+    console.log('[StitchflowTestCron] ✅ Successfully refreshed access token.');
+
+    // 5. Fetch all users and apps from Google Workspace
+    console.log('[StitchflowTestCron] Fetching data from Google Workspace API...');
+    const [allGoogleUsers, allGoogleApps] = await Promise.all([
+      googleService.getUsersListPaginated(),
+      googleService.getOAuthTokens()
+    ]);
+    console.log(`[StitchflowTestCron] Fetched ${allGoogleUsers.length} users and ${allGoogleApps.length} apps from Google.`);
+
+    // 6. Fetch existing users and apps from the Supabase database
+    console.log('[StitchflowTestCron] Fetching existing data from Supabase DB...');
+    const [
+      { data: existingDbUsers, error: userError },
+      { data: existingDbApps, error: appError }
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('users')
+        .select('google_user_id')
+        .eq('organization_id', org.id),
+      supabaseAdmin
+        .from('applications')
+        .select('google_app_id')
+        .eq('organization_id', org.id)
+    ]);
+
+    if (userError || appError) {
+      console.error('[StitchflowTestCron] ❌ Error fetching existing data from Supabase:', { userError, appError });
+      return NextResponse.json({ error: 'DB fetch error' }, { status: 500 });
+    }
+
+    // 7. Compare the datasets to find what's new
+    console.log('[StitchflowTestCron] 🔍 Comparing datasets to find new entries...');
+
+    // Find new users
+    const existingUserIds = new Set(existingDbUsers?.map((u: { google_user_id: string }) => u.google_user_id) || []);
+    const newUsers = allGoogleUsers.filter((u: any) => !existingUserIds.has(u.id));
+
+    // Find new apps
+    const existingAppIds = new Set(existingDbApps?.map((a: { google_app_id: string }) => a.google_app_id) || []);
+    const newApps = allGoogleApps.filter((app: any) => !existingAppIds.has(app.clientId));
+
+    // 8. Log the results
+    console.log('--- [StitchflowTestCron] RESULTS ---');
+    
+    if (newUsers.length > 0) {
+      console.log(`✅ Found ${newUsers.length} new users:`);
+      newUsers.forEach((user: any) => {
+        console.log(`  - Name: ${user.name.fullName}, Email: ${user.primaryEmail}, Google ID: ${user.id}`);
+      });
+    } else {
+      console.log('✅ No new users found.');
+    }
+
+    if (newApps.length > 0) {
+      console.log(`✅ Found ${newApps.length} new apps:`);
+      newApps.forEach((app: any) => {
+        console.log(`  - Name: ${app.displayName}, App ID: ${app.clientId}, Scopes: ${app.scopes.length}`);
+      });
+    } else {
+      console.log('✅ No new apps found.');
+    }
+    
+    console.log('--- [StitchflowTestCron] END RESULTS ---');
+    console.log('[StitchflowTestCron] ✅ Test run completed successfully.');
+
+    return NextResponse.json({
+      success: true,
+      message: 'Test cron for Stitchflow completed successfully.',
+      results: {
+        newUsersFound: newUsers.length,
+        newAppsFound: newApps.length,
+        newUsers: newUsers.map((u: any) => ({ name: u.name.fullName, email: u.primaryEmail })),
+        newApps: newApps.map((a: any) => ({ name: a.displayName, id: a.clientId }))
+      }
+    });
 
   } catch (error) {
-    console.error(`[CRON TEST] ❌ Error in triggerBackgroundSync for org ${org.id}:`, error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    console.error('[StitchflowTestCron] ❌ An unexpected error occurred:', error);
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: errorMessage
+    }, { status: 500 });
   }
 } 
