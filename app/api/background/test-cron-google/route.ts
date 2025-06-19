@@ -133,13 +133,13 @@ export async function POST(request: Request) {
     console.log('[StitchflowTestCron] Fetching existing data from Supabase DB...');
     const { data: existingDbApps, error: appError } = await supabaseAdmin
         .from('applications')
-        .select('google_app_id')
+        .select('name')
         .eq('organization_id', org.id);
 
     const { data: existingDbUserAppRels, error: relError } = await supabaseAdmin
         .from('user_applications')
         .select(`
-            application:applications!inner(google_app_id),
+            application:applications!inner(name),
             user:users!inner(google_user_id)
         `)
         .eq('application.organization_id', org.id);
@@ -152,29 +152,36 @@ export async function POST(request: Request) {
     // 8. Compare datasets to find what's new
     console.log('[StitchflowTestCron] 🔍 Comparing datasets to find new entries...');
 
-    // Find new applications
-    const existingAppIds = new Set(existingDbApps?.map((a: any) => a.google_app_id) || []);
-    const newApps = uniqueGoogleApps.filter(app => !existingAppIds.has(app.id));
+    // Find new applications by name
+    const existingAppNames = new Set(existingDbApps?.map((a: any) => a.name) || []);
+    const newApps = uniqueGoogleApps.filter(app => !existingAppNames.has(app.name));
 
-    // Find new user-application relationships
-    const dbUserAppRels = new Set(existingDbUserAppRels?.map((r: any) => r.user && r.application ? `${r.user.google_user_id}:${r.application.google_app_id}` : null).filter(Boolean) || []);
+    // Find new user-application relationships by user Google ID and app name
+    const dbUserAppRelsByName = new Set(existingDbUserAppRels?.map((r: any) => r.user && r.application ? `${r.user.google_user_id}:${r.application.name}` : null).filter(Boolean) || []);
     const newRelationships: { user: any; app: any; }[] = [];
-    const foundRels = new Set();
-    
-    allGoogleTokens.forEach((token: any) => {
-        if (!token.userKey || !token.clientId) return;
-        const relationshipId = `${token.userKey}:${token.clientId}`;
-        if (!dbUserAppRels.has(relationshipId)) {
-            const user = googleUserMap.get(token.userKey);
-            const app = googleAppsMap.get(token.clientId);
-            if (user && app) {
-                const uniqueRelId = `${user.email}:${app.id}`;
-                if (!foundRels.has(uniqueRelId)) {
-                    newRelationships.push({ user, app });
-                    foundRels.add(uniqueRelId);
+    const processedRelsForReport = new Set<string>();
+
+    // Iterate through the unique apps found in Google Workspace
+    uniqueGoogleApps.forEach(app => {
+        // For each app, iterate through the users who have access
+        app.users.forEach(userKey => {
+            const googleRelationshipId = `${userKey}:${app.name}`;
+            
+            // Check if this relationship (by user ID and app name) exists in our database
+            if (!dbUserAppRelsByName.has(googleRelationshipId)) {
+                const user = googleUserMap.get(userKey);
+                if (user) {
+                    // This is a new relationship we haven't seen before.
+                    // We use a separate set to ensure we only add it to our report once,
+                    // as our de-duplication might group multiple tokens under one app name.
+                    const reportId = `${user.email}:${app.name}`;
+                    if (!processedRelsForReport.has(reportId)) {
+                        newRelationships.push({ user, app });
+                        processedRelsForReport.add(reportId);
+                    }
                 }
             }
-        }
+        });
     });
 
 
