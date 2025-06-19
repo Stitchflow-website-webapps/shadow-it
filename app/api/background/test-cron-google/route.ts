@@ -243,7 +243,7 @@ export async function POST(request: Request) {
     } else {
       console.log(`[StitchflowTestCron] Writing new entries to the database. New apps: ${newApps.length}, New relationships: ${newRelationships.length}`);
       
-      const newAppDbIdMap = new Map<string, string>();
+      const appNameToDbIdMap = new Map<string, string>();
 
       // Insert new applications
       if (newApps.length > 0) {
@@ -266,45 +266,45 @@ export async function POST(request: Request) {
         const { data: insertedApps, error: insertAppsError } = await supabaseAdmin
           .from('applications')
           .insert(appsToInsert)
-          .select('id, google_app_id');
+          .select('id, name');
 
         if (insertAppsError) {
           console.error('[StitchflowTestCron] ❌ Error inserting new applications:', insertAppsError);
         } else {
           console.log(`[StitchflowTestCron] ✅ Successfully inserted ${insertedApps.length} new applications.`);
-          insertedApps.forEach(a => newAppDbIdMap.set(a.google_app_id, a.id));
+          insertedApps.forEach(a => appNameToDbIdMap.set(a.name, a.id));
         }
       }
 
       // Insert new user-application relationships
       if (newRelationships.length > 0) {
-        // Get DB IDs for all apps involved (both new and existing)
-        const allInvolvedAppGoogleIds = Array.from(new Set(newRelationships.map(r => r.app.id)));
+        // Get DB IDs for all apps involved (both new and existing) by name
+        const allInvolvedAppNames = Array.from(new Set(newRelationships.map(r => r.app.name)));
         const { data: involvedApps, error: involvedAppsError } = await supabaseAdmin
           .from('applications')
-          .select('id, google_app_id')
-          .in('google_app_id', allInvolvedAppGoogleIds)
+          .select('id, name')
+          .in('name', allInvolvedAppNames)
           .eq('organization_id', org.id);
         
-        const googleAppIdToDbIdMap = new Map(involvedApps?.map(a => [a.google_app_id, a.id]) || []);
-        newAppDbIdMap.forEach((dbId, googleId) => googleAppIdToDbIdMap.set(googleId, dbId));
+        // Add existing apps to the map for lookup
+        involvedApps?.forEach(a => appNameToDbIdMap.set(a.name, a.id));
 
-        // Get DB IDs for all users involved
-        const allInvolvedUserGoogleIds = Array.from(new Set(newRelationships.map(r => r.userKey)));
+        // Get DB IDs for all users involved by email
+        const allInvolvedUserEmails = Array.from(new Set(newRelationships.map(r => r.user.email)));
         const { data: involvedUsers, error: involvedUsersError } = await supabaseAdmin
           .from('users')
-          .select('id, google_user_id')
-          .in('google_user_id', allInvolvedUserGoogleIds)
+          .select('id, email')
+          .in('email', allInvolvedUserEmails)
           .eq('organization_id', org.id);
 
         if (involvedAppsError || involvedUsersError) {
           console.error('[StitchflowTestCron] ❌ Error fetching DB IDs for relationships:', { involvedAppsError, involvedUsersError });
         } else {
-          const googleUserIdToDbIdMap = new Map(involvedUsers?.map(u => [u.google_user_id, u.id]) || []);
+          const userEmailToDbIdMap = new Map(involvedUsers?.map(u => [u.email, u.id]) || []);
           
           const relsToInsert = newRelationships.map(rel => {
-            const application_id = googleAppIdToDbIdMap.get(rel.app.id);
-            const user_id = googleUserIdToDbIdMap.get(rel.userKey);
+            const application_id = appNameToDbIdMap.get(rel.app.name);
+            const user_id = userEmailToDbIdMap.get(rel.user.email);
             const scopesSet = userAppScopesMap.get(`${rel.userKey}:${rel.app.id}`) || new Set();
 
             if (!application_id || !user_id) {
