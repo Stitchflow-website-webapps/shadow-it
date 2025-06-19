@@ -97,65 +97,107 @@ export async function POST(request: Request) {
     
     console.log('[StitchflowTestCron] ✅ Successfully refreshed access token.');
 
-    // 5. Fetch all users and apps from Google Workspace
+    // 5. Fetch all users and app tokens from Google Workspace
     console.log('[StitchflowTestCron] Fetching data from Google Workspace API...');
-    const [allGoogleUsers, allGoogleApps] = await Promise.all([
+    const [allGoogleUsers, allGoogleTokens] = await Promise.all([
       googleService.getUsersListPaginated(),
       googleService.getOAuthTokens()
     ]);
-    console.log(`[StitchflowTestCron] Fetched ${allGoogleUsers.length} users and ${allGoogleApps.length} apps from Google.`);
+    console.log(`[StitchflowTestCron] Fetched ${allGoogleUsers.length} users and ${allGoogleTokens.length} total app tokens from Google.`);
 
-    // 6. Fetch existing users and apps from the Supabase database
+    // Create a lookup map for user email/name by Google ID for easier logging
+    const googleUserMap = new Map(allGoogleUsers.map((u: any) => [u.id, { email: u.primaryEmail, name: u.name.fullName }]));
+
+    // 6. Process and de-duplicate applications from the raw token list
+    console.log('[StitchflowTestCron] De-duplicating application list...');
+    const googleAppsMap = new Map<string, { id: string; name: string; users: Set<string> }>();
+
+    allGoogleTokens.forEach((token: any) => {
+      if (!token.clientId) return;
+
+      if (!googleAppsMap.has(token.clientId)) {
+        googleAppsMap.set(token.clientId, {
+          id: token.clientId,
+          name: token.displayText || 'Unknown App',
+          users: new Set<string>(),
+        });
+      }
+      googleAppsMap.get(token.clientId)!.users.add(token.userKey);
+    });
+
+    const uniqueGoogleApps = Array.from(googleAppsMap.values());
+    console.log(`[StitchflowTestCron] Found ${uniqueGoogleApps.length} unique applications.`);
+
+
+    // 7. Fetch existing data from the Supabase database
     console.log('[StitchflowTestCron] Fetching existing data from Supabase DB...');
-    const [
-      { data: existingDbUsers, error: userError },
-      { data: existingDbApps, error: appError }
-    ] = await Promise.all([
-      supabaseAdmin
-        .from('users')
-        .select('google_user_id')
-        .eq('organization_id', org.id),
-      supabaseAdmin
+    const { data: existingDbApps, error: appError } = await supabaseAdmin
         .from('applications')
         .select('google_app_id')
-        .eq('organization_id', org.id)
-    ]);
+        .eq('organization_id', org.id);
 
-    if (userError || appError) {
-      console.error('[StitchflowTestCron] ❌ Error fetching existing data from Supabase:', { userError, appError });
+    const { data: existingDbUserAppRels, error: relError } = await supabaseAdmin
+        .from('user_applications')
+        .select(`
+            application:applications!inner(google_app_id),
+            user:users!inner(google_user_id)
+        `)
+        .eq('application.organization_id', org.id);
+
+    if (appError || relError) {
+      console.error('[StitchflowTestCron] ❌ Error fetching existing data from Supabase:', { appError, relError });
       return NextResponse.json({ error: 'DB fetch error' }, { status: 500 });
     }
 
-    // 7. Compare the datasets to find what's new
+    // 8. Compare datasets to find what's new
     console.log('[StitchflowTestCron] 🔍 Comparing datasets to find new entries...');
 
-    // Find new users
-    const existingUserIds = new Set(existingDbUsers?.map((u: { google_user_id: string }) => u.google_user_id) || []);
-    const newUsers = allGoogleUsers.filter((u: any) => !existingUserIds.has(u.id));
+    // Find new applications
+    const existingAppIds = new Set(existingDbApps?.map((a: any) => a.google_app_id) || []);
+    const newApps = uniqueGoogleApps.filter(app => !existingAppIds.has(app.id));
 
-    // Find new apps
-    const existingAppIds = new Set(existingDbApps?.map((a: { google_app_id: string }) => a.google_app_id) || []);
-    const newApps = allGoogleApps.filter((app: any) => !existingAppIds.has(app.clientId));
+    // Find new user-application relationships
+    const dbUserAppRels = new Set(existingDbUserAppRels?.map((r: any) => r.user && r.application ? `${r.user.google_user_id}:${r.application.google_app_id}` : null).filter(Boolean) || []);
+    const newRelationships: { user: any; app: any; }[] = [];
+    const foundRels = new Set();
+    
+    allGoogleTokens.forEach((token: any) => {
+        if (!token.userKey || !token.clientId) return;
+        const relationshipId = `${token.userKey}:${token.clientId}`;
+        if (!dbUserAppRels.has(relationshipId)) {
+            const user = googleUserMap.get(token.userKey);
+            const app = googleAppsMap.get(token.clientId);
+            if (user && app) {
+                const uniqueRelId = `${user.email}:${app.id}`;
+                if (!foundRels.has(uniqueRelId)) {
+                    newRelationships.push({ user, app });
+                    foundRels.add(uniqueRelId);
+                }
+            }
+        }
+    });
 
-    // 8. Log the results
+
+    // 9. Log the results
     console.log('--- [StitchflowTestCron] RESULTS ---');
     
-    if (newUsers.length > 0) {
-      console.log(`✅ Found ${newUsers.length} new users:`);
-      newUsers.forEach((user: any) => {
-        console.log(`  - Name: ${user.name.fullName}, Email: ${user.primaryEmail}, Google ID: ${user.id}`);
+    if (newApps.length > 0) {
+      console.log(`✅ Found ${newApps.length} new applications:`);
+      newApps.forEach((app: any) => {
+        console.log(`  - Name: ${app.name}, App ID: ${app.id}, Users: ${app.users.size}`);
       });
     } else {
-      console.log('✅ No new users found.');
+      console.log('✅ No new applications found.');
     }
 
-    if (newApps.length > 0) {
-      console.log(`✅ Found ${newApps.length} new apps:`);
-      newApps.forEach((app: any) => {
-        console.log(`  - Name: ${app.displayName}, App ID: ${app.clientId}, Scopes: ${app.scopes.length}`);
-      });
+    if (newRelationships.length > 0) {
+        console.log(`✅ Found ${newRelationships.length} new user-app relationships:`);
+        newRelationships.sort((a,b) => a.user.email.localeCompare(b.user.email) || a.app.name.localeCompare(b.app.name));
+        newRelationships.forEach(rel => {
+            console.log(`  - User: ${rel.user.name} (${rel.user.email}) was added to App: ${rel.app.name} (${rel.app.id})`);
+        });
     } else {
-      console.log('✅ No new apps found.');
+        console.log('✅ No new user-app relationships found.');
     }
     
     console.log('--- [StitchflowTestCron] END RESULTS ---');
@@ -165,10 +207,10 @@ export async function POST(request: Request) {
       success: true,
       message: 'Test cron for Stitchflow completed successfully.',
       results: {
-        newUsersFound: newUsers.length,
         newAppsFound: newApps.length,
-        newUsers: newUsers.map((u: any) => ({ name: u.name.fullName, email: u.primaryEmail })),
-        newApps: newApps.map((a: any) => ({ name: a.displayName, id: a.clientId }))
+        newUserAppRelationshipsFound: newRelationships.length,
+        newApps: newApps.map((a: any) => ({ name: a.name, id: a.id, userCount: a.users.size })),
+        newUserAppRelationships: newRelationships.map(r => ({ userName: r.user.name, userEmail: r.user.email, appName: r.app.name }))
       }
     });
 
