@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const { data: org, error: orgError } = await supabaseAdmin
       .from('organizations')
       .select('id, name, domain, auth_provider')
-      .eq('domain', 'fountain.com')
+      .eq('domain', 'stitchflow.io')
       .single();
 
     if (orgError || !org) {
