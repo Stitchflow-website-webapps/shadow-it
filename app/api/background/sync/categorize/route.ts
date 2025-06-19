@@ -257,7 +257,7 @@ export async function POST(request: Request) {
 }
 
 // Function to categorize an application using ChatGPT
-async function categorizeApplication(appName: string, scopes: string[] = [], isMicrosoftApp: boolean = false): Promise<string> {
+export async function categorizeApplication(appName: string, scopes: string[] = [], isMicrosoftApp: boolean = false): Promise<string> {
   try {
     // If OpenAI API key is not set, use heuristic approach
     if (!process.env.OPENAI_API_KEY) {

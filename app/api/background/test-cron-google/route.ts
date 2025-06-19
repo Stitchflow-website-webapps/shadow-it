@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { GoogleWorkspaceService } from '@/lib/google-workspace';
+import { determineRiskLevel, transformRiskLevel } from '@/lib/risk-assessment';
+import { categorizeApplication } from '@/app/api/background/sync/categorize/route';
 
 /**
  * A test cron job specifically for the Stitchflow organization.
@@ -28,7 +30,7 @@ export async function POST(request: Request) {
     const { data: org, error: orgError } = await supabaseAdmin
       .from('organizations')
       .select('id, name, domain, auth_provider')
-      .eq('domain', 'hazel.co')
+      .eq('domain', 'fountain.com')
       .single();
 
     if (orgError || !org) {
@@ -105,31 +107,82 @@ export async function POST(request: Request) {
     ]);
     console.log(`[StitchflowTestCron] Fetched ${allGoogleUsers.length} users and ${allGoogleTokens.length} total app tokens from Google.`);
 
+    // 6. Sync users from Google to our DB to ensure all users exist before we process relationships
+    console.log('[StitchflowTestCron] Syncing users table...');
+    const { data: existingDbUsers, error: existingUsersError } = await supabaseAdmin
+      .from('users')
+      .select('email') // Check against email to support all providers
+      .eq('organization_id', org.id);
+
+    if (existingUsersError) {
+      console.error('[StitchflowTestCron] ❌ Error fetching existing users from Supabase:', existingUsersError);
+      return NextResponse.json({ error: 'DB fetch error while getting users' }, { status: 500 });
+    }
+
+    const existingUserEmails = new Set(existingDbUsers.map(u => u.email));
+    const newGoogleUsers = allGoogleUsers.filter((u: any) => !existingUserEmails.has(u.primaryEmail));
+
+    if (newGoogleUsers.length > 0) {
+      console.log(`[StitchflowTestCron] Found ${newGoogleUsers.length} new users to add to the database.`);
+      const usersToInsert = newGoogleUsers.map((u: any) => ({
+        organization_id: org.id,
+        google_user_id: u.id,
+        email: u.primaryEmail,
+        name: u.name.fullName,
+        role: 'User' // Default role for new users
+      }));
+
+      const { error: insertUsersError } = await supabaseAdmin
+        .from('users')
+        .insert(usersToInsert);
+
+      if (insertUsersError) {
+        console.error('[StitchflowTestCron] ❌ Error inserting new users:', insertUsersError);
+        // We log the error but continue, as some relationships might still be processable
+      } else {
+        console.log(`[StitchflowTestCron] ✅ Successfully inserted ${newGoogleUsers.length} new users.`);
+      }
+    } else {
+      console.log('[StitchflowTestCron] ✅ Users table is already up to date.');
+    }
+
     // Create a lookup map for user email/name by Google ID for easier logging
     const googleUserMap = new Map(allGoogleUsers.map((u: any) => [u.id, { email: u.primaryEmail, name: u.name.fullName }]));
 
-    // 6. Process and de-duplicate applications from the raw token list
+    // 7. Process and de-duplicate applications from the raw token list
     console.log('[StitchflowTestCron] De-duplicating application list...');
-    const googleAppsMap = new Map<string, { id: string; name: string; users: Set<string> }>();
+    const googleAppsMap = new Map<string, { id: string; name: string; users: Set<string>; scopes: Set<string>; }>();
+    const userAppScopesMap = new Map<string, Set<string>>();
 
     allGoogleTokens.forEach((token: any) => {
-      if (!token.clientId) return;
+      if (!token.clientId || !token.userKey) return;
 
       if (!googleAppsMap.has(token.clientId)) {
         googleAppsMap.set(token.clientId, {
           id: token.clientId,
           name: token.displayText || 'Unknown App',
           users: new Set<string>(),
+          scopes: new Set<string>(),
         });
       }
-      googleAppsMap.get(token.clientId)!.users.add(token.userKey);
+      const appEntry = googleAppsMap.get(token.clientId)!;
+      appEntry.users.add(token.userKey);
+      token.scopes.forEach((s: string) => appEntry.scopes.add(s));
+
+      // Store scopes per user-app relationship
+      const userAppKey = `${token.userKey}:${token.clientId}`;
+      if (!userAppScopesMap.has(userAppKey)) {
+        userAppScopesMap.set(userAppKey, new Set<string>());
+      }
+      const userScopesForApp = userAppScopesMap.get(userAppKey)!;
+      token.scopes.forEach((s: string) => userScopesForApp.add(s));
     });
 
     const uniqueGoogleApps = Array.from(googleAppsMap.values());
     console.log(`[StitchflowTestCron] Found ${uniqueGoogleApps.length} unique applications.`);
 
 
-    // 7. Fetch existing data from the Supabase database
+    // 8. Fetch existing data from the Supabase database
     console.log('[StitchflowTestCron] Fetching existing data from Supabase DB...');
     const { data: existingDbApps, error: appError } = await supabaseAdmin
         .from('applications')
@@ -149,7 +202,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'DB fetch error' }, { status: 500 });
     }
 
-    // 8. Compare datasets to find what's new
+    // 9. Compare datasets to find what's new
     console.log('[StitchflowTestCron] 🔍 Comparing datasets to find new entries...');
 
     // Find new applications by name
@@ -158,7 +211,7 @@ export async function POST(request: Request) {
 
     // Find new user-application relationships by user Google ID and app name
     const dbUserAppRelsByName = new Set(existingDbUserAppRels?.map((r: any) => r.user && r.application ? `${r.user.google_user_id}:${r.application.name}` : null).filter(Boolean) || []);
-    const newRelationships: { user: any; app: any; }[] = [];
+    const newRelationships: { user: any; app: any; userKey: string; }[] = [];
     const processedRelsForReport = new Set<string>();
 
     // Iterate through the unique apps found in Google Workspace
@@ -176,7 +229,7 @@ export async function POST(request: Request) {
                     // as our de-duplication might group multiple tokens under one app name.
                     const reportId = `${user.email}:${app.name}`;
                     if (!processedRelsForReport.has(reportId)) {
-                        newRelationships.push({ user, app });
+                        newRelationships.push({ user, app, userKey });
                         processedRelsForReport.add(reportId);
                     }
                 }
@@ -184,8 +237,98 @@ export async function POST(request: Request) {
         });
     });
 
+    // 10. Write new entries to the database
+    if (newApps.length === 0 && newRelationships.length === 0) {
+      console.log('[StitchflowTestCron] ✅ No new applications or relationships to write to the database.');
+    } else {
+      console.log(`[StitchflowTestCron] Writing new entries to the database. New apps: ${newApps.length}, New relationships: ${newRelationships.length}`);
+      
+      const newAppDbIdMap = new Map<string, string>();
 
-    // 9. Log the results
+      // Insert new applications
+      if (newApps.length > 0) {
+        const appsToInsert = await Promise.all(newApps.map(async (app) => {
+          const all_scopes = Array.from(app.scopes);
+          const risk_level = determineRiskLevel(all_scopes);
+          const category = await categorizeApplication(app.name, all_scopes);
+          return {
+            organization_id: org.id,
+            google_app_id: app.id,
+            name: app.name,
+            category,
+            risk_level: transformRiskLevel(risk_level),
+            all_scopes,
+            total_permissions: all_scopes.length,
+            provider: 'google'
+          };
+        }));
+        
+        const { data: insertedApps, error: insertAppsError } = await supabaseAdmin
+          .from('applications')
+          .insert(appsToInsert)
+          .select('id, google_app_id');
+
+        if (insertAppsError) {
+          console.error('[StitchflowTestCron] ❌ Error inserting new applications:', insertAppsError);
+        } else {
+          console.log(`[StitchflowTestCron] ✅ Successfully inserted ${insertedApps.length} new applications.`);
+          insertedApps.forEach(a => newAppDbIdMap.set(a.google_app_id, a.id));
+        }
+      }
+
+      // Insert new user-application relationships
+      if (newRelationships.length > 0) {
+        // Get DB IDs for all apps involved (both new and existing)
+        const allInvolvedAppGoogleIds = Array.from(new Set(newRelationships.map(r => r.app.id)));
+        const { data: involvedApps, error: involvedAppsError } = await supabaseAdmin
+          .from('applications')
+          .select('id, google_app_id')
+          .in('google_app_id', allInvolvedAppGoogleIds)
+          .eq('organization_id', org.id);
+        
+        const googleAppIdToDbIdMap = new Map(involvedApps?.map(a => [a.google_app_id, a.id]) || []);
+        newAppDbIdMap.forEach((dbId, googleId) => googleAppIdToDbIdMap.set(googleId, dbId));
+
+        // Get DB IDs for all users involved
+        const allInvolvedUserGoogleIds = Array.from(new Set(newRelationships.map(r => r.userKey)));
+        const { data: involvedUsers, error: involvedUsersError } = await supabaseAdmin
+          .from('users')
+          .select('id, google_user_id')
+          .in('google_user_id', allInvolvedUserGoogleIds)
+          .eq('organization_id', org.id);
+
+        if (involvedAppsError || involvedUsersError) {
+          console.error('[StitchflowTestCron] ❌ Error fetching DB IDs for relationships:', { involvedAppsError, involvedUsersError });
+        } else {
+          const googleUserIdToDbIdMap = new Map(involvedUsers?.map(u => [u.google_user_id, u.id]) || []);
+          
+          const relsToInsert = newRelationships.map(rel => {
+            const application_id = googleAppIdToDbIdMap.get(rel.app.id);
+            const user_id = googleUserIdToDbIdMap.get(rel.userKey);
+            const scopesSet = userAppScopesMap.get(`${rel.userKey}:${rel.app.id}`) || new Set();
+
+            if (!application_id || !user_id) {
+              console.warn(`[StitchflowTestCron] ⚠️ Skipping relationship for user ${rel.user.email} and app ${rel.app.name} due to missing DB ID.`);
+              return null;
+            }
+            
+            return { application_id, user_id, scopes: Array.from(scopesSet) };
+          }).filter(Boolean);
+
+          if (relsToInsert.length > 0) {
+            const { error: insertRelsError } = await supabaseAdmin.from('user_applications').insert(relsToInsert as any);
+            if (insertRelsError) {
+              console.error('[StitchflowTestCron] ❌ Error inserting new relationships:', insertRelsError);
+            } else {
+              console.log(`[StitchflowTestCron] ✅ Successfully inserted ${relsToInsert.length} new user-app relationships.`);
+            }
+          }
+        }
+      }
+    }
+
+
+    // 11. Log the results
     console.log('--- [StitchflowTestCron] RESULTS ---');
     
     if (newApps.length > 0) {
