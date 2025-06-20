@@ -128,6 +128,8 @@ export async function POST(request: Request) {
         new_user_in_app: preferences.new_user_in_app,
         // new_user_in_review_app: preferences.new_user_in_review_app,
         updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_email, organization_id'
       })
       .select()
       .single();
