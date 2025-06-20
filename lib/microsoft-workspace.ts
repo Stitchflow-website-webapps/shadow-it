@@ -321,37 +321,52 @@ export class MicrosoftWorkspaceService {
   }
 
   async getUsersList() {
-    const users = await this.client.api('/users')
-      .select('id,displayName,mail,userPrincipalName,jobTitle,department,lastSignInDateTime')
-      .get();
-    console.log(users.value);
-    return users.value;
+    return this.getAllPages<MicrosoftGraphUser>('/users?$select=id,mail,displayName,userPrincipalName');
+  }
+
+  private async getAllPages<T>(endpoint: string, select?: string): Promise<T[]> {
+    let result: T[] = [];
+    let nextLink: string | undefined = endpoint;
+
+    while (nextLink) {
+      try {
+        const response: any = await this.client.api(nextLink).get();
+        result = result.concat(response.value);
+        nextLink = response['@odata.nextLink'];
+      } catch (error) {
+        console.error(`Error fetching page for endpoint ${endpoint}:`, error);
+        // Depending on the error, you might want to break or handle it differently
+        // For now, we stop pagination on error to prevent infinite loops on persistent failures
+        break;
+      }
+    }
+    return result;
   }
 
   /**
-   * Helper method to fetch all pages from a Microsoft Graph API endpoint
+   * Fetches all service principals (applications) from the tenant.
+   * @returns A promise that resolves to an array of service principal objects.
    */
-  private async getAllPages<T>(endpoint: string, select?: string): Promise<T[]> {
-    let url = endpoint;
-    if (select) {
-      url = `${url}?$select=${select}`;
-    }
-    
-    const results: T[] = [];
-    let response;
-    
-    do {
-      response = await this.client.api(url).get();
-      
-      if (response.value && Array.isArray(response.value)) {
-        results.push(...response.value);
-      }
-      
-      // Get the next page URL if available
-      url = response['@odata.nextLink'];
-    } while (url);
-    
-    return results;
+  async getServicePrincipals(): Promise<any[]> {
+    console.log('Fetching all service principals from Microsoft Graph API...');
+    // We select only the necessary fields to reduce payload size.
+    const endpoint = '/servicePrincipals?$select=id,appId,displayName,appRoles,oauth2PermissionScopes,servicePrincipalType';
+    const servicePrincipals = await this.getAllPages(endpoint);
+    console.log(`Successfully fetched ${servicePrincipals.length} service principals.`);
+    return servicePrincipals;
+  }
+
+  /**
+   * Fetches all OAuth2 permission grants for the entire tenant.
+   * This represents the permissions (scopes) that users have granted to applications.
+   * @returns A promise that resolves to an array of OAuth2 permission grant objects.
+   */
+  async getAllOAuth2PermissionGrants(): Promise<any[]> {
+    console.log('Fetching all OAuth2 permission grants from Microsoft Graph API...');
+    const endpoint = '/oauth2PermissionGrants';
+    const grants = await this.getAllPages(endpoint);
+    console.log(`Successfully fetched ${grants.length} OAuth2 permission grants.`);
+    return grants;
   }
 
   async getOAuthTokens(): Promise<Token[]> {
