@@ -265,6 +265,7 @@ export async function POST(request: Request) {
             name: app.name,
             category,
             risk_level: transformRiskLevel(risk_level),
+            management_status: 'Newly discovered',
             all_scopes,
             total_permissions: all_scopes.length,
             provider: 'google'

@@ -271,6 +271,7 @@ export async function POST(request: Request) {
             name: app.name,
             category,
             risk_level: transformRiskLevel(risk_level),
+            management_status: 'Newly discovered',
             all_scopes,
             total_permissions: all_scopes.length,
             provider: 'microsoft'
@@ -354,7 +355,13 @@ export async function POST(request: Request) {
 
     if (newRelationships.length > 0) {
         console.log(`✅ Found ${newRelationships.length} new user-app relationships:`);
-        newRelationships.sort((a,b) => a.user.email.localeCompare(b.user.email) || a.app.name.localeCompare(b.app.name));
+        newRelationships.sort((a,b) => {
+          const emailA = a.user?.email || '';
+          const emailB = b.user?.email || '';
+          const nameA = a.app?.name || '';
+          const nameB = b.app?.name || '';
+          return emailA.localeCompare(emailB) || nameA.localeCompare(nameB);
+        });
         newRelationships.forEach(rel => console.log(`  - User: ${rel.user.name} (${rel.user.email}) to App: ${rel.app.name}`));
     } else {
         console.log('✅ No new user-app relationships found.');

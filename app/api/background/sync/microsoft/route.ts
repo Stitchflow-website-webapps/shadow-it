@@ -544,7 +544,7 @@ export async function GET(request: NextRequest) {
                 microsoft_app_id: appId,
                 category: existingApp?.category || 'Unknown',
                 risk_level: riskLevel,
-                management_status: existingApp?.management_status || 'NEEDS_REVIEW',
+                management_status: existingApp?.management_status || 'Not specified',
                 total_permissions: allAppScopes.length,
                 all_scopes: allAppScopes,
                 user_count: Array.from(userAppScopes.values()).filter(ua => ua.appId === appId).length,
@@ -850,7 +850,7 @@ async function processMicrosoftData(
 
         const { error: usersError } = await supabaseAdmin
           .from('users')
-          .upsert(usersToUpsert);
+          .upsert(usersToUpsert, { onConflict: 'organization_id, email' });
 
         if (usersError) {
           console.error(`[Microsoft ${sync_id}] Error storing users batch:`, usersError);
@@ -1009,4 +1009,4 @@ async function processMicrosoftData(
     );
     throw error;
   }
-} 
+}

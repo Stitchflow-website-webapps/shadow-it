@@ -457,7 +457,7 @@ async function processTokens(
         // Check if app already exists
         const { data: existingApp } = await supabaseAdmin
           .from('applications')
-          .select('id')
+          .select('id, management_status')
           .eq('name', appName)
           .eq('organization_id', organization_id)
           .maybeSingle();
@@ -468,6 +468,7 @@ async function processTokens(
           name: appName,
           category: 'Unknown',
           risk_level: highestRiskLevel,
+          management_status: existingApp?.management_status || 'Not specified',
           total_permissions: allScopesForRiskEvaluation.size,
           all_scopes: Array.from(allScopesForRiskEvaluation),
           organization_id: organization_id,
