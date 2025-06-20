@@ -210,13 +210,26 @@ export async function GET(request: Request) {
   }
 }
 
-function transformManagementStatus(status: string): 'Managed' | 'Unmanaged' | 'Needs Review' {
-  const map: Record<string, 'Managed' | 'Unmanaged' | 'Needs Review'> = {
-    'Managed': 'Managed',
-    'Unmanaged': 'Unmanaged',
-    'Needs Review': 'Needs Review'
-  };
-  return map[status] || 'Needs Review';
+function transformManagementStatus(status: string): 'Managed' | 'Unmanaged' | 'Newly discovered' | 'Unknown' | 'Ignore' | 'Not specified' {
+  const validStatuses: ('Managed' | 'Unmanaged' | 'Newly discovered' | 'Unknown' | 'Ignore' | 'Not specified')[] = [
+    'Managed',
+    'Unmanaged',
+    'Newly discovered',
+    'Unknown',
+    'Ignore',
+    'Not specified'
+  ];
+
+  if (validStatuses.includes(status as any)) {
+    return status as 'Managed' | 'Unmanaged' | 'Newly discovered' | 'Unknown' | 'Ignore' | 'Not specified';
+  }
+  
+  // Handle backward compatibility
+  if (status === 'Needs Review') {
+    return 'Not specified';
+  }
+  
+  return 'Not specified';
 }
 
 function calculateScopeVariance(userApplications: any[] | null): { userGroups: number; scopeGroups: number } {
@@ -247,7 +260,7 @@ export async function PATCH(request: Request) {
     
     if (managementStatus) {
       // Validate management status
-      if (!['Managed', 'Unmanaged', 'Needs Review'].includes(managementStatus)) {
+      if (!['Managed', 'Unmanaged', 'Newly discovered', 'Unknown', 'Ignore', 'Not specified'].includes(managementStatus)) {
         return NextResponse.json({ error: 'Invalid management status' }, { status: 400 });
       }
       updateData.management_status = managementStatus;

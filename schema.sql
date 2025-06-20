@@ -77,4 +77,21 @@ ALTER TABLE shadow_it.applications
   ADD COLUMN notes text null;
 
 -- If you want an index on owner_email for faster lookups
-create index IF not exists idx_applications_owner_email on shadow_it.applications using btree (owner_email) TABLESPACE pg_default; 
+create index IF not exists idx_applications_owner_email on shadow_it.applications using btree (owner_email) TABLESPACE pg_default;
+
+-- Add CHECK constraint to the management_status column in the shadow_it.applications table
+ALTER TABLE shadow_it.applications
+  ADD CONSTRAINT applications_management_status_check CHECK (
+    (
+      management_status = any (
+        array[
+          'Managed'::text,
+          'Unmanaged'::text,
+          'Newly discovered'::text,
+          'Unknown'::text,
+          'Ignore'::text,
+          'Not specified'::text
+        ]
+      )
+    )
+  );

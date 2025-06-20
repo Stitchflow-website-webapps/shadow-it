@@ -59,8 +59,7 @@ export async function GET(request: Request) {
       // Create default preferences
       const defaultPreferences = {
         new_app_detected: true,
-        new_user_in_app: true,
-        new_user_in_review_app: true
+        new_user_in_app: true
       };
       
       // Create an entry with default preferences
@@ -70,8 +69,7 @@ export async function GET(request: Request) {
           organization_id: orgId,
           user_email: userEmail,
           new_app_detected: defaultPreferences.new_app_detected,
-          new_user_in_app: defaultPreferences.new_user_in_app,
-          new_user_in_review_app: defaultPreferences.new_user_in_review_app
+          new_user_in_app: defaultPreferences.new_user_in_app
         })
         .select()
         .single();
@@ -128,7 +126,7 @@ export async function POST(request: Request) {
         user_email: userEmail,
         new_app_detected: preferences.new_app_detected,
         new_user_in_app: preferences.new_user_in_app,
-        new_user_in_review_app: preferences.new_user_in_review_app,
+        // new_user_in_review_app: preferences.new_user_in_review_app,
         updated_at: new Date().toISOString()
       })
       .select()

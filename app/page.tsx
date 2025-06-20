@@ -83,7 +83,7 @@ type Application = {
   logoUrl?: string      // Primary logo URL
   logoUrlFallback?: string // Fallback logo URL
   created_at?: string   // Added created_at field
-  managementStatus: "Managed" | "Unmanaged" | "Needs Review"
+  managementStatus: "Managed" | "Unmanaged" | "Newly discovered" | "Unknown" | "Ignore" | "Not specified"
   ownerEmail: string
   notes: string
   scopes: string[]
@@ -150,6 +150,24 @@ const truncateText = (text: string, maxLength: number = 20) => {
     return text.substring(0, maxLength) + "...";
   }
   return text;
+};
+
+// Helper function to get initials from a name
+const getInitials = (name: string): string => {
+  if (!name) return "";
+
+  // Split by space or hyphen to handle names like "John-Doe"
+  const parts = name.split(/[\s-]+/).filter(Boolean);
+
+  if (parts.length === 0) return "";
+
+  // For a single word name, take the first two letters. For "J", it will be "J".
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+
+  // For multi-word names, take the first letter of the first and last parts.
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
 export default function ShadowITDashboard() {
@@ -663,7 +681,7 @@ export default function ShadowITDashboard() {
             ],
             "Total Scopes": 3,
             "Risk": "Low",
-            "Status": "Needs Review"
+            "Status": "Not specified"
           },
           {
             "Apps": "Strapi Cloud",
@@ -736,7 +754,7 @@ export default function ShadowITDashboard() {
             ],
             "Total Scopes": 4,
             "Risk": "High",
-            "Status": "Needs Review"
+            "Status": "Not specified"
           },
           {
             "Apps": "Canva",
@@ -773,7 +791,7 @@ export default function ShadowITDashboard() {
             ],
             "Total Scopes": 4,
             "Risk": "Medium",
-            "Status": "Needs Review"
+            "Status": "Not specified"
           }
         ]
         
@@ -1254,7 +1272,7 @@ export default function ShadowITDashboard() {
       // Update local state immediately after successful API call
       setApplications((prevApps) =>
         prevApps.map((app) =>
-          app.id === appId ? { ...app, managementStatus: newStatus as "Managed" | "Unmanaged" | "Needs Review" } : app,
+          app.id === appId ? { ...app, managementStatus: newStatus as "Managed" | "Unmanaged" | "Newly discovered" | "Unknown" | "Ignore" | "Not specified" } : app,
         ),
       );
 
@@ -1996,7 +2014,7 @@ export default function ShadowITDashboard() {
         riskReason: "Based on scope permissions and usage patterns",
         totalPermissions: item["Total Scopes"],
         scopeVariance: { userGroups: Math.floor(Math.random() * 5) + 1, scopeGroups: Math.floor(Math.random() * 3) + 1 },
-        managementStatus: item.Status as "Managed" | "Unmanaged" | "Needs Review",
+        managementStatus: item.Status as "Managed" | "Unmanaged" | "Newly discovered" | "Unknown" | "Ignore" | "Not specified",
         ownerEmail: "",
         logoUrl: logoUrls.primary,
         logoUrlFallback: logoUrls.fallback, // Assign fallback logo URL
@@ -2752,7 +2770,10 @@ export default function ShadowITDashboard() {
                               <option value="">All Statuses</option>
                               <option value="Managed">Managed</option>
                               <option value="Unmanaged">Unmanaged</option>
-                              <option value="Needs Review">Needs Review</option>
+                              <option value="Newly discovered">Newly discovered</option>
+                              <option value="Unknown">Unknown</option>
+                              <option value="Ignore">Ignore</option>
+                              <option value="Not specified">Not specified</option>
                             </select>
                           </div>
                         </div>
@@ -2861,10 +2882,7 @@ export default function ShadowITDashboard() {
                                             key={idx}
                                             className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 border-2 border-background text-xs font-medium"
                                           >
-                                            {user.name
-                                              .split(" ")
-                                              .map((n) => n[0])
-                                              .join("")}
+                                            {getInitials(user.name)}
                                           </div>
                                         ))}
                                         {app.userCount > 3 && (
@@ -2957,7 +2975,10 @@ export default function ShadowITDashboard() {
                                     >
                                       <option value="Managed">Managed</option>
                                       <option value="Unmanaged">Unmanaged</option>
-                                      <option value="Needs Review">Needs Review</option>
+                                      <option value="Newly discovered">Newly discovered</option>
+                                      <option value="Unknown">Unknown</option>
+                                      <option value="Ignore">Ignore</option>
+                                      <option value="Not specified">Not specified</option>
                                     </select>
                                   </TableCell>
                                   <TableCell>
@@ -3149,7 +3170,10 @@ export default function ShadowITDashboard() {
                             <option value="Any Status">Any Status</option>
                             <option value="Managed">Managed</option>
                             <option value="Unmanaged">Unmanaged</option>
-                            <option value="Needs Review">Needs Review</option>
+                            <option value="Newly discovered">Newly discovered</option>
+                            <option value="Unknown">Unknown</option>
+                            <option value="Ignore">Ignore</option>
+                            <option value="Not specified">Not specified</option>
                           </select>
                         </div>
                       </div>
@@ -3343,7 +3367,10 @@ export default function ShadowITDashboard() {
                               <option value="Any Status">Any Status</option>
                               <option value="Managed">Managed</option>
                               <option value="Unmanaged">Unmanaged</option>
-                              <option value="Needs Review">Needs Review</option>
+                              <option value="Newly discovered">Newly discovered</option>
+                              <option value="Unknown">Unknown</option>
+                              <option value="Ignore">Ignore</option>
+                              <option value="Not specified">Not specified</option>
                             </select>
                           </div>
                         </div>
@@ -3439,7 +3466,10 @@ export default function ShadowITDashboard() {
                               <option value="Any Status">Any Status</option>
                               <option value="Managed">Managed</option>
                               <option value="Unmanaged">Unmanaged</option>
-                              <option value="Needs Review">Needs Review</option>
+                              <option value="Newly discovered">Newly discovered</option>
+                              <option value="Unknown">Unknown</option>
+                              <option value="Ignore">Ignore</option>
+                              <option value="Not specified">Not specified</option>
                             </select>
                           </div>
                         </div>
@@ -3810,7 +3840,10 @@ export default function ShadowITDashboard() {
                           >
                             <option value="Managed">Managed</option>
                             <option value="Unmanaged">Unmanaged</option>
-                            <option value="Needs Review">Needs Review</option>
+                            <option value="Newly discovered">Newly discovered</option>
+                            <option value="Unknown">Unknown</option>
+                            <option value="Ignore">Ignore</option>
+                            <option value="Not specified">Not specified</option>
                           </select>
                         </div>
                       </div>
@@ -3923,10 +3956,7 @@ export default function ShadowITDashboard() {
                                       <div className="flex items-center gap-2">
                                         <Avatar className="h-8 w-8">
                                           <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                                            {user.name
-                                              .split(" ")
-                                              .map((n) => n[0])
-                                              .join("")}
+                                            {getInitials(user.name)}
                                           </AvatarFallback>
                                         </Avatar>
                                         <span className="font-medium">{user.name}</span>
@@ -4169,10 +4199,7 @@ export default function ShadowITDashboard() {
                                                   className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-md border border-gray-200"
                                                 >
                                                   <div className="flex items-center justify-center w-6 h-6 rounded-md bg-gray-200 text-xs font-medium text-gray-800">
-                                                    {user.name
-                                                      .split(" ")
-                                                      .map((n: string) => n[0])
-                                                      .join("")}
+                                                    {getInitials(user.name)}
                                                   </div>
                                                   <span className="text-sm">{user.name}</span>
                                                 </div>

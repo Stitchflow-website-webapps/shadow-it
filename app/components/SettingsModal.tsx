@@ -212,7 +212,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <div className="flex items-center justify-between">
                   <div>
                     <Label className="font-medium">New App Detection</Label>
-                    <p className="text-sm text-gray-500">Get notified when a new app is detected</p>
+                    <p className="text-sm text-gray-500">Get a weekly digest of newly-discovered apps in your org</p>
                   </div>
                   <div 
                     className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 cursor-pointer"
@@ -227,7 +227,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <div className="flex items-center justify-between">
                   <div>
                     <Label className="font-medium">New User Detection</Label>
-                    <p className="text-sm text-gray-500">Alert when any new user is added to any app</p>
+                    <p className="text-sm text-gray-500">Get regular alerts when new user(s) sign up for apps in your org </p>
                   </div>
                   <div 
                     className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 cursor-pointer"
@@ -238,20 +238,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </div>
                 </div>
 
-                {/* Needs Review Apps */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="font-medium">Needs Review Apps</Label>
-                    <p className="text-sm text-gray-500">Alert when new users are added to apps needing review</p>
-                  </div>
-                  <div 
-                    className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 cursor-pointer"
-                    onClick={() => handleSettingChange('new_user_in_review_app', !notificationSettings.new_user_in_review_app)}
-                    style={{ backgroundColor: notificationSettings.new_user_in_review_app ? '#111827' : '#E5E7EB' }}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notificationSettings.new_user_in_review_app ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </div>
-                </div>
+
               </div>
             </>
           )}
