@@ -119,15 +119,13 @@ export async function POST(request: Request) {
     
     console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Re-initialized service with correct tenant ID.`);
 
-    // 5. Fetch all users, service principals (apps), and OAuth grants from Microsoft Graph API
+    // 5. Fetch all users and application tokens (with scopes) from Microsoft Graph API
     console.log(`[TestCron:Microsoft:${orgDomain}] Fetching data from Microsoft Graph API...`);
-    const [allMSUsers, servicePrincipals, allOAuthGrants] = await Promise.all([
-      microsoftService.getUsersList(),
-      microsoftService.getServicePrincipals(),
-      microsoftService.getAllOAuth2PermissionGrants()
-    ]);
-    console.log(`[TestCron:Microsoft:${orgDomain}] Fetched ${allMSUsers.length} users, ${servicePrincipals.length} service principals, and ${allOAuthGrants.length} OAuth grants.`);
+    const allMSUsers = await microsoftService.getUsersList();
+    const allMSAppTokens = await microsoftService.getOAuthTokens();
 
+    console.log(`[TestCron:Microsoft:${orgDomain}] Fetched ${allMSUsers.length} users and ${allMSAppTokens.length} user-app tokens.`);
+    
     // 6. Sync users from Microsoft to our DB
     console.log(`[TestCron:Microsoft:${orgDomain}] Syncing users table...`);
     const { data: existingDbUsers, error: existingUsersError } = await supabaseAdmin
@@ -171,47 +169,41 @@ export async function POST(request: Request) {
 
     const msAppsMap = new Map<string, { ids: Set<string>; name: string; users: Set<string>; scopes: Set<string>; }>();
     const userAppScopesMap = new Map<string, Set<string>>(); // Key: user_id:app_name
-
-    // Create a map of Service Principals by their ID for easy lookup
-    const servicePrincipalMap = new Map(servicePrincipals.map(sp => [sp.id, sp]));
-
-    for (const grant of allOAuthGrants) {
-        // Find the service principal (application) this grant is for
-        const app: any = servicePrincipalMap.get(grant.resourceId);
-        // Find the user this grant is for
-        const user = msUserMap.get(grant.principalId);
-
-        if (!app || !user || !app.displayName) continue;
-
+    
+    for (const token of allMSAppTokens) {
+        if (!token.displayText || !token.userKey) {
+            continue; // Skip tokens without essential info
+        }
+        
         // Use the application's display name as the primary key for de-duplication
-        if (!msAppsMap.has(app.displayName)) {
-            msAppsMap.set(app.displayName, {
+        if (!msAppsMap.has(token.displayText)) {
+            msAppsMap.set(token.displayText, {
                 ids: new Set<string>(), // Will store all service principal IDs associated with this name
-                name: app.displayName,
+                name: token.displayText,
                 users: new Set<string>(), // Will store all user IDs
                 scopes: new Set<string>(),
             });
         }
 
-        const appEntry = msAppsMap.get(app.displayName)!;
-        appEntry.ids.add(app.id);
-        appEntry.users.add(grant.principalId);
+        const appEntry = msAppsMap.get(token.displayText)!;
+        appEntry.ids.add(token.clientId); // Store the app's client ID
+        appEntry.users.add(token.userKey); // Store the user's MS ID
         
-        // The grant.scope is a space-separated string of permissions
-        const grantScopes = (grant.scope || '').split(' ').filter((s: string) => s);
-
-        grantScopes.forEach((scope: string) => {
+        // Add all scopes from the token to the application's scope set
+        const tokenScopes = token.scopes || [];
+        tokenScopes.forEach((scope: string) => {
             appEntry.scopes.add(scope);
         });
         
         // Store scopes per user-app relationship
-        const userAppKey = `${grant.principalId}:${app.displayName}`;
+        const userAppKey = `${token.userKey}:${token.displayText}`;
         if (!userAppScopesMap.has(userAppKey)) {
             userAppScopesMap.set(userAppKey, new Set<string>());
         }
         const userScopesForApp = userAppScopesMap.get(userAppKey)!;
-        grantScopes.forEach((scope: string) => userScopesForApp.add(scope));
+        tokenScopes.forEach((scope: string) => userScopesForApp.add(scope));
     }
+
 
     const uniqueMSApps = Array.from(msAppsMap.values());
     console.log(`[TestCron:Microsoft:${orgDomain}] Found ${uniqueMSApps.length} unique applications.`);
@@ -292,7 +284,7 @@ export async function POST(request: Request) {
 
         if (insertAppsError) {
           console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting new applications:`, insertAppsError);
-        } else {
+        } else if (insertedApps) {
           console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully inserted ${insertedApps.length} new applications.`);
           insertedApps.forEach(a => appNameToDbIdMap.set(a.name, a.id));
         }
@@ -389,4 +381,4 @@ export async function POST(request: Request) {
       details: errorMessage
     }, { status: 500 });
   }
-} 
+}
