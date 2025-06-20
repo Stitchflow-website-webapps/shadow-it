@@ -577,9 +577,16 @@ export class MicrosoftWorkspaceService {
               (role: any) => role.id === assignment.appRoleId
             );
             
-            if (assignedRole?.value) {
-              assignedPermissions.add(assignedRole.value);
-              console.log(`    📌 App role permission: ${assignedRole.value}`);
+            // Prefer the role.value, but fall back to displayName when value is missing.
+            const rolePermissionName = assignedRole?.value || assignedRole?.displayName;
+
+            if (rolePermissionName) {
+              assignedPermissions.add(rolePermissionName);
+              console.log(`    📌 App role permission: ${rolePermissionName}`);
+            } else if (assignment.appRoleId === '00000000-0000-0000-0000-000000000000') {
+              // The default assignment (empty role) – give it a generic permission label
+              assignedPermissions.add('UserAssignment');
+              console.log('    📌 Default user assignment role detected – adding "UserAssignment" permission');
             }
             
             // Look for any delegated permissions for this app
@@ -606,9 +613,34 @@ export class MicrosoftWorkspaceService {
               if (!isForThisApp || !isForThisUser) continue;
               
               if (isAdminConsent) {
-                // For admin consents, include all scopes as they are organization-approved
-                adminScopes = [...new Set([...adminScopes, ...scopes])];
-                console.log(`    🛡️ Admin consent permissions: ${scopes.join(', ')}`);
+                // For admin consents, we should only include critical permissions that are explicitly granted
+                // to this user via an app role assignment. Only include admin scopes when they match
+                // the current role assignment and are application-specific.
+                // Skip admin consents for Microsoft Graph which apply globally
+
+                // Only include admin scopes if:
+                // 1. This is a direct app role assignment for this user (we're in the app role loop)
+                // 2. The admin scope is directly related to the current app permission
+                // 3. It's not a generic Microsoft Graph permission unless specifically assigned to the user
+                const isMicrosoftGraphScope = grant.resourceId === '00000003-0000-0000-c000-000000000000'; // Microsoft Graph ID
+                
+                // Only add admin-consented scopes that are relevant to this user's role
+                const relevantAdminScopes = scopes.filter((scope: string) => {
+                  // For Microsoft Graph scopes, only include if the user has a direct assignment
+                  if (isMicrosoftGraphScope) {
+                    // Only include if there's a matching app role that grants this scope
+                    return assignedRole?.value === scope;
+                  }
+                  
+                  // For other apps, include app-specific scopes
+                  return true;
+                });
+                
+                // Only add the relevant admin scopes
+                if (relevantAdminScopes.length > 0) {
+                  adminScopes = [...new Set([...adminScopes, ...relevantAdminScopes])];
+                  console.log(`    🛡️ Admin consent permissions (relevant): ${relevantAdminScopes.join(', ')}`);
+                }
               } else {
                 // User consents always apply directly to the user
                 delegatedScopes = [...new Set([...delegatedScopes, ...scopes])];
@@ -688,20 +720,42 @@ export class MicrosoftWorkspaceService {
           // Skip if this grant doesn't apply to this user
           if (!isForThisUser) continue;
           
-          // For admin consents, include them as they represent organization-wide permissions
-          // Admin consents mean the organization has approved these permissions for all users
+          // For admin consents, only include if the user has a specific assignment
+          // We should only include admin consents for users who have an assignment to the app
           if (isAdminConsent) {
-            console.log(`    🛡️ Processing admin-consented app: ${servicePrincipal.displayName}`);
+            // Use our pre-built set of directly assigned apps to check if user has access
+            const hasDirectAssignment = userDirectAssignedApps.has(clientId);
+            
+            // Skip if this is an admin consent without a direct user assignment
+            // This prevents all users from appearing to have access to all admin-consented apps
+            if (!hasDirectAssignment && !userScopes.length) {
+              console.log(`    ⏭️ Skipping admin-consented app without direct user assignment`);
+              continue;
+            }
           }
           
-          // Include admin consents as they represent organization-wide permissions
+          // Only use admin consents when they apply to this specific app
           let adminScopes: string[] = [];
           if (isAdminConsent && grant.scope) {
-            // For admin consents, include all granted scopes since they are organization-approved
-            adminScopes = grant.scope.split(' ').filter((s: string) => s.trim() !== '');
+            // For admin consents, we need to be more selective about what permissions we apply
+            const isMicrosoftGraphScope = grant.resourceId === '00000003-0000-0000-c000-000000000000'; // Microsoft Graph ID
+            
+            // Filter admin scopes to only include those relevant to this user
+            const allScopes = grant.scope.split(' ').filter((s: string) => s.trim() !== '');
+            adminScopes = allScopes.filter((scope: string) => {
+              // For Microsoft Graph, be very selective
+              if (isMicrosoftGraphScope) {
+                // Check if user has a direct assignment for this permission
+                // For now, include only basic scopes and exclude high-risk ones
+                const isBasicScope = ['User.Read', 'profile', 'email', 'openid', 'offline_access'].includes(scope);
+                return isBasicScope;
+              }
+              // For other app-specific scopes, include them if the user has access to the app
+              return true;
+            });
             
             if (adminScopes.length > 0) {
-              console.log(`    🛡️ Admin consent permissions: ${adminScopes.join(', ')}`);
+              console.log(`    🛡️ Admin consent permissions (filtered): ${adminScopes.join(', ')}`);
             }
           }
           
