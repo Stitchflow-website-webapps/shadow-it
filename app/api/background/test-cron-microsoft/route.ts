@@ -248,7 +248,7 @@ export async function POST(request: Request) {
 
       // Insert new applications
       if (newApps.length > 0) {
-        /*
+        
         const appsToInsert = await Promise.all(newApps.map(async (app) => {
           const all_scopes = Array.from(app.scopes);
           const risk_level = determineRiskLevel(all_scopes);
@@ -276,12 +276,12 @@ export async function POST(request: Request) {
           console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully inserted ${insertedApps.length} new applications.`);
           insertedApps.forEach(a => appNameToDbIdMap.set(a.name, a.id));
         }
-        */
+        
       }
 
       // Insert new user-application relationships
       if (newRelationships.length > 0) {
-        /*
+        
         const allInvolvedAppNames = Array.from(new Set(newRelationships.map(r => r.app.name)));
         const { data: involvedApps, error: involvedAppsError } = await supabaseAdmin
           .from('applications')
@@ -331,7 +331,7 @@ export async function POST(request: Request) {
             }
           }
         }
-        */
+        
       }
     }
 
