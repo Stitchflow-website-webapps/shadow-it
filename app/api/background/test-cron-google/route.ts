@@ -576,7 +576,9 @@ function getWeekNumber(d: Date): number {
 
 function getStartOfWeek(d: Date): Date {
   const date = new Date(d);
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
-  return new Date(date.setDate(diff));
+  const day = date.getDay(); // Sunday = 0, Monday = 1, etc.
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday to get Monday
+  const monday = new Date(date.setDate(diff));
+  monday.setHours(0, 0, 0, 0); // Set to the beginning of the day in local time
+  return monday;
 } 
