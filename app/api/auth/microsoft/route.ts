@@ -96,6 +96,7 @@ export async function GET(request: NextRequest) {
     // If the state string contains "|freshsync" it means we are returning from a
     // consent round-trip that was triggered to refresh corrupted/missing data.
     const isFreshSyncFlow = (state && state.includes('|freshsync'));
+    const isReauth = searchParams.get('reauth') === 'true';
     
     if (!code) {
       console.error('No authorization code received from Microsoft');
@@ -213,6 +214,56 @@ export async function GET(request: NextRequest) {
 
     const userData = await userResponse.json();
     console.log('Microsoft user data:', userData);
+
+    // Handle re-authentication - only update tokens, skip full sync
+    if (isReauth) {
+      console.log('Re-authentication flow detected for:', userData.userPrincipalName);
+      
+      // Find the organization for this user
+      const orgDomain = searchParams.get('org');
+      if (!orgDomain) {
+        console.error('Re-authentication requires organization domain');
+        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=missing_org`);
+      }
+
+      const { data: org, error: orgError } = await supabaseAdmin
+        .from('organizations')
+        .select('id, name, domain')
+        .eq('domain', orgDomain)
+        .single();
+
+      if (orgError || !org) {
+        console.error('Organization not found for re-authentication:', orgDomain);
+        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=org_not_found`);
+      }
+
+      // Update the sync_status with new tokens
+      const { error: updateError } = await supabaseAdmin
+        .from('sync_status')
+        .update({
+          access_token: access_token,
+          refresh_token: refresh_token,
+          token_expiry: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null,
+          updated_at: new Date().toISOString(),
+          message: 'Tokens refreshed via re-authentication'
+        })
+        .eq('organization_id', org.id)
+        .eq('user_email', userData.userPrincipalName);
+
+      if (updateError) {
+        console.error('Error updating tokens during re-authentication:', updateError);
+        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=token_update_failed`);
+      }
+
+      console.log('Successfully updated tokens for re-authentication');
+      
+      // Redirect back to dashboard with success message
+      const redirectUrl = new URL('https://stitchflow.com/tools/shadow-it-scan/');
+      redirectUrl.searchParams.set('reauth_success', 'true');
+      redirectUrl.searchParams.set('orgId', org.id);
+      
+      return NextResponse.redirect(redirectUrl);
+    }
     
     // If we don't have a refresh token, the user probably used prompt=none
     // We need a refresh token for background syncs to work, so redirect to auth with prompt=consent

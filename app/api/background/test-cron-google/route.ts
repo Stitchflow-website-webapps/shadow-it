@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { GoogleWorkspaceService } from '@/lib/google-workspace';
 import { determineRiskLevel, transformRiskLevel } from '@/lib/risk-assessment';
 import { categorizeApplication } from '@/app/api/background/sync/categorize/route';
+import { EmailService } from '@/app/lib/services/email-service';
 
 /**
  * A test cron job for a specific organization.
@@ -100,9 +101,18 @@ export async function POST(request: Request) {
     const refreshedTokens = await googleService.refreshAccessToken(true);
 
     if (!refreshedTokens || !refreshedTokens.access_token) {
-      const errorMsg = 'Failed to refresh access token.';
+      const errorMsg = 'Failed to refresh access token. Tokens may have been revoked.';
       console.error(`[TestCron:${orgDomain}] ❌ ${errorMsg}`);
-      return NextResponse.json({ error: errorMsg }, { status: 500 });
+      
+      // Send re-authentication email to the user whose tokens failed
+      console.log(`[TestCron:${orgDomain}] Sending re-authentication email to ${bestToken.user_email}`);
+      await EmailService.sendReAuthenticationRequired(bestToken.user_email, org.name, 'google');
+      
+      return NextResponse.json({ 
+        error: errorMsg,
+        action_required: 'Re-authentication needed',
+        user_email: bestToken.user_email
+      }, { status: 401 });
     }
     
     console.log(`[TestCron:${orgDomain}] ✅ Successfully refreshed access token.`);
@@ -279,7 +289,7 @@ export async function POST(request: Request) {
 
         if (insertAppsError) {
           console.error(`[TestCron:${orgDomain}] ❌ Error inserting new applications:`, insertAppsError);
-        } else {
+        } else if (insertedApps) {
           console.log(`[TestCron:${orgDomain}] ✅ Successfully inserted ${insertedApps.length} new applications.`);
           insertedApps.forEach(a => appNameToDbIdMap.set(a.name, a.id));
         }
@@ -287,7 +297,6 @@ export async function POST(request: Request) {
 
       // Insert new user-application relationships
       if (newRelationships.length > 0) {
-        // Get DB IDs for all apps involved (both new and existing) by name
         const allInvolvedAppNames = Array.from(new Set(newRelationships.map(r => r.app.name)));
         const { data: involvedApps, error: involvedAppsError } = await supabaseAdmin
           .from('applications')
@@ -295,10 +304,8 @@ export async function POST(request: Request) {
           .in('name', allInvolvedAppNames)
           .eq('organization_id', org.id);
         
-        // Add existing apps to the map for lookup
         involvedApps?.forEach(a => appNameToDbIdMap.set(a.name, a.id));
 
-        // Get DB IDs for all users involved by email
         const allInvolvedUserEmails = Array.from(new Set(newRelationships.map(r => r.user.email)));
         const { data: involvedUsers, error: involvedUsersError } = await supabaseAdmin
           .from('users')
@@ -307,22 +314,24 @@ export async function POST(request: Request) {
           .eq('organization_id', org.id);
 
         if (involvedAppsError || involvedUsersError) {
-          console.error(`[TestCron:${orgDomain}] ❌ Error fetching DB IDs for relationships:`, { involvedAppsError, involvedUsersError });
+          console.error(`[TestCron:${orgDomain}] ❌ Error fetching DB IDs:`, { involvedAppsError, involvedUsersError });
         } else {
           const userEmailToDbIdMap = new Map(involvedUsers?.map(u => [u.email, u.id]) || []);
           
-          const relsToInsert = newRelationships.map(rel => {
+          const relsToInsert = newRelationships.flatMap(rel => {
             const application_id = appNameToDbIdMap.get(rel.app.name);
             const user_id = userEmailToDbIdMap.get(rel.user.email);
-            const scopesSet = userAppScopesMap.get(`${rel.userKey}:${rel.app.id}`) || new Set();
-
+            
             if (!application_id || !user_id) {
-              console.warn(`[TestCron:${orgDomain}] ⚠️ Skipping relationship for user ${rel.user.email} and app ${rel.app.name} due to missing DB ID.`);
-              return null;
+              console.warn(`[TestCron:${orgDomain}] ⚠️ Skipping relationship for ${rel.user.email} and ${rel.app.name} (missing DB ID).`);
+              return [];
             }
             
-            return { application_id, user_id, scopes: Array.from(scopesSet) };
-          }).filter(Boolean);
+            // Get the user-specific scopes for this relationship
+            const scopesSet = userAppScopesMap.get(`${rel.userKey}:${rel.app.id}`) || new Set();
+            
+            return [{ application_id, user_id, scopes: Array.from(scopesSet) }];
+          });
 
           if (relsToInsert.length > 0) {
             const { error: insertRelsError } = await supabaseAdmin.from('user_applications').insert(relsToInsert as any);
@@ -362,6 +371,14 @@ export async function POST(request: Request) {
     console.log(`--- [TestCron:${orgDomain}] END RESULTS ---`);
     console.log(`[TestCron:${orgDomain}] ✅ Test run for ${orgDomain} completed successfully.`);
 
+    // 12. Send reports
+    if (newApps.length > 0) {
+      await processWeeklyNewAppReport(org, newApps);
+    }
+    if (newRelationships.length > 0) {
+      await processNewUserDigestReport(org, newRelationships, googleUserMap);
+    }
+
     return NextResponse.json({
       success: true,
       message: `Test cron for ${orgDomain} completed successfully.`,
@@ -381,4 +398,185 @@ export async function POST(request: Request) {
       details: errorMessage
     }, { status: 500 });
   }
+}
+
+async function processWeeklyNewAppReport(org: { id: string, name: string }, newApps: any[]) {
+  try {
+    console.log(`[TestCron:Google:${org.name}] Checking for weekly new app reports...`);
+    const currentWeek = getWeekNumber(new Date());
+    const currentYear = new Date().getFullYear();
+    const weekIdentifier = `weekly-apps-${currentYear}-${currentWeek}`;
+
+    // Check if any apps were discovered this week (not just added to our newApps array)
+    const startOfWeek = getStartOfWeek(new Date());
+    const { data: appsDiscoveredThisWeek, error: weeklyAppsError } = await supabaseAdmin
+      .from('applications')
+      .select('id, name, total_permissions, risk_level, created_at')
+      .eq('organization_id', org.id)
+      .eq('provider', 'google')
+      .gte('created_at', startOfWeek.toISOString());
+
+    if (weeklyAppsError) {
+      console.error(`[TestCron:Google:${org.name}] Error fetching weekly apps:`, weeklyAppsError);
+      return;
+    }
+
+    // If no apps were discovered this week, skip the report
+    if (!appsDiscoveredThisWeek || appsDiscoveredThisWeek.length === 0) {
+      console.log(`[TestCron:Google:${org.name}] No apps discovered this week, skipping weekly report.`);
+      return;
+    }
+
+    console.log(`[TestCron:Google:${org.name}] Found ${appsDiscoveredThisWeek.length} apps discovered this week.`);
+
+    // Get user counts for each app discovered this week
+    const appIds = appsDiscoveredThisWeek.map(app => app.id);
+    const { data: userCounts, error: userCountError } = await supabaseAdmin
+      .from('user_applications')
+      .select('application_id')
+      .in('application_id', appIds);
+
+    if (userCountError) {
+      console.error(`[TestCron:Google:${org.name}] Error fetching user counts:`, userCountError);
+      return;
+    }
+
+    // Count users per app
+    const userCountMap = new Map<string, number>();
+    userCounts?.forEach(uc => {
+      const count = userCountMap.get(uc.application_id) || 0;
+      userCountMap.set(uc.application_id, count + 1);
+    });
+
+    // Format the apps data for the email
+    const eventAppsString = appsDiscoveredThisWeek.map(app => 
+      `App name: ${app.name}\nTotal scope permission: ${app.total_permissions}\nRisk level: ${app.risk_level}\nTotal users: ${userCountMap.get(app.id) || 0}`
+    ).join('\n\n');
+
+    const notificationPrefs = await getNotificationPreferences(org.id, 'new_app_detected');
+    if (!notificationPrefs) return;
+
+    for (const pref of notificationPrefs) {
+      await safelySendReport({
+        organizationId: org.id,
+        userEmail: pref.user_email,
+        notificationType: 'weekly_new_apps',
+        reportIdentifier: weekIdentifier,
+        sendFunction: () => EmailService.sendNewAppsDigest(pref.user_email, eventAppsString, org.name)
+      });
+    }
+  } catch (error) {
+    console.error(`[TestCron:Google:${org.name}] Error processing weekly new app report:`, error);
+  }
+}
+
+async function processNewUserDigestReport(org: { id: string, name: string }, newRelationships: any[], googleUserMap: Map<string, { email: string; name: string; }>) {
+  try {
+    console.log(`[TestCron:Google:${org.name}] Checking for new user digest report...`);
+    const reportIdentifier = `digest-users-${new Date().toISOString().split('T')[0]}`;
+
+    const usersToAppsMap = new Map<string, string[]>();
+    newRelationships.forEach(rel => {
+        const user = googleUserMap.get(rel.userKey);
+        if (user && user.email) {
+            if (!usersToAppsMap.has(user.email)) {
+                usersToAppsMap.set(user.email, []);
+            }
+            usersToAppsMap.get(user.email)!.push(rel.app.name);
+        }
+    });
+
+    const eventUsersString = Array.from(usersToAppsMap.entries()).map(([email, apps]) => 
+      `User email: ${email}\nApp names: ${[...new Set(apps)].join(', ')}`
+    ).join('\n\n');
+
+    const notificationPrefs = await getNotificationPreferences(org.id, 'new_user_in_app');
+    if (!notificationPrefs) return;
+    
+    for (const pref of notificationPrefs) {
+      await safelySendReport({
+        organizationId: org.id,
+        userEmail: pref.user_email,
+        notificationType: 'digest_new_users',
+        reportIdentifier: reportIdentifier,
+        sendFunction: () => EmailService.sendNewUsersDigest(pref.user_email, eventUsersString, org.name)
+      });
+    }
+  } catch (error) {
+    console.error(`[TestCron:Google:${org.name}] Error processing new user digest report:`, error);
+  }
+}
+
+async function getNotificationPreferences(organizationId: string, preferenceType: 'new_app_detected' | 'new_user_in_app') {
+  const { data: prefs, error } = await supabaseAdmin
+    .from('notification_preferences')
+    .select('user_email')
+    .eq('organization_id', organizationId)
+    .eq(preferenceType, true);
+
+  if (error) {
+    console.error(`[TestCron:Google] Error fetching notification preferences for ${preferenceType} for org ${organizationId}:`, error);
+    return null;
+  }
+  return prefs;
+}
+
+async function safelySendReport({
+  organizationId,
+  userEmail,
+  notificationType,
+  reportIdentifier,
+  sendFunction
+}: {
+  organizationId: string;
+  userEmail: string;
+  notificationType: 'weekly_new_apps' | 'digest_new_users';
+  reportIdentifier: string;
+  sendFunction: () => Promise<boolean>;
+}) {
+  const { data: existing, error: checkError } = await supabaseAdmin
+    .from('notification_tracking')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('user_email', userEmail)
+    .eq('notification_type', notificationType)
+    .eq('application_id', reportIdentifier) // Using application_id to store the report identifier
+    .single();
+
+  if (checkError && !checkError.message.includes('No rows found')) {
+    console.error('[TestCron:Google] Error checking for report:', checkError);
+    return;
+  }
+
+  if (existing) {
+    console.log(`[TestCron:Google] Report ${notificationType} for ${reportIdentifier} already sent to ${userEmail}.`);
+    return;
+  }
+
+  const success = await sendFunction();
+  if (success) {
+    await supabaseAdmin.from('notification_tracking').insert({
+      organization_id: organizationId,
+      user_email: userEmail,
+      notification_type: notificationType,
+      application_id: reportIdentifier, // Storing report identifier
+      sent_at: new Date().toISOString()
+    });
+    console.log(`[TestCron:Google] Successfully sent and tracked report ${notificationType} to ${userEmail}`);
+  }
+}
+
+function getWeekNumber(d: Date): number {
+  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return weekNo;
+}
+
+function getStartOfWeek(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+  return new Date(date.setDate(diff));
 } 

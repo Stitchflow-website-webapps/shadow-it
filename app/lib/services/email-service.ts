@@ -165,4 +165,133 @@ export class EmailService {
       throw error;
     }
   }
+
+  static async sendNewAppsDigest(to: string, eventAppsString: string, organizationName: string) {
+    if (!this.NEW_APP_TEMPLATE_ID) {
+      console.error('NEW_APP_TEMPLATE_ID is not set');
+      return false;
+    }
+    try {
+      await loops.sendTransactionalEmail({
+        transactionalId: this.NEW_APP_TEMPLATE_ID,
+        email: to,
+        dataVariables: {
+          'event-apps': eventAppsString
+        }
+      });
+      console.log(`Successfully sent new apps digest to ${to}`);
+      return true;
+    } catch (error) {
+      console.error(`Failed to send new apps digest to ${to}:`, error);
+      return false;
+    }
+  }
+
+  static async sendNewUsersDigest(to: string, eventUsersString: string, organizationName: string) {
+    if (!this.NEW_USER_TEMPLATE_ID) {
+      console.error('NEW_USER_TEMPLATE_ID is not set');
+      return false;
+    }
+    try {
+      await loops.sendTransactionalEmail({
+        transactionalId: this.NEW_USER_TEMPLATE_ID,
+        email: to,
+        dataVariables: {
+          'event-users': eventUsersString
+        }
+      });
+      console.log(`Successfully sent new users digest to ${to}`);
+      return true;
+    } catch (error) {
+      console.error(`Failed to send new users digest to ${to}:`, error);
+      return false;
+    }
+  }
+
+  static async sendReAuthenticationRequired(to: string, organizationName: string, provider: 'google' | 'microsoft') {
+    const transactionalId = process.env.LOOPS_TRANSACTIONAL_ID_REAUTH_REQUIRED;
+    if (!transactionalId) {
+      console.error('LOOPS_TRANSACTIONAL_ID_REAUTH_REQUIRED is not set');
+      return false;
+    }
+    
+    // Generate the actual OAuth URL based on provider
+    let reAuthUrl: string;
+    
+    if (provider === 'google') {
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const redirectUri = process.env.NODE_ENV === 'production' 
+        ? 'https://stitchflow.com/tools/shadow-it-scan/api/auth/google'
+        : `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/google`;
+      
+      const scopes = [
+        'openid',
+        'profile', 
+        'email',
+        'https://www.googleapis.com/auth/admin.directory.user.readonly',
+        'https://www.googleapis.com/auth/admin.directory.domain.readonly',
+        'https://www.googleapis.com/auth/admin.directory.user.security'
+      ].join(' ');
+      
+      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+      authUrl.searchParams.append('client_id', clientId!);
+      authUrl.searchParams.append('redirect_uri', redirectUri);
+      authUrl.searchParams.append('response_type', 'code');
+      authUrl.searchParams.append('scope', scopes);
+      authUrl.searchParams.append('access_type', 'offline');
+      authUrl.searchParams.append('include_granted_scopes', 'true');
+      authUrl.searchParams.append('prompt', 'consent');
+      authUrl.searchParams.append('reauth', 'true');
+      authUrl.searchParams.append('org', encodeURIComponent(organizationName));
+      
+      reAuthUrl = authUrl.toString();
+    } else {
+      // Microsoft
+      const clientId = process.env.MICROSOFT_CLIENT_ID;
+      const redirectUri = process.env.NODE_ENV === 'production'
+        ? 'https://www.stitchflow.com/tools/shadow-it-scan/api/auth/microsoft'
+        : `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/microsoft`;
+      
+      const scopes = [
+        'User.Read',
+        'offline_access',
+        'openid',
+        'profile',
+        'email',
+        'Directory.Read.All',
+        'Application.Read.All',
+        'DelegatedPermissionGrant.ReadWrite.All',
+        'AppRoleAssignment.ReadWrite.All'
+      ].join(' ');
+      
+      const authUrl = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
+      authUrl.searchParams.append('client_id', clientId!);
+      authUrl.searchParams.append('redirect_uri', redirectUri);
+      authUrl.searchParams.append('response_type', 'code');
+      authUrl.searchParams.append('scope', scopes);
+      authUrl.searchParams.append('response_mode', 'query');
+      authUrl.searchParams.append('prompt', 'consent');
+      authUrl.searchParams.append('reauth', 'true');
+      authUrl.searchParams.append('org', encodeURIComponent(organizationName));
+      
+      reAuthUrl = authUrl.toString();
+    }
+    
+    try {
+      await loops.sendTransactionalEmail({
+        transactionalId,
+        email: to,
+        dataVariables: {
+          organization_name: organizationName,
+          provider: provider.charAt(0).toUpperCase() + provider.slice(1),
+          reauth_url: reAuthUrl
+        }
+      });
+      console.log(`Successfully sent re-authentication email to ${to} for ${provider}`);
+      return true;
+    } catch (error) {
+      console.error(`Failed to send re-authentication email to ${to}:`, error);
+      return false;
+    }
+  }
 } 

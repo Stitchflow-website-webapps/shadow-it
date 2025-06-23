@@ -332,6 +332,7 @@ export async function GET(request: NextRequest) {
           .update({
             access_token: refreshedTokens.access_token,
             refresh_token: refreshedTokens.refresh_token,
+            provider: 'microsoft',
             updated_at: new Date().toISOString()
           })
           .eq('id', syncRecord.id);
@@ -685,6 +686,7 @@ async function updateSyncStatus(
         progress,
         message,
         status,
+        provider: 'microsoft',
         updated_at: new Date().toISOString()
       })
       .eq('id', syncId);

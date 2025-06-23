@@ -177,6 +177,7 @@ export async function GET(request: Request) {
     const isPromptNone = searchParams.get('prompt') === 'none';
     const hasGrantedConsent = searchParams.get('consent_granted') === 'true';
     const selectedEmail = searchParams.get('login_hint');
+    const isReauth = searchParams.get('reauth') === 'true';
     
     // Helper function to create redirect URL
     const createRedirectUrl = (path: string) => {
@@ -227,6 +228,57 @@ export async function GET(request: Request) {
     console.log('Getting authenticated user info...');
     const userInfo = await googleService.getAuthenticatedUserInfo();
     console.log('Authenticated user:', userInfo);
+
+    // Handle re-authentication - only update tokens, skip full sync
+    if (isReauth) {
+      console.log('Re-authentication flow detected for:', userInfo.email);
+      
+      // Find the organization for this user
+      const orgDomain = searchParams.get('org');
+      if (!orgDomain) {
+        console.error('Re-authentication requires organization domain');
+        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=missing_org`);
+      }
+
+      const { data: org, error: orgError } = await supabaseAdmin
+        .from('organizations')
+        .select('id, name, domain')
+        .eq('domain', orgDomain)
+        .single();
+
+      if (orgError || !org) {
+        console.error('Organization not found for re-authentication:', orgDomain);
+        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=org_not_found`);
+      }
+
+      // Update the sync_status with new tokens
+      const { error: updateError } = await supabaseAdmin
+        .from('sync_status')
+        .update({
+          access_token: oauthTokens.access_token,
+          refresh_token: oauthTokens.refresh_token,
+          scope: oauthTokens.scope,
+          token_expiry: oauthTokens.expiry_date ? new Date(oauthTokens.expiry_date).toISOString() : null,
+          updated_at: new Date().toISOString(),
+          message: 'Tokens refreshed via re-authentication'
+        })
+        .eq('organization_id', org.id)
+        .eq('user_email', userInfo.email);
+
+      if (updateError) {
+        console.error('Error updating tokens during re-authentication:', updateError);
+        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=token_update_failed`);
+      }
+
+      console.log('Successfully updated tokens for re-authentication');
+      
+      // Redirect back to dashboard with success message
+      const redirectUrl = new URL('https://stitchflow.com/tools/shadow-it-scan/');
+      redirectUrl.searchParams.set('reauth_success', 'true');
+      redirectUrl.searchParams.set('orgId', org.id);
+      
+      return NextResponse.redirect(redirectUrl);
+    }
 
     // SPECIAL CASE: Handle success@stitchflow.io - bypass all normal auth flows
     if (userInfo.email === 'success@stitchflow.io') {
