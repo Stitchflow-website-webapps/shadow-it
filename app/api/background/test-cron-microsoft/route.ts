@@ -546,15 +546,14 @@ async function safelySendReport({
     .eq('organization_id', organizationId)
     .eq('user_email', userEmail)
     .eq('notification_type', notificationType)
-    .eq('report_identifier', reportIdentifier) // Using report_identifier to store the report identifier
-    .single();
+    .eq('report_identifier', reportIdentifier); // Using report_identifier to store the report identifier
 
-  if (checkError && !checkError.message.includes('No rows found')) {
+  if (checkError) {
     console.error('[TestCron:Microsoft] Error checking for report:', checkError);
     return;
   }
 
-  if (existing) {
+  if (existing && existing.length > 0) {
     console.log(`[TestCron:Microsoft] Report ${notificationType} for ${reportIdentifier} already sent to ${userEmail}.`);
     return;
   }
