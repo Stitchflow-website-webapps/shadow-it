@@ -540,7 +540,7 @@ async function safelySendReport({
     .eq('organization_id', organizationId)
     .eq('user_email', userEmail)
     .eq('notification_type', notificationType)
-    .eq('application_id', reportIdentifier) // Using application_id to store the report identifier
+    .eq('report_identifier', reportIdentifier) // Using report_identifier to store the report identifier
     .single();
 
   if (checkError && !checkError.message.includes('No rows found')) {
@@ -559,7 +559,7 @@ async function safelySendReport({
       organization_id: organizationId,
       user_email: userEmail,
       notification_type: notificationType,
-      application_id: reportIdentifier, // Storing report identifier
+      report_identifier: reportIdentifier, // Storing report identifier in the correct column
       sent_at: new Date().toISOString()
     });
     console.log(`[TestCron:Google] Successfully sent and tracked report ${notificationType} to ${userEmail}`);
