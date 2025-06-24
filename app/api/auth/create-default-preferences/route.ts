@@ -63,7 +63,6 @@ export async function POST(request: Request) {
         user_email: userEmail,
         new_app_detected: defaultPreferences.new_app_detected,
         new_user_in_app: defaultPreferences.new_user_in_app,
-        new_user_in_review_app: defaultPreferences.new_user_in_review_app,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
