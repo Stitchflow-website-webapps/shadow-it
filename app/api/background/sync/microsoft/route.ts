@@ -306,41 +306,30 @@ export async function GET(request: NextRequest) {
 
     console.log("tenant_id before init microsoft service", process.env.MICROSOFT_TENANT_ID)
 
-    // Initialize Microsoft service with credentials
-    console.log('🔑 Initializing Microsoft service...');
-    const microsoftService = new MicrosoftWorkspaceService({
+    // Initialize with 'common' tenant to get a refresh token, then get tenant ID from token
+    console.log('🔑 Initializing Microsoft service with "common" tenant to discover user tenant...');
+    let microsoftService = new MicrosoftWorkspaceService({
       clientId: process.env.MICROSOFT_CLIENT_ID!,
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
-      tenantId: process.env.MICROSOFT_TENANT_ID!
+      tenantId: 'common' // Use 'common' to handle any tenant
     });
 
     await microsoftService.setCredentials({
-      access_token: syncRecord.access_token,
       refresh_token: syncRecord.refresh_token
     });
 
     // Attempt to refresh tokens before making API calls
-    console.log(`🔄 Refreshing Microsoft tokens before API calls...`);
+    console.log(`🔄 Refreshing Microsoft tokens...`);
+    let refreshedTokens;
     try {
-      const refreshedTokens = await microsoftService.refreshAccessToken(true); // Force refresh
-      if (refreshedTokens) {
-        console.log(`✅ Successfully refreshed Microsoft tokens`);
-        
-        // Update the sync_status record with new tokens for future use
-        await supabaseAdmin
-          .from('sync_status')
-          .update({
-            access_token: refreshedTokens.access_token,
-            refresh_token: refreshedTokens.refresh_token,
-            provider: 'microsoft',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', syncRecord.id);
+      refreshedTokens = await microsoftService.refreshAccessToken(true); // Force refresh
+      if (!refreshedTokens?.id_token) {
+        throw new Error("Refresh token did not return an id_token.");
       }
+      console.log(`✅ Successfully refreshed Microsoft tokens`);
     } catch (refreshError: any) {
       console.error(`❌ Microsoft token refresh failed:`, refreshError.message);
       
-      // If token refresh fails, it's likely the refresh token is invalid
       const errorMessage = refreshError.message.includes('invalid_grant') || refreshError.message.includes('expired')
         ? 'Microsoft authentication has expired. Please re-authenticate your Microsoft account.'
         : `Microsoft token refresh failed: ${refreshError.message}`;
@@ -348,6 +337,44 @@ export async function GET(request: NextRequest) {
       await updateSyncStatus(syncRecord.id, 0, errorMessage, 'FAILED');
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
+
+    // Extract tenant ID from the id_token
+    let tenantId: string;
+    try {
+      const idTokenPayload = JSON.parse(Buffer.from(refreshedTokens.id_token.split('.')[1], 'base64').toString());
+      tenantId = idTokenPayload.tid;
+      if (!tenantId) {
+        throw new Error('Tenant ID (tid) not found in id_token payload.');
+      }
+    } catch (e) {
+      const errorMsg = 'Failed to decode id_token or find tenant ID.';
+      console.error(`❌ ${errorMsg}`, e);
+      await updateSyncStatus(syncRecord.id, 0, errorMsg, 'FAILED');
+      return NextResponse.json({ error: errorMsg }, { status: 500 });
+    }
+
+    console.log(`✅ Tenant ID discovered: ${tenantId}`);
+
+    // Re-initialize service with the correct tenant ID
+    microsoftService = new MicrosoftWorkspaceService({
+      clientId: process.env.MICROSOFT_CLIENT_ID!,
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
+      tenantId: tenantId,
+    });
+    
+    // Set the full credentials on the new, correctly-scoped service instance
+    await microsoftService.setCredentials(refreshedTokens);
+    
+    // Update the sync_status record with new tokens for future use
+    await supabaseAdmin
+      .from('sync_status')
+      .update({
+        access_token: refreshedTokens.access_token,
+        refresh_token: refreshedTokens.refresh_token,
+        provider: 'microsoft',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', syncRecord.id);
 
     // Update sync status to indicate progress
     await updateSyncStatus(syncRecord.id, 10, 'Connected to Microsoft Entra ID...');
@@ -757,11 +784,11 @@ async function processMicrosoftData(
   try {
     console.log(`[Microsoft ${sync_id}] Starting Microsoft sync for organization: ${organization_id}`);
     
-    // Initialize Microsoft service
-    const microsoftService = new MicrosoftWorkspaceService({
+    // Initialize Microsoft service with 'common' tenant to discover the correct tenant ID
+    let microsoftService = new MicrosoftWorkspaceService({
       clientId: process.env.MICROSOFT_CLIENT_ID!,
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
-      tenantId: process.env.MICROSOFT_TENANT_ID!
+      tenantId: 'common'
     });
 
     await microsoftService.setCredentials({
@@ -770,27 +797,18 @@ async function processMicrosoftData(
       expires_at: Date.now() + 3600 * 1000 // Add expiry time
     });
 
-    // Attempt to refresh tokens before making API calls
-    console.log(`[Microsoft ${sync_id}] Refreshing tokens before API calls...`);
+    // Attempt to refresh tokens and get tenant ID
+    console.log(`[Microsoft ${sync_id}] Refreshing tokens and discovering tenant ID...`);
+    let refreshedTokens;
     try {
-      const refreshedTokens = await microsoftService.refreshAccessToken(true); // Force refresh
-      if (refreshedTokens) {
-        console.log(`[Microsoft ${sync_id}] Successfully refreshed tokens`);
-        
-        // Update the sync_status record with new tokens for future use
-        await supabaseAdmin
-          .from('sync_status')
-          .update({
-            access_token: refreshedTokens.access_token,
-            refresh_token: refreshedTokens.refresh_token,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', sync_id);
+      refreshedTokens = await microsoftService.refreshAccessToken(true); // Force refresh
+      if (!refreshedTokens?.id_token) {
+        throw new Error("Refresh token did not return an id_token.");
       }
+      console.log(`[Microsoft ${sync_id}] Successfully refreshed tokens`);
     } catch (refreshError: any) {
       console.error(`[Microsoft ${sync_id}] Token refresh failed:`, refreshError.message);
       
-      // If token refresh fails, it's likely the refresh token is invalid
       const errorMessage = refreshError.message.includes('invalid_grant') || refreshError.message.includes('expired')
         ? 'Microsoft authentication has expired. Please re-authenticate your Microsoft account.'
         : `Microsoft token refresh failed: ${refreshError.message}`;
@@ -798,6 +816,43 @@ async function processMicrosoftData(
       await updateSyncStatus(sync_id, 0, errorMessage, 'FAILED');
       throw new Error(errorMessage);
     }
+
+    // Extract tenant ID from the id_token
+    let tenantId: string;
+    try {
+      const idTokenPayload = JSON.parse(Buffer.from(refreshedTokens.id_token.split('.')[1], 'base64').toString());
+      tenantId = idTokenPayload.tid;
+      if (!tenantId) {
+        throw new Error('Tenant ID (tid) not found in id_token payload.');
+      }
+    } catch (e: any) {
+      const errorMsg = `Failed to decode id_token or find tenant ID: ${e.message}`;
+      console.error(`[Microsoft ${sync_id}] ${errorMsg}`);
+      await updateSyncStatus(sync_id, 0, errorMsg, 'FAILED');
+      throw new Error(errorMsg);
+    }
+    
+    console.log(`[Microsoft ${sync_id}] Discovered tenant ID: ${tenantId}`);
+
+    // Re-initialize service with the correct tenant ID
+    microsoftService = new MicrosoftWorkspaceService({
+      clientId: process.env.MICROSOFT_CLIENT_ID!,
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
+      tenantId: tenantId,
+    });
+
+    // Set the full credentials on the new, correctly-scoped service instance
+    await microsoftService.setCredentials(refreshedTokens);
+
+    // Update the sync_status record with new tokens for future use
+    await supabaseAdmin
+      .from('sync_status')
+      .update({
+        access_token: refreshedTokens.access_token,
+        refresh_token: refreshedTokens.refresh_token,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sync_id);
 
     // Update sync status to indicate progress
     await updateSyncStatus(sync_id, 10, 'Connected to Microsoft Entra ID...');
