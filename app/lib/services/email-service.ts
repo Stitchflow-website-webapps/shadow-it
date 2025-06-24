@@ -282,7 +282,6 @@ export class EmailService {
         transactionalId,
         email: to,
         dataVariables: {
-          organization_name: organizationName,
           provider: provider.charAt(0).toUpperCase() + provider.slice(1),
           reauth_url: reAuthUrl
         }

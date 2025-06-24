@@ -458,7 +458,7 @@ async function processWeeklyNewAppReport(org: { id: string, name: string }, newA
 
     // Format the apps data for the email
     const eventAppsString = appsDiscoveredThisWeek.map(app => 
-      `App name: ${app.name}\nTotal scope permission: ${app.total_permissions}\nRisk level: ${app.risk_level}\nTotal users: ${userCountMap.get(app.id) || 0}`
+      `App name: ${app.name}\nTotal scope permission(s): ${app.total_permissions}\nScope Risk level: ${app.risk_level}\nTotal user(s): ${userCountMap.get(app.id) || 0}`
     ).join('\n\n');
 
     const notificationPrefs = await getNotificationPreferences(org.id, 'new_app_detected');

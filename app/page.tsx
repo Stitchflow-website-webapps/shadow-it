@@ -2957,7 +2957,7 @@ export default function ShadowITDashboard() {
                                         </TooltipProvider>
                                       </TableCell>
 
-                                  <TableCell>
+                                  <TableCell className="min-w-[140px]">
                                     <select
                                       className="w-full h-8 rounded-md border border-gray-200 bg-white px-2 text-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200"
                                       value={editedStatuses[app.id] || app.managementStatus}

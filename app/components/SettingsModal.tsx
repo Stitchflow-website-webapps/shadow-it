@@ -210,7 +210,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <div className="space-y-4">
                 {/* New App Detection */}
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex-1 pr-4">
                     <Label className="font-medium">New App Detection</Label>
                     <p className="text-sm text-gray-500">Get a weekly digest of newly-discovered apps in your org</p>
                   </div>
@@ -225,7 +225,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                 {/* New User Notifications */}
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex-1 pr-4">
                     <Label className="font-medium">New User Detection</Label>
                     <p className="text-sm text-gray-500">Get regular alerts when new user(s) sign up for apps in your org </p>
                   </div>
