@@ -4,6 +4,32 @@ import { MicrosoftWorkspaceService } from '@/lib/microsoft-workspace';
 import { determineRiskLevel, transformRiskLevel } from '@/lib/risk-assessment';
 import { categorizeApplication } from '@/app/api/background/sync/categorize/route';
 import { EmailService } from '@/app/lib/services/email-service';
+import { ResourceMonitor, processInBatchesWithResourceControl } from '@/lib/resource-monitor';
+
+// **NEW: Configuration for resource management**
+const PROCESSING_CONFIG = {
+  BATCH_SIZE: 30, // Conservative batch size for large orgs
+  DELAY_BETWEEN_BATCHES: 150, // Allow time for memory cleanup
+  EMERGENCY_LIMITS: {
+    MAX_USERS_IN_MEMORY: 20000, // Hard limit on users processed at once
+    MAX_TOKENS_IN_MEMORY: 8000, // Hard limit on tokens processed at once
+    FORCE_CLEANUP_THRESHOLD: 1400, // Force cleanup at 1.4GB (87.5% of 1.6GB limit)
+  }
+};
+
+// **NEW: Helper function to force memory cleanup**
+const forceMemoryCleanup = () => {
+  if (global.gc) {
+    global.gc();
+  }
+  if (typeof process !== 'undefined' && process.memoryUsage) {
+    const memUsage = process.memoryUsage();
+    if (memUsage.heapUsed > PROCESSING_CONFIG.EMERGENCY_LIMITS.FORCE_CLEANUP_THRESHOLD * 1024 * 1024) {
+      console.log(`[TestCron:Microsoft] Memory usage high: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB, forcing cleanup`);
+      if (global.gc) global.gc();
+    }
+  }
+};
 
 /**
  * A test cron job for a specific Microsoft organization.
@@ -34,6 +60,10 @@ export async function POST(request: Request) {
   }
 
   console.log(`🚀 [TestCron:Microsoft:${orgDomain}] Starting test cron job for ${orgDomain}...`);
+  
+  // **NEW: Initialize resource monitoring**
+  const monitor = ResourceMonitor.getInstance();
+  monitor.logResourceUsage(`TestCron:Microsoft:${orgDomain} START`);
 
   try {
     // 2. Find the organization using the provided domain
@@ -136,6 +166,32 @@ export async function POST(request: Request) {
 
     console.log(`[TestCron:Microsoft:${orgDomain}] Fetched ${allMSUsers.length} users and ${allMSAppTokens.length} user-app tokens.`);
     
+    // **NEW: Emergency check for huge organizations**
+    if (allMSUsers.length > PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_USERS_IN_MEMORY) {
+      console.warn(`[TestCron:Microsoft:${orgDomain}] 🚨 HUGE ORG DETECTED: ${allMSUsers.length} users exceeds limit of ${PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_USERS_IN_MEMORY}`);
+      return NextResponse.json({ 
+        error: `Organization too large for current memory configuration. Please contact support for enterprise processing of ${allMSUsers.length} users.`,
+        organizationSize: {
+          users: allMSUsers.length,
+          tokens: allMSAppTokens.length
+        }
+      }, { status: 413 });
+    }
+    
+    if (allMSAppTokens.length > PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_TOKENS_IN_MEMORY) {
+      console.warn(`[TestCron:Microsoft:${orgDomain}] 🚨 HUGE ORG DETECTED: ${allMSAppTokens.length} tokens exceeds limit of ${PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_TOKENS_IN_MEMORY}`);
+      return NextResponse.json({ 
+        error: `Organization too large for current memory configuration. Please contact support for enterprise processing of ${allMSAppTokens.length} tokens.`,
+        organizationSize: {
+          users: allMSUsers.length,
+          tokens: allMSAppTokens.length
+        }
+      }, { status: 413 });
+    }
+    
+    // **NEW: Log resource usage after fetch**
+    monitor.logResourceUsage(`TestCron:Microsoft:${orgDomain} FETCH COMPLETE`);
+    
     // 6. Sync users from Microsoft to our DB
     console.log(`[TestCron:Microsoft:${orgDomain}] Syncing users table...`);
     const { data: existingDbUsers, error: existingUsersError } = await supabaseAdmin
@@ -161,12 +217,26 @@ export async function POST(request: Request) {
         role: 'User'
       }));
 
-      const { error: insertUsersError } = await supabaseAdmin.from('users').insert(usersToInsert);
+      // **NEW: Use resource-aware batch processing for user insertion**
+      try {
+        await processInBatchesWithResourceControl(
+          usersToInsert,
+          async (userBatch) => {
+            const { error: insertUsersError } = await supabaseAdmin
+              .from('users')
+              .insert(userBatch);
 
-      if (insertUsersError) {
-        console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting new users:`, insertUsersError);
-      } else {
-        console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully inserted ${newMSUsers.length} new users.`);
+            if (insertUsersError) {
+              console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting user batch:`, insertUsersError);
+            }
+          },
+          `TestCron:Microsoft:${orgDomain} USER_INSERT`,
+          PROCESSING_CONFIG.BATCH_SIZE,
+          PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
+        );
+        console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully processed ${newMSUsers.length} new users with resource monitoring.`);
+      } catch (insertError) {
+        console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error in resource-aware user insertion:`, insertError);
       }
     } else {
       console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Users table is already up to date.`);
@@ -174,49 +244,67 @@ export async function POST(request: Request) {
 
     const msUserMap = new Map(allMSUsers.map((u: any) => [u.id, { email: u.mail, name: u.displayName }]));
 
-    // 7. Process and de-duplicate applications from the service principals and grants
-    console.log(`[TestCron:Microsoft:${orgDomain}] Processing and de-duplicating application list...`);
+    // 7. Process and de-duplicate applications from the service principals and grants with resource management
+    console.log(`[TestCron:Microsoft:${orgDomain}] Processing and de-duplicating application list with memory management...`);
 
     const msAppsMap = new Map<string, { ids: Set<string>; name: string; users: Set<string>; scopes: Set<string>; }>();
     const userAppScopesMap = new Map<string, Set<string>>(); // Key: user_id:app_name
     
-    for (const token of allMSAppTokens) {
-        if (!token.displayText || !token.userKey) {
-            continue; // Skip tokens without essential info
-        }
-        
-        // Use the application's display name as the primary key for de-duplication
-        if (!msAppsMap.has(token.displayText)) {
-            msAppsMap.set(token.displayText, {
-                ids: new Set<string>(), // Will store all service principal IDs associated with this name
-                name: token.displayText,
-                users: new Set<string>(), // Will store all user IDs
-                scopes: new Set<string>(),
-            });
+    // **NEW: Process tokens in resource-aware batches**
+    await processInBatchesWithResourceControl(
+      allMSAppTokens,
+      async (tokenBatch) => {
+        for (const token of tokenBatch) {
+          if (!token.displayText || !token.userKey) {
+              continue; // Skip tokens without essential info
+          }
+          
+          // Use the application's display name as the primary key for de-duplication
+          if (!msAppsMap.has(token.displayText)) {
+              msAppsMap.set(token.displayText, {
+                  ids: new Set<string>(), // Will store all service principal IDs associated with this name
+                  name: token.displayText,
+                  users: new Set<string>(), // Will store all user IDs
+                  scopes: new Set<string>(),
+              });
+          }
+
+          const appEntry = msAppsMap.get(token.displayText)!;
+          appEntry.ids.add(token.clientId); // Store the app's client ID
+          appEntry.users.add(token.userKey); // Store the user's MS ID
+          
+          // Add all scopes from the token to the application's scope set
+          const tokenScopes = token.scopes || [];
+          tokenScopes.forEach((scope: string) => {
+              appEntry.scopes.add(scope);
+          });
+          
+          // Store scopes per user-app relationship
+          const userAppKey = `${token.userKey}:${token.displayText}`;
+          if (!userAppScopesMap.has(userAppKey)) {
+              userAppScopesMap.set(userAppKey, new Set<string>());
+          }
+          const userScopesForApp = userAppScopesMap.get(userAppKey)!;
+          tokenScopes.forEach((scope: string) => userScopesForApp.add(scope));
         }
 
-        const appEntry = msAppsMap.get(token.displayText)!;
-        appEntry.ids.add(token.clientId); // Store the app's client ID
-        appEntry.users.add(token.userKey); // Store the user's MS ID
-        
-        // Add all scopes from the token to the application's scope set
-        const tokenScopes = token.scopes || [];
-        tokenScopes.forEach((scope: string) => {
-            appEntry.scopes.add(scope);
-        });
-        
-        // Store scopes per user-app relationship
-        const userAppKey = `${token.userKey}:${token.displayText}`;
-        if (!userAppScopesMap.has(userAppKey)) {
-            userAppScopesMap.set(userAppKey, new Set<string>());
+        // **NEW: Force memory cleanup periodically**
+        const currentUsage = monitor.getCurrentUsage();
+        if (currentUsage.heapUsed > PROCESSING_CONFIG.EMERGENCY_LIMITS.FORCE_CLEANUP_THRESHOLD) {
+          console.log(`[TestCron:Microsoft:${orgDomain}] 🧹 Memory cleanup triggered at ${currentUsage.heapUsed}MB`);
+          forceMemoryCleanup();
         }
-        const userScopesForApp = userAppScopesMap.get(userAppKey)!;
-        tokenScopes.forEach((scope: string) => userScopesForApp.add(scope));
-    }
-
+      },
+      `TestCron:Microsoft:${orgDomain} TOKEN_PROCESSING`,
+      PROCESSING_CONFIG.BATCH_SIZE,
+      PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
+    );
 
     const uniqueMSApps = Array.from(msAppsMap.values());
-    console.log(`[TestCron:Microsoft:${orgDomain}] Found ${uniqueMSApps.length} unique applications.`);
+    console.log(`[TestCron:Microsoft:${orgDomain}] Found ${uniqueMSApps.length} unique applications with resource management.`);
+    
+    // **NEW: Log resource usage after token processing**
+    monitor.logResourceUsage(`TestCron:Microsoft:${orgDomain} TOKEN_PROCESSING COMPLETE`);
 
     // 8. Fetch existing data from the Supabase DB
     console.log(`[TestCron:Microsoft:${orgDomain}] Fetching existing data from Supabase DB...`);
@@ -268,38 +356,59 @@ export async function POST(request: Request) {
       
       const appNameToDbIdMap = new Map<string, string>();
 
-      // Insert new applications
+      // Insert new applications with resource management
       if (newApps.length > 0) {
+        console.log(`[TestCron:Microsoft:${orgDomain}] Processing ${newApps.length} new applications with resource management...`);
         
-        const appsToInsert = await Promise.all(newApps.map(async (app) => {
-          const all_scopes: string[] = Array.from(app.scopes);
-          const risk_level = determineRiskLevel(all_scopes);
-          const category = await categorizeApplication(app.name, all_scopes);
-          return {
-            organization_id: org.id,
-            microsoft_app_id: Array.from(app.ids)[0], // Store one of the client IDs
-            name: app.name,
-            category,
-            risk_level: transformRiskLevel(risk_level),
-            management_status: 'Newly discovered',
-            all_scopes,
-            total_permissions: all_scopes.length,
-            provider: 'microsoft'
-          };
-        }));
+        // **NEW: Process apps in resource-aware batches for categorization**
+        const appsToInsert: any[] = [];
+        await processInBatchesWithResourceControl(
+          newApps,
+          async (appBatch) => {
+            const batchInserts = await Promise.all(appBatch.map(async (app) => {
+              const all_scopes: string[] = Array.from(app.scopes);
+              const risk_level = determineRiskLevel(all_scopes);
+              const category = await categorizeApplication(app.name, all_scopes);
+              return {
+                organization_id: org.id,
+                microsoft_app_id: Array.from(app.ids)[0], // Store one of the client IDs
+                name: app.name,
+                category,
+                risk_level: transformRiskLevel(risk_level),
+                management_status: 'Newly discovered',
+                all_scopes,
+                total_permissions: all_scopes.length,
+                provider: 'microsoft'
+              };
+            }));
+            appsToInsert.push(...batchInserts);
+          },
+          `TestCron:Microsoft:${orgDomain} APP_CATEGORIZATION`,
+          Math.min(PROCESSING_CONFIG.BATCH_SIZE, 10), // Smaller batches for AI categorization
+          PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
+        );
         
-        const { data: insertedApps, error: insertAppsError } = await supabaseAdmin
-          .from('applications')
-          .insert(appsToInsert)
-          .select('id, name');
+        // **NEW: Insert apps in resource-aware batches**
+        await processInBatchesWithResourceControl(
+          appsToInsert,
+          async (insertBatch) => {
+            const { data: insertedApps, error: insertAppsError } = await supabaseAdmin
+              .from('applications')
+              .insert(insertBatch)
+              .select('id, name');
 
-        if (insertAppsError) {
-          console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting new applications:`, insertAppsError);
-        } else if (insertedApps) {
-          console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully inserted ${insertedApps.length} new applications.`);
-          insertedApps.forEach(a => appNameToDbIdMap.set(a.name, a.id));
-        }
+            if (insertAppsError) {
+              console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting application batch:`, insertAppsError);
+            } else if (insertedApps) {
+              insertedApps.forEach(a => appNameToDbIdMap.set(a.name, a.id));
+            }
+          },
+          `TestCron:Microsoft:${orgDomain} APP_INSERT`,
+          PROCESSING_CONFIG.BATCH_SIZE,
+          PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
+        );
         
+        console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully processed ${newApps.length} new applications with resource monitoring.`);
       }
 
       // Insert new user-application relationships
@@ -342,12 +451,23 @@ export async function POST(request: Request) {
           });
 
           if (relsToInsert.length > 0) {
-            const { error: insertRelsError } = await supabaseAdmin.from('user_applications').insert(relsToInsert as any);
-            if (insertRelsError) {
-              console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting new relationships:`, insertRelsError);
-            } else {
-              console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully inserted ${relsToInsert.length} new user-app relationships.`);
-            }
+            // **NEW: Insert relationships in resource-aware batches**
+            await processInBatchesWithResourceControl(
+              relsToInsert,
+              async (relBatch) => {
+                const { error: insertRelsError } = await supabaseAdmin
+                  .from('user_applications')
+                  .insert(relBatch as any);
+                
+                if (insertRelsError) {
+                  console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting relationship batch:`, insertRelsError);
+                }
+              },
+              `TestCron:Microsoft:${orgDomain} RELATIONS_INSERT`,
+              PROCESSING_CONFIG.BATCH_SIZE,
+              PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
+            );
+            console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully processed ${relsToInsert.length} new user-app relationships with resource monitoring.`);
           }
         }
         
@@ -379,6 +499,9 @@ export async function POST(request: Request) {
     console.log(`--- [TestCron:Microsoft:${orgDomain}] END RESULTS ---`);
     console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Test run for ${orgDomain} completed successfully.`);
 
+    // **NEW: Log final resource usage**
+    monitor.logResourceUsage(`TestCron:Microsoft:${orgDomain} COMPLETE`);
+
     // 11. Send reports
     if (newApps.length > 0) {
       await processWeeklyNewAppReport(org, newApps);
@@ -401,6 +524,10 @@ export async function POST(request: Request) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     console.error(`[TestCron:Microsoft:${orgDomain}] ❌ An unexpected error occurred:`, error);
+    
+    // **NEW: Log resource usage on error**
+    monitor.logResourceUsage(`TestCron:Microsoft:${orgDomain} ERROR`);
+    
     return NextResponse.json({ 
       error: 'Internal server error',
       details: errorMessage

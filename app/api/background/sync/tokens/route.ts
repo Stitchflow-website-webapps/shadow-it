@@ -17,10 +17,10 @@ const PROCESSING_CONFIG = {
 
 // **NEW: Emergency memory management for huge organizations**
 const EMERGENCY_LIMITS = {
-  MAX_TOKENS_IN_MEMORY: 10000, // Hard limit on tokens loaded at once
-  MAX_APPS_IN_MEMORY: 2000,    // Hard limit on applications processed at once
-  MAX_RELATIONS_IN_MEMORY: 15000, // Hard limit on relations in memory
-  FORCE_CLEANUP_THRESHOLD: 1400,  // Force cleanup at 1.4GB (87.5% of 1.6GB limit)
+  MAX_TOKENS_IN_MEMORY: 8000,  // Hard limit on tokens loaded at once (reduced for stability)
+  MAX_APPS_IN_MEMORY: 1500,    // Hard limit on applications processed at once
+  MAX_RELATIONS_IN_MEMORY: 12000, // Hard limit on relations in memory
+  FORCE_CLEANUP_THRESHOLD: 1300,  // Force cleanup at 1.3GB (81% of 1.6GB limit)
 };
 
 // Helper function to sleep

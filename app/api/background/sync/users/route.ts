@@ -13,8 +13,8 @@ const PROCESSING_CONFIG = {
 
 // **NEW: Emergency limits for huge organizations**
 const EMERGENCY_LIMITS = {
-  MAX_USERS_IN_MEMORY: 25000, // Hard limit on users processed at once
-  FORCE_CLEANUP_THRESHOLD: 1200, // Force cleanup at 1.2GB (75% of 1.6GB limit)
+  MAX_USERS_IN_MEMORY: 20000, // Hard limit on users processed at once (reduced for stability)
+  FORCE_CLEANUP_THRESHOLD: 1300, // Force cleanup at 1.3GB (81% of 1.6GB limit)
 };
 
 // Helper function to sleep
