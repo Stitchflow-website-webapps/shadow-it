@@ -1,6 +1,123 @@
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 
+// **NEW: Rate limiting configuration to prevent quota violations**
+interface RateLimitConfig {
+  requestsPerMinute: number;
+  burstLimit: number;
+  adaptiveDelay: boolean;
+  maxRetries: number;
+  backoffMultiplier: number;
+}
+
+class RateLimiter {
+  private queue: Array<() => Promise<any>> = [];
+  private processing = false;
+  private requestTimes: number[] = [];
+  private config: RateLimitConfig;
+
+  constructor(config: RateLimitConfig) {
+    this.config = config;
+  }
+
+  async makeRequest<T>(requestFn: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await this.executeWithRetry(requestFn);
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      });
+
+      if (!this.processing) {
+        this.processQueue();
+      }
+    });
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.processing || this.queue.length === 0) return;
+    
+    this.processing = true;
+
+    while (this.queue.length > 0) {
+      const request = this.queue.shift()!;
+      
+      // Wait for rate limit if needed
+      await this.waitForRateLimit();
+      
+      // Execute the request
+      await request();
+      
+      // Record the request time
+      const now = Date.now();
+      this.requestTimes.push(now);
+      
+      // Clean old request times (older than 1 minute)
+      this.requestTimes = this.requestTimes.filter(time => now - time < 60000);
+    }
+
+    this.processing = false;
+  }
+
+  private async waitForRateLimit(): Promise<void> {
+    const now = Date.now();
+    const recentRequests = this.requestTimes.filter(time => now - time < 60000);
+    
+    if (recentRequests.length >= this.config.requestsPerMinute) {
+      // Calculate delay needed
+      const oldestRequest = Math.min(...recentRequests);
+      const waitTime = 60000 - (now - oldestRequest) + 100; // Add 100ms buffer
+      
+      if (waitTime > 0) {
+        console.log(`⏳ Rate limit reached, waiting ${Math.round(waitTime/1000)}s...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+    
+    // Adaptive delay based on recent request frequency
+    if (this.config.adaptiveDelay && recentRequests.length > this.config.requestsPerMinute * 0.8) {
+      const adaptiveDelay = Math.min(1000, recentRequests.length * 10);
+      await new Promise(resolve => setTimeout(resolve, adaptiveDelay));
+    }
+  }
+
+  private async executeWithRetry<T>(requestFn: () => Promise<T>): Promise<T> {
+    let lastError: any;
+    
+    for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
+      try {
+        return await requestFn();
+      } catch (error: any) {
+        lastError = error;
+        
+        // Check if it's a quota error
+        if (this.isQuotaError(error)) {
+          const delay = Math.pow(this.config.backoffMultiplier, attempt) * 1000;
+          console.log(`🚫 Quota error (attempt ${attempt + 1}/${this.config.maxRetries}), waiting ${delay/1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // For non-quota errors, don't retry
+        throw error;
+      }
+    }
+    
+    throw lastError;
+  }
+
+  private isQuotaError(error: any): boolean {
+    return error?.code === 429 || 
+           error?.status === 429 ||
+           error?.message?.includes('quota') ||
+           error?.message?.includes('rate limit') ||
+           error?.message?.includes('Quota exceeded');
+  }
+}
+
 // Define interfaces for Google API responses
 interface Token {
   clientId: string;
@@ -36,6 +153,7 @@ export class GoogleWorkspaceService {
   private oauth2Client: OAuth2Client;
   private admin: any;
   private oauth2: any;
+  private rateLimiter: RateLimiter;
 
   constructor(credentials: any) {
     this.oauth2Client = new OAuth2Client({
@@ -54,6 +172,17 @@ export class GoogleWorkspaceService {
     this.oauth2 = google.oauth2({
       version: 'v2',
       auth: this.oauth2Client
+    });
+
+    // **NEW: Initialize rate limiter with conservative settings**
+    // Google Admin SDK has a default limit of 2,400 queries per minute per user
+    // We set it to 1,800 to leave headroom and prevent quota violations
+    this.rateLimiter = new RateLimiter({
+      requestsPerMinute: 1800, // 75% of Google's 2,400 limit
+      burstLimit: 100,         // Allow small bursts
+      adaptiveDelay: true,     // Enable adaptive delays
+      maxRetries: 3,           // Retry quota errors 3 times
+      backoffMultiplier: 2     // Exponential backoff (2s, 4s, 8s)
     });
   }
 
@@ -273,20 +402,25 @@ export class GoogleWorkspaceService {
   }
 
   async getUsersList() {
-    // https: // developers.google.com/admin-sdk/directory/reference/rest/v1/users/list
-    const response = await this.admin.users.list({
-      customer: 'my_customer',
-      maxResults: 500,
-      orderBy: 'email',
+    // **NEW: Use rate limiter for API calls**
+    return await this.rateLimiter.makeRequest(async () => {
+      const response = await this.admin.users.list({
+        customer: 'my_customer',
+        maxResults: 500,
+        orderBy: 'email',
+      });
+      return response.data.users;
     });
-    return response.data.users;
   }
 
   async getUserDetails(userKey: string) {
-    const response = await this.admin.users.get({
-      userKey,
+    // **NEW: Use rate limiter for API calls**
+    return await this.rateLimiter.makeRequest(async () => {
+      const response = await this.admin.users.get({
+        userKey,
+      });
+      return response.data;
     });
-    return response.data;
   }
 
   async getOAuthTokens(): Promise<Token[]> {
@@ -295,9 +429,9 @@ export class GoogleWorkspaceService {
       const users = await this.getUsersListPaginated();
       console.log(`Found ${users.length} users in the organization`);
       
-      // Increased batch size and concurrent processing
-      const batchSize = 100; // Increased from 5
-      const maxConcurrentBatches = 100;
+      // **NEW: Conservative batch sizes to respect quota limits**
+      const batchSize = 25;   // Reduced from 100 to prevent quota violations
+      const maxConcurrentBatches = 5; // Significantly reduced from 100
       const userBatches: any[][] = [];
       
       for (let i = 0; i < users.length; i += batchSize) {
@@ -312,8 +446,8 @@ export class GoogleWorkspaceService {
         console.log(`Processing batches ${i + 1} to ${i + currentBatches.length} of ${userBatches.length}`);
         
         const batchPromises = currentBatches.map(async (userBatch, batchIndex) => {
-          // Stagger the start of concurrent batches to avoid rate limits
-          await new Promise(resolve => setTimeout(resolve, batchIndex * 100));
+          // **NEW: Increased stagger delay to prevent quota violations**
+          await new Promise(resolve => setTimeout(resolve, batchIndex * 500)); // Increased from 100ms to 500ms
           
           return Promise.all(userBatch.map(async (user: any) => {
             try {
@@ -337,11 +471,10 @@ export class GoogleWorkspaceService {
         const batchResults = await Promise.all(batchPromises);
         allTokens = [...allTokens, ...batchResults.flat(2)];
         
-        // Brief pause between major batch groups to respect rate limits
+        // **NEW: Longer pause between major batch groups to respect rate limits**
         if (i + maxConcurrentBatches < userBatches.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          // This 500ms pause between major batch groups helps prevent
-          // overwhelming the API with too many requests in a short time
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Increased from 500ms to 2s
+          console.log(`⏳ Pausing 2s between batch groups to respect API quotas...`);
         }
       }
       
@@ -352,17 +485,20 @@ export class GoogleWorkspaceService {
     }
   }
 
-  // New helper method to fetch user tokens with efficient pagination
+  // **NEW: Rate-limited helper method to fetch user tokens with efficient pagination**
   private async fetchUserTokens(user: any): Promise<any[]> {
     let pageToken: string | undefined = undefined;
     let allTokens: any[] = [];
     
     do {
       try {
-        const listResponse: { data: { items?: any[]; nextPageToken?: string } } = await this.admin.tokens.list({
-          userKey: user.primaryEmail,
-          maxResults: 100,
-          pageToken
+        // **NEW: Use rate limiter for every API call**
+        const listResponse: { data: { items?: any[]; nextPageToken?: string } } = await this.rateLimiter.makeRequest(async () => {
+          return await this.admin.tokens.list({
+            userKey: user.primaryEmail,
+            maxResults: 100,
+            pageToken
+          });
         });
         
         if (listResponse.data.items) {
@@ -397,11 +533,16 @@ export class GoogleWorkspaceService {
     
     for (const batch of tokenBatches) {
       try {
-        const batchResults = await Promise.all(batch.map(async (token) => {
+        // **NEW: Process tokens sequentially with rate limiting instead of parallel**
+        const batchResults = [];
+        for (const token of batch) {
           try {
-            const detailResponse = await this.admin.tokens.get({
-              userKey: user.primaryEmail,
-              clientId: token.clientId
+            // **NEW: Use rate limiter for each token detail request**
+            const detailResponse = await this.rateLimiter.makeRequest(async () => {
+              return await this.admin.tokens.get({
+                userKey: user.primaryEmail,
+                clientId: token.clientId
+              });
             });
             
             const detailedToken = detailResponse.data;
@@ -410,28 +551,28 @@ export class GoogleWorkspaceService {
             // More efficient scope processing
             this.processTokenScopes(detailedToken, scopes);
             
-            return {
+            batchResults.push({
               ...detailedToken,
               userKey: user.id,
               userEmail: user.primaryEmail,
               scopes: Array.from(scopes)
-            };
+            });
           } catch (error) {
             // Return basic token info on error
-            return {
+            batchResults.push({
               ...token,
               userKey: user.id,
               userEmail: user.primaryEmail,
               scopes: token.scopes || []
-            };
+            });
           }
-        }));
+        }
         
         processedTokens.push(...batchResults);
         
-        // Minimal delay between batches
+        // **NEW: Longer delay between token batches to prevent quota violations**
         if (tokenBatches.length > 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 300)); // Increased from 100ms to 300ms
         }
       } catch (error) {
         console.error(`Error processing token batch for ${user.primaryEmail}:`, error);
@@ -504,9 +645,12 @@ export class GoogleWorkspaceService {
       // Method 1: Direct admin check using user.get() and isAdmin field
       // This is the most reliable way to check admin status
       try {
-        const userResponse = await this.admin.users.get({
-          userKey: email,
-          projection: 'full'
+        // **NEW: Use rate limiter for admin check**
+        const userResponse = await this.rateLimiter.makeRequest(async () => {
+          return await this.admin.users.get({
+            userKey: email,
+            projection: 'full'
+          });
         });
         
         const userData = userResponse.data;
@@ -536,9 +680,12 @@ export class GoogleWorkspaceService {
 
       // Method 2: Try to access user security tokens (specific to our Shadow IT needs)
       try {
-        const tokenResponse = await this.admin.tokens.list({
-          userKey: email,
-          maxResults: 1
+        // **NEW: Use rate limiter for token access check**
+        const tokenResponse = await this.rateLimiter.makeRequest(async () => {
+          return await this.admin.tokens.list({
+            userKey: email,
+            maxResults: 1
+          });
         });
         
         console.log(`Successfully accessed tokens API, admin confirmed for: ${email}`);
@@ -618,13 +765,16 @@ export class GoogleWorkspaceService {
       do {
         console.log(`Fetching user page${pageToken ? ' with token: ' + pageToken : ''}`);
         
-        const response: any = await this.admin.users.list({
-          customer: 'my_customer',
-          maxResults: 500,
-          orderBy: 'email',
-          pageToken,
-          viewType: 'admin_view',
-          projection: 'full'
+        // **NEW: Use rate limiter for paginated user list calls**
+        const response: any = await this.rateLimiter.makeRequest(async () => {
+          return await this.admin.users.list({
+            customer: 'my_customer',
+            maxResults: 500,
+            orderBy: 'email',
+            pageToken,
+            viewType: 'admin_view',
+            projection: 'full'
+          });
         }).catch((error: any) => {
           console.error('Error in users.list API call:', {
             code: error?.code,
