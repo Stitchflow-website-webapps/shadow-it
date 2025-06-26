@@ -166,28 +166,8 @@ export async function POST(request: Request) {
 
     console.log(`[TestCron:Microsoft:${orgDomain}] Fetched ${allMSUsers.length} users and ${allMSAppTokens.length} user-app tokens.`);
     
-    // **NEW: Emergency check for huge organizations**
-    if (allMSUsers.length > PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_USERS_IN_MEMORY) {
-      console.warn(`[TestCron:Microsoft:${orgDomain}] 🚨 HUGE ORG DETECTED: ${allMSUsers.length} users exceeds limit of ${PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_USERS_IN_MEMORY}`);
-      return NextResponse.json({ 
-        error: `Organization too large for current memory configuration. Please contact support for enterprise processing of ${allMSUsers.length} users.`,
-        organizationSize: {
-          users: allMSUsers.length,
-          tokens: allMSAppTokens.length
-        }
-      }, { status: 413 });
-    }
-    
-    if (allMSAppTokens.length > PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_TOKENS_IN_MEMORY) {
-      console.warn(`[TestCron:Microsoft:${orgDomain}] 🚨 HUGE ORG DETECTED: ${allMSAppTokens.length} tokens exceeds limit of ${PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_TOKENS_IN_MEMORY}`);
-      return NextResponse.json({ 
-        error: `Organization too large for current memory configuration. Please contact support for enterprise processing of ${allMSAppTokens.length} tokens.`,
-        organizationSize: {
-          users: allMSUsers.length,
-          tokens: allMSAppTokens.length
-        }
-      }, { status: 413 });
-    }
+    // **REMOVED: Emergency limits - processing all organizations regardless of size**
+    console.log(`[TestCron:Microsoft:${orgDomain}] Processing large organization with ${allMSUsers.length} users and ${allMSAppTokens.length} tokens...`);
     
     // **NEW: Log resource usage after fetch**
     monitor.logResourceUsage(`TestCron:Microsoft:${orgDomain} FETCH COMPLETE`);

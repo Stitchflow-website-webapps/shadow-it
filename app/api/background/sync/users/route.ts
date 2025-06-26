@@ -3,12 +3,12 @@ import { GoogleWorkspaceService } from '@/lib/google-workspace';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ResourceMonitor, processInBatchesWithResourceControl } from '@/lib/resource-monitor';
 
-// Configuration optimized for 1 CPU + 2GB RAM - Balanced for speed vs stability
+// Configuration optimized for high-performance processing
 const PROCESSING_CONFIG = {
-  BATCH_SIZE: 40, // Increased from 25 for better throughput
-  DELAY_BETWEEN_BATCHES: 100, // Reduced from 150ms for faster processing
-  DB_OPERATION_DELAY: 50, // Reduced from 75ms for faster DB operations
-  MEMORY_CLEANUP_INTERVAL: 75, // Increased from 50 for better speed
+  BATCH_SIZE: 150, // Large batches for speed
+  DELAY_BETWEEN_BATCHES: 25, // Minimal delays for speed
+  DB_OPERATION_DELAY: 25, // Fast DB operations
+  MEMORY_CLEANUP_INTERVAL: 200, // Less frequent cleanup for speed
 };
 
 // **NEW: Emergency limits for huge organizations**
@@ -205,11 +205,8 @@ async function processUsers(
       users = await googleService.getUsersListPaginated();
       console.log(`[Users ${sync_id}] Successfully fetched ${users.length} users`);
       
-      // **NEW: Emergency check for huge organizations**
-      if (users.length > EMERGENCY_LIMITS.MAX_USERS_IN_MEMORY) {
-        console.warn(`[Users ${sync_id}] 🚨 HUGE ORG DETECTED: ${users.length} users exceeds limit of ${EMERGENCY_LIMITS.MAX_USERS_IN_MEMORY}`);
-        throw new Error(`Organization too large for current memory configuration. Please contact support for enterprise processing of ${users.length} users.`);
-      }
+      // **REMOVED: Emergency limit check - processing all organizations regardless of size**
+      console.log(`[Users ${sync_id}] Processing ${users.length} users for large organization...`);
       
       // Log resource usage after fetching
       monitor.logResourceUsage(`Users ${sync_id} FETCH COMPLETE`);

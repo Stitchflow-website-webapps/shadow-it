@@ -5,14 +5,14 @@ import { determineRiskLevel } from '@/lib/risk-assessment';
 import { ResourceMonitor, processInBatchesWithResourceControl, processConcurrentlyWithResourceControl } from '@/lib/resource-monitor';
 import crypto from 'crypto';
 
-// Configuration optimized for 1 CPU + 2GB RAM - Balanced for speed vs stability
+// Configuration optimized for high-quota, high-performance processing
 const PROCESSING_CONFIG = {
-  MAX_CONCURRENT_OPERATIONS: 2, // Sequential processing only for single CPU
-  BATCH_SIZE: 25, // Increased from 15 for better throughput
-  DELAY_BETWEEN_BATCHES: 100, // Reduced from 150ms for faster processing
-  MAX_TOKENS_PER_BATCH: 75, // Increased from 50 for better throughput
-  DB_OPERATION_DELAY: 50, // Reduced from 75ms for faster DB operations
-  MEMORY_CLEANUP_INTERVAL: 150, // Less frequent cleanup (from 100) for better speed
+  MAX_CONCURRENT_OPERATIONS: 10, // High concurrency for speed
+  BATCH_SIZE: 100, // Large batches for throughput
+  DELAY_BETWEEN_BATCHES: 25, // Minimal delays for speed
+  MAX_TOKENS_PER_BATCH: 200, // Large token batches
+  DB_OPERATION_DELAY: 25, // Fast DB operations
+  MEMORY_CLEANUP_INTERVAL: 300, // Less frequent cleanup for speed
 };
 
 // **NEW: Emergency memory management for huge organizations**
@@ -345,11 +345,8 @@ async function processTokens(
       applicationTokens = await googleService.getOAuthTokens();
       console.log(`[Tokens ${sync_id}] Fetched ${applicationTokens.length} application tokens`);
       
-      // **NEW: Emergency check for huge organizations**
-      if (applicationTokens.length > EMERGENCY_LIMITS.MAX_TOKENS_IN_MEMORY) {
-        console.warn(`[Tokens ${sync_id}] 🚨 HUGE ORG DETECTED: ${applicationTokens.length} tokens exceeds limit of ${EMERGENCY_LIMITS.MAX_TOKENS_IN_MEMORY}`);
-        throw new Error(`Organization too large for current memory configuration. Please contact support for enterprise processing of ${applicationTokens.length} tokens.`);
-      }
+          // **REMOVED: Emergency limit check - processing all organizations regardless of size**
+    console.log(`[Tokens ${sync_id}] Processing ${applicationTokens.length} tokens for large organization...`);
       
       // Log resource usage after token fetch
       monitor.logResourceUsage(`Tokens ${sync_id} FETCH COMPLETE`);
@@ -412,11 +409,8 @@ async function processTokens(
     
     console.log(`[Tokens ${sync_id}] Processing ${totalApps} applications with resource-aware concurrency`);
     
-    // **NEW: Emergency check for huge app count**
-    if (totalApps > EMERGENCY_LIMITS.MAX_APPS_IN_MEMORY) {
-      console.warn(`[Tokens ${sync_id}] 🚨 HUGE ORG DETECTED: ${totalApps} apps exceeds limit of ${EMERGENCY_LIMITS.MAX_APPS_IN_MEMORY}`);
-      throw new Error(`Organization has too many applications (${totalApps}) for current memory configuration. Please contact support for enterprise processing.`);
-    }
+    // **REMOVED: App limit check - processing all applications regardless of size**
+    console.log(`[Tokens ${sync_id}] Processing ${totalApps} applications for large organization...`);
     
     // Process applications in concurrent batches with resource monitoring
     await processConcurrentlyWithResourceControl(
@@ -561,11 +555,8 @@ async function processTokens(
               token: simplifiedToken
             });
             
-            // **NEW: Emergency check for relations array size**
-            if (userAppRelationsToProcess.length > EMERGENCY_LIMITS.MAX_RELATIONS_IN_MEMORY) {
-              console.warn(`[Tokens ${sync_id}] 🚨 HUGE ORG DETECTED: ${userAppRelationsToProcess.length} relations exceeds limit`);
-              throw new Error(`Organization has too many user-app relationships (${userAppRelationsToProcess.length}) for current memory configuration. Please contact support for enterprise processing.`);
-            }
+                // **REMOVED: Relations limit check - processing all relationships regardless of size**
+    console.log(`[Tokens ${sync_id}] Processing ${userAppRelationsToProcess.length} user-app relationships for large organization...`);
           }
         }
         

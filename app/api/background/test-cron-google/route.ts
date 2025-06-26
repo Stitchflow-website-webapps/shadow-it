@@ -130,28 +130,8 @@ export async function POST(request: Request) {
     ]);
     console.log(`[TestCron:${orgDomain}] Fetched ${allGoogleUsers.length} users and ${allGoogleTokens.length} total app tokens from Google.`);
     
-    // **NEW: Emergency check for huge organizations**
-    if (allGoogleUsers.length > PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_USERS_IN_MEMORY) {
-      console.warn(`[TestCron:${orgDomain}] 🚨 HUGE ORG DETECTED: ${allGoogleUsers.length} users exceeds limit of ${PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_USERS_IN_MEMORY}`);
-      return NextResponse.json({ 
-        error: `Organization too large for current memory configuration. Please contact support for enterprise processing of ${allGoogleUsers.length} users.`,
-        organizationSize: {
-          users: allGoogleUsers.length,
-          tokens: allGoogleTokens.length
-        }
-      }, { status: 413 });
-    }
-    
-    if (allGoogleTokens.length > PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_TOKENS_IN_MEMORY) {
-      console.warn(`[TestCron:${orgDomain}] 🚨 HUGE ORG DETECTED: ${allGoogleTokens.length} tokens exceeds limit of ${PROCESSING_CONFIG.EMERGENCY_LIMITS.MAX_TOKENS_IN_MEMORY}`);
-      return NextResponse.json({ 
-        error: `Organization too large for current memory configuration. Please contact support for enterprise processing of ${allGoogleTokens.length} tokens.`,
-        organizationSize: {
-          users: allGoogleUsers.length,
-          tokens: allGoogleTokens.length
-        }
-      }, { status: 413 });
-    }
+    // **REMOVED: Emergency limits - processing all organizations regardless of size**
+    console.log(`[TestCron:${orgDomain}] Processing large organization with ${allGoogleUsers.length} users and ${allGoogleTokens.length} tokens...`);
     
     // **NEW: Log resource usage after fetch**
     monitor.logResourceUsage(`TestCron:${orgDomain} FETCH COMPLETE`);

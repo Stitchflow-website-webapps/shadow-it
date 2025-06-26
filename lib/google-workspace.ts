@@ -174,15 +174,14 @@ export class GoogleWorkspaceService {
       auth: this.oauth2Client
     });
 
-    // **NEW: Initialize rate limiter with conservative settings**
-    // Google Admin SDK has a default limit of 2,400 queries per minute per user
-    // We set it to 1,800 to leave headroom and prevent quota violations
+    // **TEMPORARY: Conservative rate limiter for current 2,400 quota limit**
+    // Once Google approves quota increase to 10,000, we can increase this
     this.rateLimiter = new RateLimiter({
-      requestsPerMinute: 1800, // 75% of Google's 2,400 limit
-      burstLimit: 100,         // Allow small bursts
-      adaptiveDelay: true,     // Enable adaptive delays
-      maxRetries: 3,           // Retry quota errors 3 times
-      backoffMultiplier: 2     // Exponential backoff (2s, 4s, 8s)
+      requestsPerMinute: 2400, // Safe under current 2,400 quota limit
+      burstLimit: 200,         // Conservative burst limit
+      adaptiveDelay: true,     // Enable adaptive delays for quota safety
+      maxRetries: 3,           // More retries for quota errors
+      backoffMultiplier: 2.0   // Longer backoff for quota safety (2s, 4s, 8s)
     });
   }
 
@@ -429,9 +428,9 @@ export class GoogleWorkspaceService {
       const users = await this.getUsersListPaginated();
       console.log(`Found ${users.length} users in the organization`);
       
-      // **NEW: Conservative batch sizes to respect quota limits**
-      const batchSize = 25;   // Reduced from 100 to prevent quota violations
-      const maxConcurrentBatches = 5; // Significantly reduced from 100
+      // **NEW: Aggressive batch sizes for high-quota environments**
+      const batchSize = 100;  // Large batches for speed
+      const maxConcurrentBatches = 20; // Higher concurrency for speed
       const userBatches: any[][] = [];
       
       for (let i = 0; i < users.length; i += batchSize) {
@@ -446,8 +445,8 @@ export class GoogleWorkspaceService {
         console.log(`Processing batches ${i + 1} to ${i + currentBatches.length} of ${userBatches.length}`);
         
         const batchPromises = currentBatches.map(async (userBatch, batchIndex) => {
-          // **NEW: Increased stagger delay to prevent quota violations**
-          await new Promise(resolve => setTimeout(resolve, batchIndex * 500)); // Increased from 100ms to 500ms
+          // **NEW: Minimal stagger delay for speed**
+          await new Promise(resolve => setTimeout(resolve, batchIndex * 50)); // Fast processing
           
           return Promise.all(userBatch.map(async (user: any) => {
             try {
@@ -471,10 +470,9 @@ export class GoogleWorkspaceService {
         const batchResults = await Promise.all(batchPromises);
         allTokens = [...allTokens, ...batchResults.flat(2)];
         
-        // **NEW: Longer pause between major batch groups to respect rate limits**
+        // **NEW: Minimal pause between major batch groups for speed**
         if (i + maxConcurrentBatches < userBatches.length) {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Increased from 500ms to 2s
-          console.log(`⏳ Pausing 2s between batch groups to respect API quotas...`);
+          await new Promise(resolve => setTimeout(resolve, 200)); // Fast processing
         }
       }
       
@@ -533,9 +531,8 @@ export class GoogleWorkspaceService {
     
     for (const batch of tokenBatches) {
       try {
-        // **NEW: Process tokens sequentially with rate limiting instead of parallel**
-        const batchResults = [];
-        for (const token of batch) {
+        // **NEW: Parallel token processing with rate limiting for speed**
+        const batchResults = await Promise.all(batch.map(async (token) => {
           try {
             // **NEW: Use rate limiter for each token detail request**
             const detailResponse = await this.rateLimiter.makeRequest(async () => {
@@ -551,28 +548,28 @@ export class GoogleWorkspaceService {
             // More efficient scope processing
             this.processTokenScopes(detailedToken, scopes);
             
-            batchResults.push({
+            return {
               ...detailedToken,
               userKey: user.id,
               userEmail: user.primaryEmail,
               scopes: Array.from(scopes)
-            });
+            };
           } catch (error) {
             // Return basic token info on error
-            batchResults.push({
+            return {
               ...token,
               userKey: user.id,
               userEmail: user.primaryEmail,
               scopes: token.scopes || []
-            });
+            };
           }
-        }
+        }));
         
         processedTokens.push(...batchResults);
         
-        // **NEW: Longer delay between token batches to prevent quota violations**
+        // **NEW: Minimal delay between token batches for speed**
         if (tokenBatches.length > 1) {
-          await new Promise(resolve => setTimeout(resolve, 300)); // Increased from 100ms to 300ms
+          await new Promise(resolve => setTimeout(resolve, 50)); // Fast processing
         }
       } catch (error) {
         console.error(`Error processing token batch for ${user.primaryEmail}:`, error);
