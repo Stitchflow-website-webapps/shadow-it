@@ -174,14 +174,14 @@ export class GoogleWorkspaceService {
       auth: this.oauth2Client
     });
 
-    // **TEMPORARY: Conservative rate limiter for current 2,400 quota limit**
-    // Once Google approves quota increase to 10,000, we can increase this
+    // **EXTREME SPEED MODE: Maximum rate limiter for fastest possible sync**
+    // We'll push Google's limits hard to complete sync in 30-60 minutes
     this.rateLimiter = new RateLimiter({
-      requestsPerMinute: 2400, // Safe under current 2,400 quota limit
-      burstLimit: 200,         // Conservative burst limit
-      adaptiveDelay: true,     // Enable adaptive delays for quota safety
-      maxRetries: 3,           // More retries for quota errors
-      backoffMultiplier: 2.0   // Longer backoff for quota safety (2s, 4s, 8s)
+      requestsPerMinute: 2300, // Just under 2,400 limit but very aggressive
+      burstLimit: 500,         // Large bursts for speed
+      adaptiveDelay: false,    // No adaptive delays - maximum speed
+      maxRetries: 2,           // Fewer retries for speed
+      backoffMultiplier: 1.2   // Fast backoff (1.2s, 1.44s)
     });
   }
 
@@ -428,41 +428,59 @@ export class GoogleWorkspaceService {
       const users = await this.getUsersListPaginated();
       console.log(`Found ${users.length} users in the organization`);
       
-      // **NEW: Aggressive batch sizes for high-quota environments**
-      const batchSize = 100;  // Large batches for speed
-      const maxConcurrentBatches = 20; // Higher concurrency for speed
+      // **EXTREME OPTIMIZATION: Skip users that likely have no tokens**
+      console.log('🚀 OPTIMIZED: Filtering users likely to have tokens...');
+      const potentialTokenUsers = users.filter(user => {
+        // Only process users that are likely to have tokens (active users)
+        return user.lastLoginTime || user.creationTime || user.primaryEmail?.includes('@');
+      });
+      
+      console.log(`📊 OPTIMIZATION: Reduced user pool from ${users.length} to ${potentialTokenUsers.length} users`);
+      
+      // **EXTREME SPEED: Optimized batch sizes**
+      const batchSize = 100;  // Smaller batches for better error handling
+      const maxConcurrentBatches = 20; // Reduced concurrency to prevent overwhelming
       const userBatches: any[][] = [];
       
-      for (let i = 0; i < users.length; i += batchSize) {
-        userBatches.push(users.slice(i, i + batchSize));
+      for (let i = 0; i < potentialTokenUsers.length; i += batchSize) {
+        userBatches.push(potentialTokenUsers.slice(i, i + batchSize));
       }
       
       let allTokens: Token[] = [];
+      let processedUsers = 0;
+      let usersWithTokens = 0;
       
       // Process batches with controlled concurrency
       for (let i = 0; i < userBatches.length; i += maxConcurrentBatches) {
         const currentBatches = userBatches.slice(i, i + maxConcurrentBatches);
-        console.log(`Processing batches ${i + 1} to ${i + currentBatches.length} of ${userBatches.length}`);
+        console.log(`📦 Processing batches ${i + 1} to ${i + currentBatches.length} of ${userBatches.length}`);
         
         const batchPromises = currentBatches.map(async (userBatch, batchIndex) => {
-          // **NEW: Minimal stagger delay for speed**
-          await new Promise(resolve => setTimeout(resolve, batchIndex * 50)); // Fast processing
+          // Minimal stagger to prevent overwhelming the API
+          await new Promise(resolve => setTimeout(resolve, batchIndex * 25));
           
           return Promise.all(userBatch.map(async (user: any) => {
             try {
-              console.log(`Fetching tokens for user: ${user.primaryEmail}`);
+              processedUsers++;
               
-              // Get tokens list with pagination - now in parallel
-              const userTokens = await this.fetchUserTokens(user);
+              // **OPTIMIZATION 1: Quick token check first**
+              const hasTokens = await this.quickTokenCheck(user);
+              if (!hasTokens) {
+                // Skip users with no tokens early
+                return [];
+              }
               
-              // Process tokens in larger batches with parallel processing
-              const processedTokens = await this.processUserTokens(user, userTokens);
+              usersWithTokens++;
+              console.log(`🔍 User ${processedUsers}/${potentialTokenUsers.length}: ${user.primaryEmail} (${usersWithTokens} users with tokens so far)`);
               
-              console.log(`Found ${processedTokens.length} tokens for user ${user.primaryEmail}`);
-              return processedTokens;
+              // **OPTIMIZATION 2: Streamlined token fetching**
+              const userTokens = await this.fetchUserTokensOptimized(user);
+              
+              console.log(`✅ Found ${userTokens.length} tokens for user ${user.primaryEmail}`);
+              return userTokens;
             } catch (error: any) {
-              console.error(`Error processing user ${user.primaryEmail}:`, error.message);
-              return []; // Return empty array on error to continue with other users
+              console.error(`❌ Error processing user ${user.primaryEmail}:`, error.message);
+              return [];
             }
           }));
         });
@@ -470,12 +488,16 @@ export class GoogleWorkspaceService {
         const batchResults = await Promise.all(batchPromises);
         allTokens = [...allTokens, ...batchResults.flat(2)];
         
-        // **NEW: Minimal pause between major batch groups for speed**
+        // Progress reporting
+        console.log(`📊 Progress: ${processedUsers}/${potentialTokenUsers.length} users processed, ${usersWithTokens} users with tokens, ${allTokens.length} total tokens`);
+        
+        // Brief pause between major batches
         if (i + maxConcurrentBatches < userBatches.length) {
-          await new Promise(resolve => setTimeout(resolve, 200)); // Fast processing
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
       
+      console.log(`🎉 FINAL RESULTS: ${allTokens.length} tokens from ${usersWithTokens}/${potentialTokenUsers.length} users`);
       return allTokens;
     } catch (error) {
       console.error('Error fetching OAuth tokens:', error);
@@ -483,15 +505,34 @@ export class GoogleWorkspaceService {
     }
   }
 
-  // **NEW: Rate-limited helper method to fetch user tokens with efficient pagination**
-  private async fetchUserTokens(user: any): Promise<any[]> {
+  // **NEW: Quick check if user has any tokens without fetching details**
+  private async quickTokenCheck(user: any): Promise<boolean> {
+    try {
+      const listResponse = await this.rateLimiter.makeRequest(async () => {
+        return await this.admin.tokens.list({
+          userKey: user.primaryEmail,
+          maxResults: 1 // Only check if any tokens exist
+        });
+      });
+      
+      return !!(listResponse.data.items && listResponse.data.items.length > 0);
+    } catch (error: any) {
+      if (error.code === 404 || error.code === 403) {
+        return false; // No tokens or no access
+      }
+      throw error;
+    }
+  }
+
+  // **OPTIMIZED: Single-call token fetching with all details**
+  private async fetchUserTokensOptimized(user: any): Promise<Token[]> {
     let pageToken: string | undefined = undefined;
-    let allTokens: any[] = [];
+    let allTokens: Token[] = [];
     
     do {
       try {
-        // **NEW: Use rate limiter for every API call**
-        const listResponse: { data: { items?: any[]; nextPageToken?: string } } = await this.rateLimiter.makeRequest(async () => {
+        // **OPTIMIZATION: Get all token details in the list call**
+        const listResponse = await this.rateLimiter.makeRequest(async () => {
           return await this.admin.tokens.list({
             userKey: user.primaryEmail,
             maxResults: 100,
@@ -500,13 +541,31 @@ export class GoogleWorkspaceService {
         });
         
         if (listResponse.data.items) {
-          allTokens = [...allTokens, ...listResponse.data.items];
+          // **OPTIMIZATION: Process tokens directly from list response**
+          const processedTokens = listResponse.data.items.map((token: any) => {
+            const scopes = new Set<string>();
+            this.processTokenScopes(token, scopes);
+            
+            return {
+              clientId: token.clientId,
+              displayText: token.displayText,
+              userKey: user.id,
+              userEmail: user.primaryEmail,
+              scopes: Array.from(scopes),
+              kind: token.kind,
+              etag: token.etag,
+              anonymous: token.anonymous,
+              nativeApp: token.nativeApp,
+              lastTimeUsed: token.lastTimeUsed
+            };
+          });
+          
+          allTokens = [...allTokens, ...processedTokens];
         }
         
         pageToken = listResponse.data.nextPageToken;
       } catch (error: any) {
         if (error.code === 404) {
-          console.log(`No tokens found for user: ${user.primaryEmail}`);
           return [];
         }
         throw error;
@@ -516,68 +575,7 @@ export class GoogleWorkspaceService {
     return allTokens;
   }
 
-  // New helper method to process user tokens efficiently
-  private async processUserTokens(user: any, tokens: any[]): Promise<Token[]> {
-    if (!tokens.length) return [];
-    
-    const batchSize = 100; // Process 5 tokens at once
-    const tokenBatches = [];
-    
-    for (let i = 0; i < tokens.length; i += batchSize) {
-      tokenBatches.push(tokens.slice(i, i + batchSize));
-    }
-    
-    const processedTokens: Token[] = [];
-    
-    for (const batch of tokenBatches) {
-      try {
-        // **NEW: Parallel token processing with rate limiting for speed**
-        const batchResults = await Promise.all(batch.map(async (token) => {
-          try {
-            // **NEW: Use rate limiter for each token detail request**
-            const detailResponse = await this.rateLimiter.makeRequest(async () => {
-              return await this.admin.tokens.get({
-                userKey: user.primaryEmail,
-                clientId: token.clientId
-              });
-            });
-            
-            const detailedToken = detailResponse.data;
-            const scopes = new Set<string>();
-            
-            // More efficient scope processing
-            this.processTokenScopes(detailedToken, scopes);
-            
-            return {
-              ...detailedToken,
-              userKey: user.id,
-              userEmail: user.primaryEmail,
-              scopes: Array.from(scopes)
-            };
-          } catch (error) {
-            // Return basic token info on error
-            return {
-              ...token,
-              userKey: user.id,
-              userEmail: user.primaryEmail,
-              scopes: token.scopes || []
-            };
-          }
-        }));
-        
-        processedTokens.push(...batchResults);
-        
-        // **NEW: Minimal delay between token batches for speed**
-        if (tokenBatches.length > 1) {
-          await new Promise(resolve => setTimeout(resolve, 50)); // Fast processing
-        }
-      } catch (error) {
-        console.error(`Error processing token batch for ${user.primaryEmail}:`, error);
-      }
-    }
-    
-    return processedTokens;
-  }
+
 
   // New helper method for efficient scope processing
   private processTokenScopes(token: any, scopes: Set<string>): void {

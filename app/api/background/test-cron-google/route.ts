@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { GoogleWorkspaceService } from '@/lib/google-workspace';
 import { determineRiskLevel, transformRiskLevel } from '@/lib/risk-assessment';
@@ -17,11 +17,25 @@ import { ResourceMonitor, processInBatchesWithResourceControl } from '@/lib/reso
  * @param {Request} request - The incoming request, expected to have an `orgDomain` query parameter.
  */
 export async function POST(request: Request) {
+  // **FIXED: Support both query parameter and request body for orgDomain**
   const { searchParams } = new URL(request.url);
-  const orgDomain = searchParams.get('orgDomain');
+  let orgDomain = searchParams.get('orgDomain');
+  
+  // If not in query params, try to get from request body
+  if (!orgDomain) {
+    try {
+      const body = await request.json();
+      orgDomain = body.orgDomain;
+    } catch (error) {
+      // Ignore JSON parsing errors, orgDomain might be in query params
+    }
+  }
 
   if (!orgDomain) {
-    return NextResponse.json({ error: 'orgDomain query parameter is required' }, { status: 400 });
+    return NextResponse.json({ 
+      error: 'orgDomain is required',
+      usage: 'Provide orgDomain as query parameter (?orgDomain=domain.com) or in request body {"orgDomain":"domain.com"}'
+    }, { status: 400 });
   }
 
   // 1. Authenticate the request using a secret bearer token
@@ -362,61 +376,110 @@ export async function POST(request: Request) {
 
       // Insert new user-application relationships
       if (newRelationships.length > 0) {
-        const allInvolvedAppNames = Array.from(new Set(newRelationships.map(r => r.app.name)));
-        const { data: involvedApps, error: involvedAppsError } = await supabaseAdmin
-          .from('applications')
-          .select('id, name')
-          .in('name', allInvolvedAppNames)
-          .eq('organization_id', org.id);
+        console.log(`[TestCron:${orgDomain}] Processing ${newRelationships.length} new relationships with batched ID fetching...`);
         
-        involvedApps?.forEach(a => appNameToDbIdMap.set(a.name, a.id));
-
+        // **FIXED: Batch the ID fetching to avoid 414 Request-URI Too Large errors**
+        const allInvolvedAppNames = Array.from(new Set(newRelationships.map(r => r.app.name)));
         const allInvolvedUserEmails = Array.from(new Set(newRelationships.map(r => r.user.email)));
-        const { data: involvedUsers, error: involvedUsersError } = await supabaseAdmin
-          .from('users')
-          .select('id, email')
-          .in('email', allInvolvedUserEmails)
-          .eq('organization_id', org.id);
-
-        if (involvedAppsError || involvedUsersError) {
-          console.error(`[TestCron:${orgDomain}] ❌ Error fetching DB IDs:`, { involvedAppsError, involvedUsersError });
-        } else {
-          const userEmailToDbIdMap = new Map(involvedUsers?.map(u => [u.email, u.id]) || []);
-          
-          const relsToInsert = newRelationships.flatMap(rel => {
-            const application_id = appNameToDbIdMap.get(rel.app.name);
-            const user_id = userEmailToDbIdMap.get(rel.user.email);
-            
-            if (!application_id || !user_id) {
-              console.warn(`[TestCron:${orgDomain}] ⚠️ Skipping relationship for ${rel.user.email} and ${rel.app.name} (missing DB ID).`);
-              return [];
-            }
-            
-            // Get the user-specific scopes for this relationship
-            const scopesSet = userAppScopesMap.get(`${rel.userKey}:${rel.app.id}`) || new Set();
-            
-            return [{ application_id, user_id, scopes: Array.from(scopesSet) }];
-          });
-
-          if (relsToInsert.length > 0) {
-            // **NEW: Insert relationships in resource-aware batches**
-            await processInBatchesWithResourceControl(
-              relsToInsert,
-              async (relBatch) => {
-                const { error: insertRelsError } = await supabaseAdmin
-                  .from('user_applications')
-                  .insert(relBatch as any);
-                
-                if (insertRelsError) {
-                  console.error(`[TestCron:${orgDomain}] ❌ Error inserting relationship batch:`, insertRelsError);
-                }
-              },
-              `TestCron:${orgDomain} RELATIONS_INSERT`,
-              PROCESSING_CONFIG.BATCH_SIZE,
-              PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
-            );
-            console.log(`[TestCron:${orgDomain}] ✅ Successfully processed ${relsToInsert.length} new user-app relationships with resource monitoring.`);
+        
+        console.log(`[TestCron:${orgDomain}] Fetching IDs for ${allInvolvedAppNames.length} apps and ${allInvolvedUserEmails.length} users...`);
+        
+        // **EXTREME SPEED: Parallel batch fetching for maximum performance**
+        const appBatchSize = 50; // Smaller batches for parallel processing
+        const userBatchSize = 50; // Smaller batches for parallel processing
+        
+        // Create all app and user batch promises in parallel
+        const appBatchPromises = [];
+        for (let i = 0; i < allInvolvedAppNames.length; i += appBatchSize) {
+          const appNameBatch = allInvolvedAppNames.slice(i, i + appBatchSize);
+          appBatchPromises.push(
+            supabaseAdmin
+              .from('applications')
+              .select('id, name')
+              .in('name', appNameBatch)
+              .eq('organization_id', org.id)
+          );
+        }
+        
+        const userBatchPromises = [];
+        for (let i = 0; i < allInvolvedUserEmails.length; i += userBatchSize) {
+          const userEmailBatch = allInvolvedUserEmails.slice(i, i + userBatchSize);
+          userBatchPromises.push(
+            supabaseAdmin
+              .from('users')
+              .select('id, email')
+              .in('email', userEmailBatch)
+              .eq('organization_id', org.id)
+          );
+        }
+        
+        // Execute all app and user fetches in parallel
+        console.log(`[TestCron:${orgDomain}] Fetching ${appBatchPromises.length} app batches and ${userBatchPromises.length} user batches in parallel...`);
+        
+        const [appResults, userResults] = await Promise.all([
+          Promise.all(appBatchPromises),
+          Promise.all(userBatchPromises)
+        ]);
+        
+        // Process app results
+        appResults.forEach((result, index) => {
+          if (result.error) {
+            console.error(`[TestCron:${orgDomain}] ❌ Error fetching app batch ${index + 1}:`, result.error);
+          } else if (result.data) {
+            result.data.forEach(a => appNameToDbIdMap.set(a.name, a.id));
           }
+        });
+        
+        // Process user results
+        const userEmailToDbIdMap = new Map();
+        userResults.forEach((result, index) => {
+          if (result.error) {
+            console.error(`[TestCron:${orgDomain}] ❌ Error fetching user batch ${index + 1}:`, result.error);
+          } else if (result.data) {
+            result.data.forEach(u => userEmailToDbIdMap.set(u.email, u.id));
+          }
+        });
+        
+        console.log(`[TestCron:${orgDomain}] Successfully fetched ${appNameToDbIdMap.size} app IDs and ${userEmailToDbIdMap.size} user IDs`);
+        
+        // Create relationships with the fetched IDs
+        const relsToInsert = newRelationships.flatMap(rel => {
+          const application_id = appNameToDbIdMap.get(rel.app.name);
+          const user_id = userEmailToDbIdMap.get(rel.user.email);
+          
+          if (!application_id || !user_id) {
+            console.warn(`[TestCron:${orgDomain}] ⚠️ Skipping relationship for ${rel.user.email} and ${rel.app.name} (missing DB ID).`);
+            return [];
+          }
+          
+          // Get the user-specific scopes for this relationship
+          const scopesSet = userAppScopesMap.get(`${rel.userKey}:${rel.app.id}`) || new Set();
+          
+          return [{ application_id, user_id, scopes: Array.from(scopesSet) }];
+        });
+
+        if (relsToInsert.length > 0) {
+          console.log(`[TestCron:${orgDomain}] Inserting ${relsToInsert.length} relationships...`);
+          
+          // **NEW: Insert relationships in resource-aware batches**
+          await processInBatchesWithResourceControl(
+            relsToInsert,
+            async (relBatch) => {
+              const { error: insertRelsError } = await supabaseAdmin
+                .from('user_applications')
+                .insert(relBatch as any);
+              
+              if (insertRelsError) {
+                console.error(`[TestCron:${orgDomain}] ❌ Error inserting relationship batch:`, insertRelsError);
+              }
+            },
+            `TestCron:${orgDomain} RELATIONS_INSERT`,
+            PROCESSING_CONFIG.BATCH_SIZE,
+            PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
+          );
+          console.log(`[TestCron:${orgDomain}] ✅ Successfully processed ${relsToInsert.length} new user-app relationships with resource monitoring.`);
+        } else {
+          console.log(`[TestCron:${orgDomain}] ⚠️ No valid relationships to insert (all missing required IDs).`);
         }
       }
     }
@@ -665,14 +728,14 @@ function getStartOfWeek(d: Date): Date {
   return monday;
 }
 
-// **NEW: Configuration for resource management**
+// **EXTREME SPEED MODE: Maximum performance configuration**
 const PROCESSING_CONFIG = {
-  BATCH_SIZE: 30, // Conservative batch size for large orgs
-  DELAY_BETWEEN_BATCHES: 150, // Allow time for memory cleanup
+  BATCH_SIZE: 200, // Large batch size for maximum speed
+  DELAY_BETWEEN_BATCHES: 25, // Minimal delays for speed
   EMERGENCY_LIMITS: {
-    MAX_USERS_IN_MEMORY: 20000, // Hard limit on users processed at once
-    MAX_TOKENS_IN_MEMORY: 8000, // Hard limit on tokens processed at once
-    FORCE_CLEANUP_THRESHOLD: 1400, // Force cleanup at 1.4GB (87.5% of 1.6GB limit)
+    MAX_USERS_IN_MEMORY: 50000, // Higher memory limits for speed
+    MAX_TOKENS_IN_MEMORY: 20000, // Higher token limits for speed
+    FORCE_CLEANUP_THRESHOLD: 1500, // Higher threshold before cleanup
   }
 };
 
@@ -688,4 +751,217 @@ const forceMemoryCleanup = () => {
       if (global.gc) global.gc();
     }
   }
-}; 
+};
+
+// **NEW: Add GET endpoint for relationships-only processing**
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  const orgDomain = url.searchParams.get('org');
+  const mode = url.searchParams.get('mode');
+  
+  // **NEW: Support relationships-only mode**
+  if (mode === 'relationships-only') {
+    return await processRelationshipsOnly(orgDomain);
+  }
+  
+  // Default behavior for existing functionality
+  return NextResponse.json({ 
+    error: 'Missing parameters',
+    usage: 'Use ?org=domain.com&mode=relationships-only to process only relationships'
+  }, { status: 400 });
+}
+
+// **NEW: Relationships-only processing function**
+async function processRelationshipsOnly(orgDomain: string | null) {
+  if (!orgDomain) {
+    return NextResponse.json({ error: 'Organization domain is required' }, { status: 400 });
+  }
+
+  console.log(`[RelationshipsOnly:${orgDomain}] 🔄 Starting intelligent relationships reconstruction...`);
+  
+  const monitor = new ResourceMonitor();
+  monitor.logResourceUsage(`RelationshipsOnly:${orgDomain} START`);
+
+  try {
+    // 1. Get organization details
+    const { data: org, error: orgError } = await supabaseAdmin
+      .from('organizations')
+      .select('id, name, domain')
+      .eq('domain', orgDomain)
+      .single();
+
+    if (orgError || !org) {
+      console.error(`[RelationshipsOnly:${orgDomain}] ❌ Organization not found:`, orgError);
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+
+    console.log(`[RelationshipsOnly:${orgDomain}] ✅ Found organization: ${org.name} (ID: ${org.id})`);
+
+    // 2. Get existing data and analyze what we can reconstruct
+    console.log(`[RelationshipsOnly:${orgDomain}] 🔍 Analyzing existing data for relationship reconstruction...`);
+    
+    const [usersResult, appsResult, existingRelationshipsResult] = await Promise.all([
+      supabaseAdmin
+        .from('users')
+        .select('id, email, google_user_id, name')
+        .eq('organization_id', org.id),
+      supabaseAdmin
+        .from('applications')
+        .select('id, name, google_app_id, user_count, all_scopes, owner_email')
+        .eq('organization_id', org.id)
+        .eq('provider', 'google'),
+      supabaseAdmin
+        .from('user_applications')
+        .select('user_id, application_id')
+        .eq('organization_id', org.id)
+    ]);
+
+    if (usersResult.error || appsResult.error) {
+      console.error(`[RelationshipsOnly:${orgDomain}] ❌ Error fetching data:`, { usersResult: usersResult.error, appsResult: appsResult.error });
+      return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
+    }
+
+    const existingUsers = usersResult.data || [];
+    const existingApps = appsResult.data || [];
+    const existingRelationships = existingRelationshipsResult.data || [];
+
+    console.log(`[RelationshipsOnly:${orgDomain}] 📊 Data summary:`);
+    console.log(`  - Users: ${existingUsers.length}`);
+    console.log(`  - Applications: ${existingApps.length}`);
+    console.log(`  - Existing relationships: ${existingRelationships.length}`);
+
+    if (existingUsers.length === 0) {
+      return NextResponse.json({ error: 'No users found - run full sync first' }, { status: 400 });
+    }
+
+    if (existingApps.length === 0) {
+      return NextResponse.json({ error: 'No applications found - run full sync first' }, { status: 400 });
+    }
+
+    // 3. **INTELLIGENT APPROACH**: Analyze applications for relationship clues
+    console.log(`[RelationshipsOnly:${orgDomain}] 🧠 Analyzing applications for relationship patterns...`);
+    
+    // Create lookup maps
+    const userEmailToId = new Map(existingUsers.map(u => [u.email.toLowerCase(), u.id]));
+    const existingRelationshipsSet = new Set(
+      existingRelationships.map(rel => `${rel.user_id}:${rel.application_id}`)
+    );
+
+    const relationshipsToCreate = [];
+    let analysisResults = {
+      appsWithOwners: 0,
+      appsWithUserCounts: 0,
+      ownerRelationshipsCreated: 0,
+      estimatedTotalRelationships: 0,
+      totalPossibleRelationships: existingUsers.length * existingApps.length
+    };
+
+    // Analyze each application for relationship clues
+    for (const app of existingApps) {
+      console.log(`[RelationshipsOnly:${orgDomain}] 🔍 Analyzing app: ${app.name}`);
+      
+      // Strategy 1: Owner relationships (most accurate)
+      if (app.owner_email) {
+        analysisResults.appsWithOwners++;
+        const ownerUserId = userEmailToId.get(app.owner_email.toLowerCase());
+        
+        if (ownerUserId) {
+          const relationshipKey = `${ownerUserId}:${app.id}`;
+          if (!existingRelationshipsSet.has(relationshipKey)) {
+            relationshipsToCreate.push({
+              user_id: ownerUserId,
+              application_id: app.id,
+              organization_id: org.id,
+              scopes: app.all_scopes || [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+            analysisResults.ownerRelationshipsCreated++;
+          }
+        }
+      }
+
+      // Strategy 2: User count analysis (for estimation)
+      if (app.user_count && app.user_count > 0) {
+        analysisResults.appsWithUserCounts++;
+        analysisResults.estimatedTotalRelationships += app.user_count;
+      }
+    }
+
+    console.log(`[RelationshipsOnly:${orgDomain}] 📈 Analysis Results:`);
+    console.log(`  - Apps with owners: ${analysisResults.appsWithOwners}`);
+    console.log(`  - Apps with user counts: ${analysisResults.appsWithUserCounts}`);
+    console.log(`  - Owner relationships to create: ${analysisResults.ownerRelationshipsCreated}`);
+    console.log(`  - Estimated total relationships in org: ${analysisResults.estimatedTotalRelationships}`);
+    console.log(`  - Total possible relationships: ${analysisResults.totalPossibleRelationships}`);
+
+    // 4. Provide user with options based on analysis
+    if (relationshipsToCreate.length === 0) {
+      console.log(`[RelationshipsOnly:${orgDomain}] ⚠️ No owner-based relationships found. The original OAuth token data would be needed for accurate relationships.`);
+      
+      return NextResponse.json({
+        success: false,
+        message: `No accurate relationships can be reconstructed from existing data`,
+        analysis: {
+          ...analysisResults,
+          recommendation: "The original OAuth tokens contained the exact user-app relationships, but they're not accessible due to scope limitations. Consider re-running with proper admin scopes, or manual relationship creation based on your organization's knowledge."
+        },
+        options: {
+          option1: "Re-authenticate with admin scopes to fetch fresh OAuth data",
+          option2: "Manually specify known user-app relationships",
+          option3: "Use application owner data only (limited accuracy)"
+        }
+      });
+    }
+
+    // 5. Insert the accurate owner-based relationships
+    console.log(`[RelationshipsOnly:${orgDomain}] 🔄 Creating ${relationshipsToCreate.length} owner-based relationships...`);
+    
+    await processInBatchesWithResourceControl(
+      relationshipsToCreate,
+      async (relationshipBatch) => {
+        const { error: insertError } = await supabaseAdmin
+          .from('user_applications')
+          .insert(relationshipBatch);
+        
+        if (insertError) {
+          console.error(`[RelationshipsOnly:${orgDomain}] ❌ Error inserting relationship batch:`, insertError);
+        } else {
+          console.log(`[RelationshipsOnly:${orgDomain}] ✅ Successfully inserted batch of ${relationshipBatch.length} relationships`);
+        }
+      },
+      `RelationshipsOnly:${orgDomain}`,
+      100,
+      500
+    );
+
+    monitor.logResourceUsage(`RelationshipsOnly:${orgDomain} COMPLETE`);
+
+    return NextResponse.json({
+      success: true,
+      message: `Intelligent relationships reconstruction completed for ${orgDomain}`,
+      results: {
+        approach: 'owner-based reconstruction (partial but accurate)',
+        existingUsers: existingUsers.length,
+        existingApplications: existingApps.length,
+        existingRelationships: existingRelationships.length,
+        newRelationshipsCreated: relationshipsToCreate.length,
+        totalRelationshipsAfter: existingRelationships.length + relationshipsToCreate.length,
+        analysis: analysisResults,
+        dataQuality: 'High accuracy for owner relationships, but incomplete coverage',
+        nextSteps: relationshipsToCreate.length < analysisResults.estimatedTotalRelationships 
+          ? 'Consider re-authentication with admin scopes for complete data'
+          : 'Relationship data appears complete'
+      }
+    });
+
+  } catch (error) {
+    console.error(`[RelationshipsOnly:${orgDomain}] ❌ Error:`, error);
+    monitor.logResourceUsage(`RelationshipsOnly:${orgDomain} ERROR`);
+    
+    return NextResponse.json({
+      error: 'Failed to process relationships',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
+} 
