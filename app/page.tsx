@@ -61,6 +61,10 @@ import { FeedbackChat } from "@/components/ui/feedback";
 import { Share } from "@/components/ui/share";
 // Import the new SettingsModal component
 import SettingsModal from "@/app/components/SettingsModal";
+// Import the Sidebar component
+import Sidebar from "@/app/components/Sidebar";
+// Import the OrganizationSettingsDialog component
+import { OrganizationSettingsDialog } from "@/app/components/OrganizationSettingsDialog";
 // Import risk assessment utilities
 import { HIGH_RISK_SCOPES, MEDIUM_RISK_SCOPES } from "@/lib/risk-assessment";
 
@@ -201,7 +205,32 @@ export default function ShadowITDashboard() {
   // Add new state for settings
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
+  // Add sidebar state management
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [currentView, setCurrentView] = useState<string>("applications")
+
   const [authProvider, setAuthProvider] = useState<'google' | 'microsoft' | null>(null);
+
+  // Sidebar handlers
+  const handleSidebarToggle = () => {
+    setIsSidebarOpen(!isSidebarOpen)
+  }
+
+  const handleSidebarCollapse = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed)
+  }
+
+  const handleViewChange = (view: string) => {
+    setCurrentView(view)
+    if (view === "applications") {
+      setMainView("list")
+    } else if (view === "ai-risk-analysis") {
+      setMainView("Insights")
+    }
+    // Close sidebar on mobile after selection
+    setIsSidebarOpen(false)
+  }
 
   const [isPolling, setIsPolling] = useState(false)
   const [uncategorizedApps, setUncategorizedApps] = useState<Set<string>>(new Set())
@@ -209,8 +238,6 @@ export default function ShadowITDashboard() {
   const pollingInterval = useRef<NodeJS.Timeout | null>(null);
 
   const [userInfo, setUserInfo] = useState<{ name: string; email: string; avatar_url: string | null } | null>(null);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
 
   // Add this state near your other useState declarations
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -233,6 +260,27 @@ export default function ShadowITDashboard() {
   const [notes, setNotes] = useState<string>("");
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<{type: "success" | "error", text: string} | null>(null);
+
+  // Default organization settings for the OrganizationSettingsDialog
+  const [orgSettings, setOrgSettings] = useState({
+    bucketWeights: {
+      dataPrivacy: 20,
+      securityAccess: 25,
+      businessImpact: 20,
+      aiGovernance: 15,
+      vendorProfile: 20
+    },
+    aiMultipliers: {
+      native: { dataPrivacy: 1.5, securityAccess: 1.8, businessImpact: 1.3, aiGovernance: 2.0, vendorProfile: 1.2 },
+      partial: { dataPrivacy: 1.2, securityAccess: 1.4, businessImpact: 1.1, aiGovernance: 1.5, vendorProfile: 1.1 },
+      none: { dataPrivacy: 1.0, securityAccess: 1.0, businessImpact: 1.0, aiGovernance: 1.0, vendorProfile: 1.0 }
+    },
+    scopeMultipliers: {
+      high: { dataPrivacy: 1.8, securityAccess: 2.0, businessImpact: 1.4, aiGovernance: 1.6, vendorProfile: 1.3 },
+      medium: { dataPrivacy: 1.3, securityAccess: 1.5, businessImpact: 1.2, aiGovernance: 1.2, vendorProfile: 1.1 },
+      low: { dataPrivacy: 1.0, securityAccess: 1.0, businessImpact: 1.0, aiGovernance: 1.0, vendorProfile: 1.0 }
+    }
+  });
 
   // Helper function to redirect to Google consent screen
   const redirectToGoogleConsent = () => {
@@ -801,7 +849,7 @@ export default function ShadowITDashboard() {
       }
 
       const fetchOrgIdValue = fetchOrgId || '';
-      const response = await fetch(`/tools/shadow-it-scan/api/applications?orgId=${fetchOrgIdValue}`);
+      const response = await fetch(`/api/applications?orgId=${fetchOrgIdValue}`);
       if (!response.ok) {
         throw new Error('Failed to fetch applications');
       }
@@ -1881,22 +1929,7 @@ export default function ShadowITDashboard() {
     return { nodes, edges };
   }
 
-  // Add click outside handler for profile dropdown
-  useEffect(() => {
-    // Only add event listeners in browser environment
-    if (typeof window !== 'undefined') {
-      function handleClickOutside(event: MouseEvent) {
-        if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-          setIsProfileOpen(false);
-        }
-      }
 
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-  }, []);
 
   // Helper function to generate a random ID
   const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -2427,68 +2460,28 @@ export default function ShadowITDashboard() {
   };
 
   return (
-    <div className="mx-auto font-sans text-gray-900 bg-[#f8f5f3]">
+    <div className="min-h-screen font-sans text-gray-900 bg-[#f8f5f3]">
+      {/* Sidebar - only show when authenticated */}
+      {isAuthenticated() && (
+        <Sidebar
+          isOpen={isSidebarOpen}
+          isCollapsed={isSidebarCollapsed}
+          onToggle={handleSidebarToggle}
+          onCollapse={handleSidebarCollapse}
+          currentView={currentView}
+          onViewChange={handleViewChange}
+          userInfo={userInfo}
+          onSignOut={handleSignOut}
+        />
+      )}
 
-      <header className="fixed top-0 left-0 right-0 z-50 bg-[#f8f5f3] border-b">
-        <div className="flex items-center align-middle justify-between max-w-7xl mx-auto px-4 sm:px-8 py-3">
-          <div className="flex items-center gap-2.5">
-            <a href="https://www.stitchflow.com" target="_blank" rel="noopener noreferrer" className="flex items-center">
-              <img
-                src="/Stitchflow.png"
-                alt="Stitchflow"
-                className="h-6 w-auto"
-              />
-            </a>
-            <span className="text-lg font-medium font-['Epilogue', sans-serif] text-gray-900 flex items-center">Shadow IT Scanner</span>
-          </div>
-        </div>
-      </header>
-
-       
-          <div className="text-center space-y-4 sm:space-y-6 py-6 sm:py-16 px-4 max-w-[1900px] mx-auto">
-            <a
-              href="https://www.stitchflow.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-medium hover:bg-primary/15 transition-colors"
-            >
-               Free tool from Stitchflow
-              <ExternalLink className="h-3 w-3" />
-            </a>
-            
-            <div className="space-y-4 sm:space-y-6">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mx-auto max-w-[900px] leading-tight">
-               Free Shadow IT Scanner 
-              </h1>
-              
-              <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Discover the apps your employees are using, detect potential risks by tracking app scopes, and prevent compliance gaps before they escalate.
-              </p>
-              {!isAuthenticated() && (
-                <div className="mt-6 sm:mt-8 flex justify-center">
-                  <Button_website 
-                    onClick={() => setShowLoginModal(true)} 
-                    variant="primary" // This variant will be styled by the className
-                    type="button"
-                    // className combines custom button's base styles with overrides for white bg, dark text, border, and new padding
-                    className="py-3 px-8 w-auto flex group z-50 pointer-events-auto bg-white hover:bg-gray-100 text-[#363338] border border-gray-300 rounded-lg"
-                  >
-                    <div className="flex justify-center items-center">
-                        <span className="font-medium text-base leading-4 whitespace-nowrap">
-                            Start your scan
-                        </span>
-                        <ArrowRight className="ml-2 h-4 w-0 flex-shrink-0 transition-all ease-in duration-200 group-hover:w-4 group-active:translate-x-1.5" />
-                    </div>
-                  </Button_website>
-                </div>
-              )}
-            </div>
-          </div>
-
-
-        
-
-      <main className="pt-[40px] pl-10 pr-10 bg-white mt-4 pb-10">
+      <main className={`min-h-screen bg-white transition-all duration-300 ${
+        isAuthenticated() 
+          ? `${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-56'}` 
+          : ''
+      }`}>
+        <div className="h-screen overflow-y-auto">
+          <div className="px-6 py-3">
 
             {!isAuthenticated() && (
               <div className="bg-black border border-gray-800 rounded-lg p-4 mb-6">
@@ -2516,7 +2509,18 @@ export default function ShadowITDashboard() {
               </div>
             )}
 
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              {/* Mobile menu button - only show when authenticated */}
+              {isAuthenticated() && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSidebarToggle}
+                  className="lg:hidden mr-2 p-1.5 hover:bg-gray-100"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+              )}
               <h2 className="text-xl font-bold">Shadow IT Overview</h2>
               <Share url="https://www.stitchflow.com/tools/shadow-it-scan" />
             </div>
@@ -2566,6 +2570,7 @@ export default function ShadowITDashboard() {
                       variant={mainView === "list" ? "default" : "outline"} 
                       onClick={() => {
                         setMainView("list");
+                        setCurrentView("applications");
                         handleCloseUserModal();
                       }}
                       className={mainView === "list" ? "bg-gray-900 hover:bg-gray-800" : ""}
@@ -2575,7 +2580,18 @@ export default function ShadowITDashboard() {
                     </Button>
                     <Button 
                       variant={mainView === "Insights" ? "default" : "outline"} 
-                      onClick={handleViewInsights}
+                      onClick={() => {
+                        if (checkAuth(() => {
+                          setMainView("Insights");
+                          setCurrentView("ai-risk-analysis");
+                          handleCloseUserModal();
+                        })) {
+                          // If authenticated, update immediately
+                          setMainView("Insights");
+                          setCurrentView("ai-risk-analysis");
+                          handleCloseUserModal();
+                        }
+                      }}
                       className={mainView === "Insights" ? "bg-gray-900 hover:bg-gray-800" : ""}
                     >
                       <BarChart3 className="h-4 w-4 mr-2" />
@@ -2590,77 +2606,12 @@ export default function ShadowITDashboard() {
                       Email Notifications
                     </Button>
 
-                    {/* Only show profile if authenticated */}
+                    {/* Only show organization settings if authenticated */}
                     {isAuthenticated() && (
-                    <div className="relative" ref={profileRef}>
-                      <button
-                        onClick={() => setIsProfileOpen(!isProfileOpen)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setIsProfileOpen(!isProfileOpen);
-                          } else if (e.key === 'Escape') {
-                            setIsProfileOpen(false);
-                          }
-                        }}
-                        aria-expanded={isProfileOpen}
-                        aria-haspopup="true"
-                        aria-label="User menu"
-                        className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors overflow-hidden"
-                      >
-                        {userInfo?.avatar_url ? (
-                          <img 
-                            src={userInfo.avatar_url} 
-                            alt={userInfo.name || "User"} 
-                            className="h-10 w-10 object-cover"
-                          />
-                        ) : userInfo?.name ? (
-                          <span className="text-sm font-medium">
-                            {userInfo.name.split(' ').map(n => n[0]).join('')}
-                          </span>
-                        ) : (
-                          <User className="h-5 w-5 text-gray-600" />
-                        )}
-                      </button>
-
-                      {isProfileOpen && (
-                        <div 
-                          className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-100 py-2 z-50"
-                          role="menu"
-                          aria-orientation="vertical"
-                          aria-labelledby="user-menu"
-                        >
-                          {userInfo && (
-                            <>
-                              <div className="px-4 py-3 border-b border-gray-100">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <div>
-                                    <p className="font-medium text-gray-900">{userInfo.name}</p>
-                                    <p className="text-sm text-gray-500 truncate max-w-[200px]">{userInfo.email}</p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="px-2 py-2">
-                                <button
-                                  onClick={handleSignOut}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                      e.preventDefault();
-                                      handleSignOut();
-                                    }
-                                  }}
-                                  role="menuitem"
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                                >
-                                  <LogOut className="h-4 w-4" />
-                                  Sign out
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                      <OrganizationSettingsDialog
+                        initialSettings={orgSettings}
+                        onSave={setOrgSettings}
+                      />
                     )}
                   </div>
                 </div>
@@ -3705,6 +3656,7 @@ export default function ShadowITDashboard() {
                     variant={mainView === "list" ? "default" : "outline"} 
                     onClick={() => {
                       setMainView("list");
+                      setCurrentView("applications");
                       handleCloseUserModal();
                     }}
                     className={mainView === "list" ? "bg-gray-900 hover:bg-gray-800" : ""}
@@ -3714,7 +3666,11 @@ export default function ShadowITDashboard() {
                   </Button>
                   <Button 
                     variant={mainView === "Insights" ? "default" : "outline"} 
-                    onClick={handleViewInsights}
+                    onClick={() => {
+                      setMainView("Insights");
+                      setCurrentView("ai-risk-analysis");
+                      handleCloseUserModal();
+                    }}
                     className={mainView === "Insights" ? "bg-gray-900 hover:bg-gray-800" : ""}
                   >
                     <BarChart3 className="h-4 w-4 mr-2" />
@@ -3729,77 +3685,12 @@ export default function ShadowITDashboard() {
                     Email Notifications
                   </Button>
 
-                  {/* Only show profile if authenticated */}
+                  {/* Only show organization settings if authenticated */}
                   {isAuthenticated() && (
-                  <div className="relative" ref={profileRef}>
-                    <button
-                      onClick={() => setIsProfileOpen(!isProfileOpen)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setIsProfileOpen(!isProfileOpen);
-                        } else if (e.key === 'Escape') {
-                          setIsProfileOpen(false);
-                        }
-                      }}
-                      aria-expanded={isProfileOpen}
-                      aria-haspopup="true"
-                      aria-label="User menu"
-                      className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors overflow-hidden"
-                    >
-                      {userInfo?.avatar_url ? (
-                        <img 
-                          src={userInfo.avatar_url} 
-                          alt={userInfo.name || "User"} 
-                          className="h-10 w-10 object-cover"
-                        />
-                      ) : userInfo?.name ? (
-                        <span className="text-sm font-medium">
-                          {userInfo.name.split(' ').map(n => n[0]).join('')}
-                        </span>
-                      ) : (
-                        <User className="h-5 w-5 text-gray-600" />
-                      )}
-                    </button>
-
-                    {isProfileOpen && (
-                      <div 
-                        className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-100 py-2 z-50"
-                        role="menu"
-                        aria-orientation="vertical"
-                        aria-labelledby="user-menu"
-                      >
-                        {userInfo && (
-                          <>
-                            <div className="px-4 py-3 border-b border-gray-100">
-                              <div className="flex items-center gap-3 mb-2">
-                                <div>
-                                  <p className="font-medium text-gray-900">{userInfo.name}</p>
-                                  <p className="text-sm text-gray-500 truncate max-w-[200px]">{userInfo.email}</p>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="px-2 py-2">
-                              <button
-                                onClick={handleSignOut}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    handleSignOut();
-                                  }
-                                }}
-                                role="menuitem"
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                              >
-                                <LogOut className="h-4 w-4" />
-                                Sign out
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                    <OrganizationSettingsDialog
+                      initialSettings={orgSettings}
+                      onSave={setOrgSettings}
+                    />
                   )}
                 </div>
               </div>
@@ -4412,108 +4303,16 @@ export default function ShadowITDashboard() {
               </div>
             </div>
           )}
-       </main>
+          </div>
+        </div>
+      </main>
 
       {/* Use the new SettingsModal component */}
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 
       />
-
-      <div className="max-w-[70rem] mx-auto px-4 sm:px-8">
-          <h2 className="text-2xl font-semibold mb-8 sm:mb-14 text-gray-900 text-center mt-11">
-          Complete visibility. Real control. All in one place
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
-            <div className="flex flex-col p-8 bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="bg-primary/10 rounded-full w-12 h-12 flex items-center justify-center mb-6">
-                <ScanSearch className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Spot unauthorized apps instantly</h3>
-              <p className="text-gray-600 text-sm leading-relaxed">
-              Automatically detect all the AI and SaaS apps your employees are using across Google Workspace or Microsoft 365. Identify your org's managed apps and mark specific apps for review.
-              </p>
-            </div>
-            <div className="flex flex-col p-8 bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="relative">
-            
-              <div className="bg-primary/10 rounded-full w-12 h-12 flex items-center justify-center mb-6">
-                <ShieldAlert className="h-6 w-6 text-primary" />
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Smart risk assessment</h3>
-              <p className="text-gray-600 text-sm leading-relaxed">
-              Get instant visibility into OAuth scopes and see clear risk indicators based on scope permissions per user.
-              </p>
-            </div>
-            <div className="flex flex-col p-8 bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="relative">
-                <div className="absolute -top-3 -right-3">
-                  <div className="bg-black text-white text-xs font-medium px-3 py-1 rounded-full flex items-center gap-1">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M13 3L4 14H13L11 21L20 10H11L13 3Z" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    Stitchflow Exclusive
-                  </div>
-                </div>
-              <div className="bg-primary/10 rounded-full w-12 h-12 flex items-center justify-center mb-6">
-                <ChartNoAxesCombined className="h-6 w-6 text-primary" />
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Granular insights</h3>
-              <p className="text-gray-600 text-sm leading-relaxed">
-            View app insights by category, risk, and scope groups—all in one place. Catch risky behavior before it becomes a problem.
-              </p>
-            </div>
-            <div className="flex flex-col p-8 bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="relative">
-                <div className="absolute -top-3 -right-3">
-                  <div className="bg-black text-white text-xs font-medium px-3 py-1 rounded-full flex items-center gap-1">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M13 3L4 14H13L11 21L20 10H11L13 3Z" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    Stitchflow Exclusive
-                  </div>
-                </div>
-              <div className="bg-primary/10 rounded-full w-12 h-12 flex items-center justify-center mb-6">
-                <Bell className="h-6 w-6 text-primary" />
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Continuous monitoring & real-time alerts</h3>
-              <p className="text-gray-600 text-sm leading-relaxed">
-              Get notified when new apps or users appear, or when high-risk apps gain new users. Your environment, under control.
-              </p>
-            </div>
-          </div>
-      </div>
-
-      <FAQ />
-
-      <WhyStitchflow className="bg-[#f8f5f3] mb-8" />
-
-      <FeedbackChat/>
-
-      <footer className="bottom-0 left-0 right-0 flex justify-between items-center px-4 py-3 mt-4 bg-[#1a1a2e] text-white">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="hover:text-blue-500 transition-colors">
-            stitchflow.com
-          </Link>
-          <Link href="/privacy" className="hover:text-blue-500 transition-colors">
-            Privacy Policy
-          </Link>
-          <Link href="/terms-of-service" className="hover:text-blue-500 transition-colors">
-            Terms of Service
-          </Link>
-        </div>
-        <a 
-          href="mailto:contact@stitchflow.io" 
-          className="hover:text-blue-500 transition-colors"
-        >
-          contact@stitchflow.io
-        </a>
-      </footer>
-
-      
+    
 
       {/* Update the custom styles */}
       <style jsx global>{`
