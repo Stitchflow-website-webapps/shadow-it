@@ -515,12 +515,80 @@ async function mergeDuplicateApplications(orgId: string) {
     }
 
     // Clean up any duplicate user_applications that might have been created
-    const { error: cleanupError } = await supabaseAdmin.rpc('remove_duplicate_user_applications', {
-      org_id: orgId
-    });
+    console.log('Cleaning up duplicate user_applications...');
+    
+    try {
+      // Find and remove duplicate user_applications, keeping the one with the most scopes
+      const { data: duplicateUserApps, error: fetchDuplicatesError } = await supabaseAdmin
+        .from('user_applications')
+        .select(`
+          id,
+          user_id,
+          application_id,
+          scopes,
+          created_at,
+          applications!inner(organization_id)
+        `)
+        .eq('applications.organization_id', orgId);
 
-    if (cleanupError) {
-      console.warn('Error cleaning up duplicate user_applications:', cleanupError);
+      if (fetchDuplicatesError) {
+        console.warn('Error fetching user_applications for cleanup:', fetchDuplicatesError);
+      } else if (duplicateUserApps) {
+        // Group by user_id + application_id to find duplicates
+        const userAppGroups = new Map<string, any[]>();
+        
+        duplicateUserApps.forEach(ua => {
+          const key = `${ua.user_id}-${ua.application_id}`;
+          if (!userAppGroups.has(key)) {
+            userAppGroups.set(key, []);
+          }
+          userAppGroups.get(key)!.push(ua);
+        });
+
+        // Find groups with duplicates
+        const duplicateGroups = Array.from(userAppGroups.values()).filter(group => group.length > 1);
+        
+        if (duplicateGroups.length > 0) {
+          console.log(`Found ${duplicateGroups.length} groups of duplicate user_applications`);
+          
+          const idsToDelete: string[] = [];
+          
+          duplicateGroups.forEach(group => {
+            // Sort by scope count (descending) then by created_at (ascending) to keep the best one
+            group.sort((a, b) => {
+              const scopeCountA = (a.scopes || []).length;
+              const scopeCountB = (b.scopes || []).length;
+              
+              if (scopeCountA !== scopeCountB) {
+                return scopeCountB - scopeCountA; // More scopes first
+              }
+              
+              return new Date(a.created_at).getTime() - new Date(b.created_at).getTime(); // Earlier created first
+            });
+            
+            // Keep the first one, delete the rest
+            const toDelete = group.slice(1);
+            idsToDelete.push(...toDelete.map(ua => ua.id));
+          });
+          
+          if (idsToDelete.length > 0) {
+            const { error: deleteError } = await supabaseAdmin
+              .from('user_applications')
+              .delete()
+              .in('id', idsToDelete);
+              
+            if (deleteError) {
+              console.warn('Error deleting duplicate user_applications:', deleteError);
+            } else {
+              console.log(`Successfully deleted ${idsToDelete.length} duplicate user_applications`);
+            }
+          }
+        } else {
+          console.log('No duplicate user_applications found');
+        }
+      }
+    } catch (cleanupError) {
+      console.warn('Error during user_applications cleanup:', cleanupError);
     }
 
     const finalCount = appsByName.size;
