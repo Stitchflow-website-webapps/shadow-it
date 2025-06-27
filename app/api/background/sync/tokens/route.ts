@@ -440,9 +440,9 @@ async function processTokens(
         // Determine highest risk level based on ALL scopes combined
         const allScopesForRiskEvaluation = new Set<string>();
         tokens.forEach((token: any) => {
-          if (token.scopes && Array.isArray(token.scopes)) {
-            token.scopes.forEach((scope: string) => allScopesForRiskEvaluation.add(scope));
-          }
+          // Use the comprehensive extractScopesFromToken function instead of just checking token.scopes
+          const tokenScopes = extractScopesFromToken(token);
+          tokenScopes.forEach((scope: string) => allScopesForRiskEvaluation.add(scope));
         });
 
         // Now evaluate risk based on the combined set of scopes
