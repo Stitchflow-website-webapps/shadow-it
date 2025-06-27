@@ -386,6 +386,10 @@ export async function POST(request: Request) {
       return await mergeDuplicateApplications(orgId);
     }
 
+    if (action === 'fix_risk_levels') {
+      return await fixApplicationRiskLevels(orgId);
+    }
+
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
     console.error('Error in applications POST:', error);
@@ -610,5 +614,128 @@ async function mergeDuplicateApplications(orgId: string) {
   } catch (error) {
     console.error('Error merging duplicate applications:', error);
     return NextResponse.json({ error: 'Failed to merge duplicates', details: (error as Error).message }, { status: 500 });
+  }
+}
+
+async function fixApplicationRiskLevels(orgId: string) {
+  try {
+    console.log(`Starting risk level fix for organization: ${orgId}`);
+
+    // Get all applications with their user_applications and scopes
+    const { data: applications, error: fetchError } = await supabaseAdmin
+      .from('applications')
+      .select(`
+        id,
+        name,
+        all_scopes,
+        user_applications!inner (
+          scopes,
+          user:users!inner (
+            id
+          )
+        )
+      `)
+      .eq('organization_id', orgId);
+
+    if (fetchError) {
+      throw fetchError;
+    }
+
+    if (!applications || applications.length === 0) {
+      return NextResponse.json({ message: 'No applications found' });
+    }
+
+    console.log(`Found ${applications.length} applications to fix`);
+
+    let fixedCount = 0;
+    let highRiskCount = 0;
+    let mediumRiskCount = 0;
+    let lowRiskCount = 0;
+
+    // Process each application
+    for (const app of applications) {
+      try {
+        // Collect all scopes from user_applications for this app
+        const allUserScopes = new Set<string>();
+        
+        if (app.user_applications && Array.isArray(app.user_applications)) {
+          app.user_applications.forEach((ua: any) => {
+            if (ua.scopes && Array.isArray(ua.scopes)) {
+              ua.scopes.forEach((scope: string) => allUserScopes.add(scope));
+            }
+          });
+        }
+
+        // Also include scopes from all_scopes if available
+        if (app.all_scopes && Array.isArray(app.all_scopes)) {
+          app.all_scopes.forEach((scope: string) => allUserScopes.add(scope));
+        }
+
+        const allScopes = Array.from(allUserScopes);
+        
+        // Recalculate risk level based on all scopes
+        const newRiskLevel = determineRiskLevel(allScopes);
+        const normalizedRiskLevel = newRiskLevel.toUpperCase();
+        
+        // Update the application with correct risk level and scope count
+        const { error: updateError } = await supabaseAdmin
+          .from('applications')
+          .update({
+            risk_level: normalizedRiskLevel,
+            total_permissions: allScopes.length,
+            all_scopes: allScopes,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', app.id);
+
+        if (updateError) {
+          console.error(`Error updating app ${app.name} (${app.id}):`, updateError);
+          continue;
+        }
+
+        // Count by risk level
+        switch (normalizedRiskLevel) {
+          case 'HIGH':
+            highRiskCount++;
+            break;
+          case 'MEDIUM':
+            mediumRiskCount++;
+            break;
+          default:
+            lowRiskCount++;
+        }
+
+        fixedCount++;
+        
+        if (normalizedRiskLevel !== 'LOW') {
+          console.log(`Fixed ${app.name}: ${allScopes.length} scopes → ${normalizedRiskLevel} risk`);
+        }
+
+      } catch (error) {
+        console.error(`Error processing app ${app.name}:`, error);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Successfully fixed risk levels for ${fixedCount} applications`,
+      summary: {
+        totalProcessed: fixedCount,
+        highRisk: highRiskCount,
+        mediumRisk: mediumRiskCount,
+        lowRisk: lowRiskCount
+      },
+      details: {
+        originalApplications: applications.length,
+        applicationsFixed: fixedCount
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fixing application risk levels:', error);
+    return NextResponse.json({ 
+      error: 'Failed to fix risk levels', 
+      details: (error as Error).message 
+    }, { status: 500 });
   }
 } 
