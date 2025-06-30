@@ -191,9 +191,13 @@ export async function GET(request: Request) {
           (ua.scopes || []).forEach(scope => allScopes.add(scope));
         });
         
-        // Track highest risk level
-        if (app.risk_level === 'HIGH') highestRiskLevel = 'HIGH';
-        else if (app.risk_level === 'MEDIUM' && highestRiskLevel !== 'HIGH') highestRiskLevel = 'MEDIUM';
+        // Track highest risk level (case-insensitive)
+        const currentRisk = (app.risk_level || 'low').toUpperCase();
+        if (currentRisk === 'HIGH') {
+          highestRiskLevel = 'HIGH';
+        } else if (currentRisk === 'MEDIUM' && highestRiskLevel !== 'HIGH') {
+          highestRiskLevel = 'MEDIUM';
+        }
         
         // Use the highest permission count
         totalPermissions = Math.max(totalPermissions, app.total_permissions || 0);
@@ -464,8 +468,12 @@ async function mergeDuplicateApplications(orgId: string) {
         }
 
         // Track highest risk level
-        if (app.risk_level === 'HIGH') highestRiskLevel = 'HIGH';
-        else if (app.risk_level === 'MEDIUM' && highestRiskLevel !== 'HIGH') highestRiskLevel = 'MEDIUM';
+        const currentRisk = (app.risk_level || 'low').toUpperCase();
+        if (currentRisk === 'HIGH') {
+          highestRiskLevel = 'HIGH';
+        } else if (currentRisk === 'MEDIUM' && highestRiskLevel !== 'HIGH') {
+          highestRiskLevel = 'MEDIUM';
+        }
 
         // Use highest permission count
         totalPermissions = Math.max(totalPermissions, app.total_permissions || 0);
