@@ -214,55 +214,53 @@ async function processRelations(
     
     const existingRelMap = new Map<string, {id: string, scopes: string[]}>();
     
-    // Use resource-aware batching for fetching existing relations
-    let offset = 0;
-    const fetchBatchSize = 300; // Conservative batch size for memory constraints
+    // Get app IDs for the current organization
+    const appIds = appMap.map(app => app.appId);
     
-    while (true) {
-      // Wait for resources before each fetch
-      await monitor.waitForResources();
+    // Only fetch if there are app IDs to look for
+    if (appIds.length > 0) {
+      // Use resource-aware batching for fetching existing relations
+      const fetchBatchSize = 500; // Increased batch size for efficiency
       
-      const { data: existingRelations, error: relError } = await supabaseAdmin
-        .from('user_applications')
-        .select('id, user_id, application_id, scopes')
-        .range(offset, offset + fetchBatchSize - 1);
-      
-      if (relError) {
-        console.error('Error fetching existing relationships:', relError);
-        throw relError;
+      for (let i = 0; i < appIds.length; i += fetchBatchSize) {
+        const batchAppIds = appIds.slice(i, i + fetchBatchSize);
+        
+        // Wait for resources before each fetch
+        await monitor.waitForResources();
+        
+        const { data: existingRelations, error: relError } = await supabaseAdmin
+          .from('user_applications')
+          .select('id, user_id, application_id, scopes')
+          .in('application_id', batchAppIds); // Filter by application_id
+        
+        if (relError) {
+          console.error('Error fetching existing relationships:', relError);
+          throw relError;
+        }
+        
+        if (existingRelations && existingRelations.length > 0) {
+          // Add to our map
+          existingRelations.forEach(rel => {
+            const key = `${rel.user_id}-${rel.application_id}`;
+            existingRelMap.set(key, {
+              id: rel.id,
+              scopes: rel.scopes || []
+            });
+          });
+        }
+        
+        // Log progress and resource usage
+        monitor.logResourceUsage(`Relations ${sync_id} FETCH BATCH ${Math.floor(i / fetchBatchSize) + 1}`);
+        
+        // Adaptive delay based on resource usage
+        const usage = monitor.getCurrentUsage();
+        const memoryRatio = Math.max(usage.heapUsed / 1600, usage.rss / 1600);
+        const delay = memoryRatio > 0.7 ? 200 : memoryRatio > 0.5 ? 100 : 50;
+        
+        if (i + fetchBatchSize < appIds.length) {
+            await sleep(delay);
+        }
       }
-      
-      if (!existingRelations || existingRelations.length === 0) {
-        break; // No more data
-      }
-      
-      // Add to our map
-      existingRelations.forEach(rel => {
-        const key = `${rel.user_id}-${rel.application_id}`;
-        existingRelMap.set(key, {
-          id: rel.id,
-          scopes: rel.scopes || []
-        });
-      });
-      
-      // If we got less than the batch size, we're done
-      if (existingRelations.length < fetchBatchSize) {
-        break;
-      }
-      
-      offset += fetchBatchSize;
-      
-      // Log progress and resource usage
-      if (offset % (fetchBatchSize * 3) === 0) {
-        monitor.logResourceUsage(`Relations ${sync_id} FETCH ${offset}`);
-      }
-      
-      // Adaptive delay based on resource usage
-      const usage = monitor.getCurrentUsage();
-      const memoryRatio = Math.max(usage.heapUsed / 1600, usage.rss / 1600);
-      const delay = memoryRatio > 0.7 ? 200 : memoryRatio > 0.5 ? 100 : 50;
-      
-      await sleep(delay);
     }
     
     console.log(`[Relations ${sync_id}] Found ${existingRelMap.size} existing relationships`);
