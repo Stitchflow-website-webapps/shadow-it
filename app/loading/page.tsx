@@ -209,14 +209,7 @@ function LoadingContent() {
           {error ? (
             <div className="text-red-500 mb-4 p-4 bg-red-50 rounded-md">
               {error}
-              <div className="mt-4">
-                <Button 
-                  onClick={goToDashboard}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-                >
-                  Go to Dashboard
-                </Button>
-              </div>
+              
             </div>
           ) : (
             <>
