@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     // 2. Fetch all organizations
     const { data: organizations, error: orgError } = await supabaseAdmin
       .from('organizations')
-      .select('domain, auth_provider');
+      .select('id, domain, auth_provider');
 
     if (orgError) {
       console.error('[CronTrigger] Error fetching organizations:', orgError);
@@ -31,10 +31,17 @@ export async function POST(request: Request) {
     
     console.log(`[CronTrigger] Found ${organizations.length} organizations to process.`);
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://www.managed.stitchflow.com";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://www.stitchflow.com/tools/shadow-it-scan";
+    const skipOrgId = '354c2aee-f32e-44b8-b820-9e393ff690b9'; // Organization to skip
 
     // 3. Trigger the specific cron for each organization
     for (const org of organizations) {
+      // Skip the specific organization
+      if (org.id === skipOrgId) {
+        console.log(`[CronTrigger] Skipping organization ${org.domain} (ID: ${org.id}) as requested`);
+        continue;
+      }
+
       if (!org.domain || !org.auth_provider) {
         console.warn(`[CronTrigger] Skipping organization with missing domain or provider.`, org);
         continue;
