@@ -231,7 +231,17 @@ export default function ShadowITDashboard() {
     if (view === "applications") {
       setMainView("list")
     } else if (view === "ai-risk-analysis") {
-      setMainView("Insights")
+      // Route to the dedicated AI Risk Analysis page
+      router.push("/Risk_analysis")
+      return
+    } else if (view === "email-notifications") {
+      // Route to the Email Notifications settings page
+      router.push("/email-notifications")
+      return
+    } else if (view === "organization-settings") {
+      // Route to the Organization Settings page
+      router.push("/organization-settings")
+      return
     }
     // Close sidebar on mobile after selection
     setIsSidebarOpen(false)
@@ -679,315 +689,10 @@ export default function ShadowITDashboard() {
       }
       
       if (!isAuthenticated()) {
-        console.log('Not authenticated, loading dummy data');
-        // Use dummy data if no cookies found
-        const dummyData = [
-          {
-            "Apps": "Slack",
-            "Category": "Productivity & Collaboration",
-            "Users": [
-              "Adam Williams",
-              "Ashley Parker",
-              "Brooke Evans",
-              "Daniel Carter",
-              "Diana Myers",
-              "Donna Reynolds",
-              "Grace Henderson",
-              "Julia Scott",
-              "Jack Thompson",
-              "James Bennett",
-              "Joseph Brooks",
-              "Kevin Anderson",
-              "Matthew Collins",
-              "Nathan Harris",
-              "Peter Russell",
-              "Patrick Walsh",
-              "Paul Simmons",
-              "Ryan Mitchell",
-              "Sandbox User",
-              "Samuel Hayes",
-              "Steven Morgan",
-              "Shane Robinson",
-              "Sara Price",
-              "Victoria Barnes",
-              "Taylor Monroe",
-              "Thomas Greene",
-              "Vanessa Reed",
-              "Valerie Patterson",
-              "Violet Richardson"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/userinfo.email",
-              "openid",
-              "https://www.googleapis.com/auth/calendar.events",
-              "https://www.googleapis.com/auth/activity",
-              "https://www.googleapis.com/auth/drive.activity",
-              "https://www.googleapis.com/auth/calendar.readonly",
-              "https://www.googleapis.com/auth/drive",
-              "https://www.googleapis.com/auth/admin.directory.group.readonly",
-              "https://www.googleapis.com/auth/admin.directory.group.member.readonly",
-              "https://www.googleapis.com/auth/admin.directory.user.readonly"
-            ],
-            "Total Scopes": 11,
-            "Risk": "High",
-            "Status": "Managed"
-          },
-          {
-            "Apps": "HubSpot",
-            "Category": "Sales & Marketing",
-            "Users": [
-              "Peter Russell",
-              "Ashley Parker",
-              "Adam Williams",
-              "Andrew Patterson",
-              "Grace Henderson",
-              "Joseph Brooks",
-              "Jack Thompson",
-              "James Bennett",
-              "Kevin Anderson",
-              "Matthew Collins",
-              "Nathan Harris",
-              "Ryan Mitchell",
-              "Ray Smith",
-              "Sandbox User",
-              "Samuel Hayes",
-              "Shane Robinson",
-              "Victoria Barnes",
-              "Sandbox User",
-              "Taylor Monroe",
-              "Thomas Greene"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/userinfo.email",
-              "openid",
-              "https://www.googleapis.com/auth/calendar.events",
-              "https://www.googleapis.com/auth/calendar.readonly",
-              "https://www.googleapis.com/auth/gmail.readonly",
-              "https://www.googleapis.com/auth/gmail.send"
-            ],
-            "Total Scopes": 7,
-            "Risk": "High",
-            "Status": "Managed"
-          },
-          {
-            "Apps": "Kandji",
-            "Category": "Identity & Access Management",
-            "Users": [
-              "Ashley Parker",
-              "Peter Russell",
-              "Shane Robinson",
-              "Taylor Monroe"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/userinfo.email",
-              "openid",
-              "https://www.googleapis.com/auth/admin.directory.group.readonly",
-              "https://www.googleapis.com/auth/admin.directory.user.readonly"
-            ],
-            "Total Scopes": 5,
-            "Risk": "High",
-            "Status": "Managed"
-          },
-          {
-            "Apps": "ClickUp",
-            "Category": "Productivity & Collaboration",
-            "Users": [
-              "Ashley Parker",
-              "Diana Myers",
-              "Grace Henderson",
-              "Julia Scott",
-              "Jack Thompson",
-              "James Bennett",
-              "Samuel Hayes",
-              "Thomas Greene",
-              "Vanessa Reed"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/userinfo.email",
-              "openid",
-              "https://www.googleapis.com/auth/calendar"
-            ],
-            "Total Scopes": 4,
-            "Risk": "Medium",
-            "Status": "Unmanaged"
-          },
-          {
-            "Apps": "Zoom",
-            "Category": "Productivity & Collaboration",
-            "Users": [
-              "Adam Williams",
-              "Ashley Parker",
-              "Victor Sanders",
-              "Brooke Evans",
-              "Daniel Carter",
-              "Diana Myers",
-              "Donna Reynolds",
-              "Grace Henderson",
-              "Julia Scott",
-              "Joseph Brooks",
-              "Jack Thompson",
-              "James Bennett",
-              "Joseph Brooks",
-              "Kevin Anderson",
-              "Matthew Collins",
-              "Peter Russell",
-              "Patrick Walsh",
-              "Sandbox User",
-              "Samuel Hayes",
-              "Shane Robinson",
-              "Sara Price",
-              "Victoria Barnes",
-              "Taylor Monroe",
-              "Thomas Greene",
-              "Vanessa Reed",
-              "Valerie Patterson"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/userinfo.email",
-              "openid",
-              "https://www.googleapis.com/auth/calendar.events",
-              "https://www.googleapis.com/auth/contacts",
-              "https://www.googleapis.com/auth/calendar"
-            ],
-            "Total Scopes": 6,
-            "Risk": "Medium",
-            "Status": "Managed"
-          },
-          {
-            "Apps": "Docker",
-            "Category": "Cloud Platforms & Infrastructure",
-            "Users": [
-              "Brooke Evans",
-              "Peter Russell",
-              "Patrick Walsh"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/userinfo.email",
-              "openid"
-            ],
-            "Total Scopes": 3,
-            "Risk": "Low",
-            "Status": "Not specified"
-          },
-          {
-            "Apps": "Strapi Cloud",
-            "Category": "Cloud Platforms & Infrastructure",
-            "Users": [
-              "Samuel Hayes",
-              "Sandbox User"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/userinfo.email",
-              "openid"
-            ],
-            "Total Scopes": 3,
-            "Risk": "Low",
-            "Status": "Unmanaged"
-          },
-          {
-            "Apps": "Datadog",
-            "Category": "IT Operations & Security",
-            "Users": [
-              "Brooke Evans",
-              "Joseph Brooks",
-              "Peter Russell",
-              "Patrick Walsh",
-              "Taylor Monroe",
-              "Thomas Greene"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/userinfo.email",
-              "openid"
-            ],
-            "Total Scopes": 3,
-            "Risk": "Low",
-            "Status": "Managed"
-          },
-          {
-            "Apps": "Looker Studio",
-            "Category": "Analytics & Business Intelligence",
-            "Users": [
-              "Grace Henderson",
-              "Paul Simmons"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/analytics.readonly",
-              "https://www.googleapis.com/auth/webmasters.readonly",
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/adwords",
-              "https://www.googleapis.com/auth/drive"
-            ],
-            "Total Scopes": 5,
-            "Risk": "High",
-            "Status": "Unmanaged"
-          },
-          {
-            "Apps": "Framer",
-            "Category": "Design & Creative Tools",
-            "Users": [
-              "Adam Williams",
-              "Nathan Harris",
-              "Samuel Hayes",
-              "Sandbox User"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/userinfo.email",
-              "openid",
-              "https://www.googleapis.com/auth/drive.file"
-            ],
-            "Total Scopes": 4,
-            "Risk": "High",
-            "Status": "Not specified"
-          },
-          {
-            "Apps": "Canva",
-            "Category": "Design & Creative Tools",
-            "Users": [
-              "Ashley Parker",
-              "James Bennett",
-              "Samuel Hayes",
-              "Taylor Monroe"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/userinfo.email",
-              "openid"
-            ],
-            "Total Scopes": 3,
-            "Risk": "Low",
-            "Status": "Managed"
-          },
-          {
-            "Apps": "Otter.ai",
-            "Category": "Productivity & Collaboration",
-            "Users": [
-              "Ashley Parker",
-              "Julia Scott",
-              "Samuel Hayes",
-              "Vanessa Reed"
-            ],
-            "Scopes": [
-              "https://www.googleapis.com/auth/userinfo.profile",
-              "https://www.googleapis.com/auth/userinfo.email",
-              "openid",
-              "https://www.googleapis.com/auth/calendar.readonly"
-            ],
-            "Total Scopes": 4,
-            "Risk": "Medium",
-            "Status": "Not specified"
-          }
-        ]
-        
-        setApplications(transformDummyData(dummyData));
+        console.log('Not authenticated, showing login modal');
+        // Show login modal directly instead of dummy data
+        setShowLoginModal(true);
+        setApplications([]);
         setIsLoading(false);
         return;
       }
@@ -2678,6 +2383,7 @@ export default function ShadowITDashboard() {
         <div className="h-screen overflow-y-auto">
           <div className="px-6 py-3">
 
+            {/* Commented out banner since login modal shows directly when not authenticated
             {!isAuthenticated() && (
               <div className="bg-black border border-gray-800 rounded-lg p-4 mb-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -2703,6 +2409,7 @@ export default function ShadowITDashboard() {
                 </div>
               </div>
             )}
+            */}
 
             <div className="flex items-center gap-2 mb-3">
               {/* Mobile menu button - only show when authenticated */}
@@ -2792,26 +2499,7 @@ export default function ShadowITDashboard() {
                       <BarChart3 className="h-4 w-4 mr-2" />
                       Insights
                     </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleOpenSettings}
-                      className="border-gray-200"
-                    >
-                      <Settings className="h-4 w-4 mr-2" />
-                      Email Notifications
-                    </Button>
 
-                    {/* Only show organization settings if authenticated */}
-                    {isAuthenticated() && (
-                      <OrganizationSettingsDialog
-                        initialSettings={orgSettings}
-                        onSave={(newSettings) => {
-                          setOrgSettings(newSettings);
-                          // Refetch data to recalculate AI risk scores with new settings
-                          fetchData();
-                        }}
-                      />
-                    )}
                   </div>
                 </div>
 
@@ -3907,22 +3595,7 @@ export default function ShadowITDashboard() {
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Insights
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleOpenSettings}
-                    className="border-gray-200"
-                  >
-                    <Settings className="h-4 w-4 mr-2" />
-                    Email Notifications
-                  </Button>
 
-                  {/* Only show organization settings if authenticated */}
-                  {isAuthenticated() && (
-                    <OrganizationSettingsDialog
-                      initialSettings={orgSettings}
-                      onSave={setOrgSettings}
-                    />
-                  )}
                 </div>
               </div>
 
