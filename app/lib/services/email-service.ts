@@ -249,7 +249,7 @@ export class EmailService {
       // Microsoft
       const clientId = process.env.MICROSOFT_CLIENT_ID;
       const redirectUri = process.env.NODE_ENV === 'production'
-        ? 'https://www.stitchflow.com/tools/shadow-it-scan/api/auth/microsoft'
+        ? 'https://www.managed.stitchflow.com/api/auth/microsoft'
         : `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/microsoft`;
       
       const scopes = [

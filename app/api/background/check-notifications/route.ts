@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     
     console.log(`[CronTrigger] Found ${organizations.length} organizations to process.`);
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://www.stitchflow.com/tools/shadow-it-scan";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://www.managed.stitchflow.com";
 
     // 3. Trigger the specific cron for each organization
     for (const org of organizations) {

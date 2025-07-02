@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
       redirectUri = `${request.nextUrl.origin}/api/auth/microsoft`;
     } else {
       // For production, use the full production URL
-      redirectUri = 'https://www.stitchflow.com/tools/shadow-it-scan/api/auth/microsoft';
+      redirectUri = 'https://www.managed.stitchflow.com/api/auth/microsoft';
     }
     
     console.log('Using redirect URI for token exchange:', redirectUri);
@@ -322,7 +322,7 @@ export async function GET(request: NextRequest) {
                   // Store email in localStorage for cross-browser session awareness
                   localStorage.setItem('userEmail', "${userData.userPrincipalName}");
                   localStorage.setItem('lastLogin', "${new Date().getTime()}");
-                  window.location.href = "https://www.stitchflow.com/tools/shadow-it-scan/";
+                  window.location.href = "https://www.managed.stitchflow.com/";
                 </script>
               </head>
               <body>
@@ -354,7 +354,7 @@ export async function GET(request: NextRequest) {
         }
         
         // If user doesn't exist or we couldn't find their organization, force consent flow
-        return NextResponse.redirect('https://www.stitchflow.com/tools/shadow-it-scan/?error=data_refresh_required');
+        return NextResponse.redirect('https://www.managed.stitchflow.com/?error=data_refresh_required');
       }
     }
 
@@ -468,7 +468,7 @@ export async function GET(request: NextRequest) {
         console.error('Error recording failed signup:', err);
       }
       
-      return NextResponse.redirect(new URL('https://www.stitchflow.com/tools/shadow-it-scan/?error=admin_required', request.url));
+      return NextResponse.redirect(new URL('https://www.managed.stitchflow.com/?error=admin_required', request.url));
     }
 
     // First check if user exists
@@ -633,7 +633,7 @@ export async function GET(request: NextRequest) {
     // redirect directly to the dashboard instead of the loading page
     if (!isNewUser && existingCompletedSync && !needsFreshSync) {
       console.log('Returning user with healthy completed sync detected, skipping loading page');
-      const dashboardUrl = new URL('https://www.stitchflow.com/tools/shadow-it-scan/');
+      const dashboardUrl = new URL('https://www.managed.stitchflow.com/');
       
       // Generate a unique session ID for the user
       const sessionId = crypto.randomUUID();
@@ -766,7 +766,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Create URL for loading page with syncId parameter
-    const redirectUrl = new URL('https://www.stitchflow.com/tools/shadow-it-scan/loading');
+    const redirectUrl = new URL('https://www.managed.stitchflow.com/loading');
     if (syncStatus?.id) {
       redirectUrl.searchParams.set('syncId', syncStatus.id);
     }
@@ -883,7 +883,7 @@ export async function GET(request: NextRequest) {
     
     // Create default notification preferences for the user
     try {
-      await fetch(`https://www.stitchflow.com/tools/shadow-it-scan/api/auth/create-default-preferences`, {
+      await fetch(`https://www.managed.stitchflow.com/api/auth/create-default-preferences`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -905,7 +905,7 @@ export async function GET(request: NextRequest) {
     // const protocol = host.includes('localhost') ? 'http://' : 'https://';
     // const baseUrl = `${protocol}${host}`;
     
-    fetch(`https://www.stitchflow.com/tools/shadow-it-scan/api/background/sync/microsoft`, {
+    fetch(`https://www.managed.stitchflow.com/api/background/sync/microsoft`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

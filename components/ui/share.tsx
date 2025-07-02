@@ -60,7 +60,7 @@ switch (platform) {
 
     try {
 
-      await navigator.clipboard.writeText("https://www.stitchflow.com/tools/shadow-it-scan");
+      await navigator.clipboard.writeText("https://www.managed.stitchflow.com");
 
       setShowShareSuccess(true);
 

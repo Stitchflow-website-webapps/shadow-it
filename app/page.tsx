@@ -2098,7 +2098,7 @@ export default function ShadowITDashboard() {
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
           redirectUri = window.location.origin + '/api/auth/microsoft';
         } else {
-          redirectUri = 'https://www.stitchflow.com/tools/shadow-it-scan/api/auth/microsoft';
+          redirectUri = 'https://www.managed.stitchflow.com/api/auth/microsoft';
         }
         
         console.log('Using redirectUri:', redirectUri);
@@ -2467,7 +2467,7 @@ export default function ShadowITDashboard() {
                 </Button>
               )}
               <h2 className="text-xl font-bold">Shadow IT Overview</h2>
-              <Share url="https://www.stitchflow.com/tools/shadow-it-scan" />
+              <Share url="https://www.managed.stitchflow.com/" />
             </div>
 
             {isLoading ? (

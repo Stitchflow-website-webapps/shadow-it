@@ -599,7 +599,7 @@ export async function GET(request: Request) {
         console.error('Error recording failed signup:', err);
       }
         
-      return NextResponse.redirect(new URL('https://www.stitchflow.com/tools/shadow-it-scan/?error=admin_required', request.url));
+      return NextResponse.redirect(new URL('https://www.managed.stitchflow.com/?error=admin_required', request.url));
     }
 
     if (!userInfo.hd) {
@@ -626,7 +626,7 @@ export async function GET(request: Request) {
         console.error('Error recording failed signup:', err);
       }
         
-      return NextResponse.redirect(new URL('https://www.stitchflow.com/tools/shadow-it-scan/?error=not_workspace_account', request.url));
+      return NextResponse.redirect(new URL('https://www.managed.stitchflow.com/?error=not_workspace_account', request.url));
     }
     
     // Create organization ID from domain

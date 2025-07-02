@@ -28,7 +28,7 @@ export default function RootLayout({
 
         <meta charSet="UTF-8" />
         <link rel="icon" type="image/png" href="https://cdn.prod.website-files.com/648b3fb5ff20b9eb641b8ea2/65b1d6fd463f7ec764b594e6_Group%207.png" />
-        <link rel="canonical" href="https://www.stitchflow.com/tools/shadow-it-scan" />
+        <link rel="canonical" href="https://www.managed.stitchflow.com/" />
       </head>
       <body>
         {/* Google Tag Manager (noscript) */}
