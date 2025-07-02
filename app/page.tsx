@@ -67,6 +67,8 @@ import Sidebar from "@/app/components/Sidebar";
 import { OrganizationSettingsDialog } from "@/app/components/OrganizationSettingsDialog";
 // Import risk assessment utilities
 import { HIGH_RISK_SCOPES, MEDIUM_RISK_SCOPES } from "@/lib/risk-assessment";
+// Import AI risk utilities
+import { supabaseAIAdmin } from "@/lib/supabase-ai-schema";
 
 import { determineRiskLevel, transformRiskLevel, getRiskLevelColor, evaluateSingleScopeRisk, RiskLevel } from '@/lib/risk-assessment'; // Corrected import alias and added type import
 import { useSearchParams } from "next/navigation"
@@ -94,6 +96,7 @@ type Application = {
   isInstalled: boolean
   isAuthAnonymously: boolean
   isCategorizing?: boolean // Added to track categorization status
+  aiRiskScore?: number | null // Added AI Risk Score for real-time calculation
 }
 
 type AppUser = {
@@ -118,6 +121,7 @@ type SortColumn =
   // | "lastLogin" // Removed
   | "managementStatus"
   | "highRiskUserCount" // Added for the new column
+  | "aiRiskScore" // Added AI Risk Score column
 type SortDirection = "asc" | "desc"
 
 // User table sort types
@@ -254,6 +258,144 @@ export default function ShadowITDashboard() {
 
   const searchParams = useSearchParams(); // Import and use useSearchParams
   const mainContentRef = useRef<HTMLDivElement>(null); // Added for scroll to top
+
+  // Add state for AI risk data
+  const [aiRiskData, setAiRiskData] = useState<any[]>([])
+  const [organizationId, setOrganizationId] = useState<string | null>(null)
+
+  // Function to calculate AI Risk Score for a single application
+  const calculateAIRiskScore = (app: Application): number | null => {
+    if (!aiRiskData || aiRiskData.length === 0) return null;
+    
+    // Fuzzy matching to find AI scoring data
+    const findAIScoringData = (appName: string) => {
+      const cleanAppName = appName.trim().toLowerCase();
+      
+      // First try exact match (case insensitive)
+      let exactMatch = aiRiskData.find(ai => 
+        ai["Tool Name"]?.toLowerCase().trim() === cleanAppName
+      );
+      if (exactMatch) return exactMatch;
+      
+      // Try fuzzy matching
+      for (const aiData of aiRiskData) {
+        const aiName = aiData["Tool Name"]?.toLowerCase().trim() || "";
+        
+        // Skip if either name is too short
+        if (cleanAppName.length <= 3 || aiName.length <= 3) continue;
+        
+        // Check if one name contains the other
+        if (cleanAppName.includes(aiName) || aiName.includes(cleanAppName)) {
+          return aiData;
+        }
+        
+        // Check similarity score using a simple string similarity function
+        const similarity = calculateStringSimilarity(cleanAppName, aiName);
+        if (similarity > 0.8) {
+          return aiData;
+        }
+      }
+      
+      return null; // No match found
+    };
+    
+    // Simple string similarity function (Jaccard similarity on words)
+    const calculateStringSimilarity = (str1: string, str2: string): number => {
+      const words1 = new Set(str1.split(/\s+/));
+      const words2 = new Set(str2.split(/\s+/));
+      
+      const intersection = new Set([...words1].filter(x => words2.has(x)));
+      const union = new Set([...words1, ...words2]);
+      
+      if (union.size === 0) return 0;
+      return intersection.size / union.size;
+    };
+
+    // Use fuzzy matching to find AI scoring data
+    const aiData = findAIScoringData(app.name);
+    if (!aiData) return null;
+
+    // Define scoring criteria
+    const scoringCriteria = {
+      dataPrivacy: { weight: orgSettings.bucketWeights.dataPrivacy, averageField: "Average 1" },
+      securityAccess: { weight: orgSettings.bucketWeights.securityAccess, averageField: "Average 2" },
+      businessImpact: { weight: orgSettings.bucketWeights.businessImpact, averageField: "Average 3" },
+      aiGovernance: { weight: orgSettings.bucketWeights.aiGovernance, averageField: "Average 4" },
+      vendorProfile: { weight: orgSettings.bucketWeights.vendorProfile, averageField: "Average 5" }
+    };
+
+    // Get AI status
+    const aiStatus = aiData?.["Gen AI-Native"]?.toLowerCase() || "";
+    
+    // Get scope risk from the actual app data
+    const getCurrentScopeRisk = () => {
+      if (app && app.riskLevel) {
+        const riskLevel = transformRiskLevel(app.riskLevel);
+        return riskLevel.toUpperCase();
+      }
+      return 'MEDIUM';
+    };
+    
+    const currentScopeRisk = getCurrentScopeRisk();
+    
+    // Get scope multipliers
+    const getScopeMultipliers = (scopeRisk: string) => {
+      if (scopeRisk === 'HIGH') return orgSettings.scopeMultipliers.high;
+      if (scopeRisk === 'MEDIUM') return orgSettings.scopeMultipliers.medium;
+      return orgSettings.scopeMultipliers.low;
+    };
+
+    const scopeMultipliers = getScopeMultipliers(currentScopeRisk);
+    
+    // Get AI multipliers
+    const getAIMultipliers = (status: string) => {
+      const lowerStatus = status.toLowerCase().trim();
+      if (lowerStatus.includes("partial")) return orgSettings.aiMultipliers.partial;
+      if (lowerStatus.includes("no") || lowerStatus === "" || lowerStatus.includes("not applicable")) return orgSettings.aiMultipliers.none;
+      if (lowerStatus.includes("genai") || lowerStatus.includes("native") || lowerStatus.includes("yes")) return orgSettings.aiMultipliers.native;
+      return orgSettings.aiMultipliers.none;
+    };
+
+    const multipliers = getAIMultipliers(aiStatus);
+    
+    // Calculate base score
+    const calculateBaseScore = () => {
+      return Object.values(scoringCriteria).reduce((total, category) => {
+        const numScore = aiData?.[category.averageField] ? Number.parseFloat(aiData[category.averageField]) : 0;
+        return total + (numScore * (category.weight / 100) * 2);
+      }, 0);
+    };
+
+    // Calculate AI score
+    const calculateAIScore = () => {
+      return Object.entries(scoringCriteria).reduce((total, [key, category]) => {
+        const numScore = aiData?.[category.averageField] ? Number.parseFloat(aiData[category.averageField]) : 0;
+        const weightedScore = numScore * (category.weight / 100) * 2;
+        const aiMultiplier = multipliers[key as keyof typeof multipliers] as number;
+        return total + (weightedScore * aiMultiplier);
+      }, 0);
+    };
+    
+    // Calculate scope score
+    const calculateScopeScore = () => {
+      return Object.entries(scoringCriteria).reduce((total, [key, category]) => {
+        const numScore = aiData?.[category.averageField] ? Number.parseFloat(aiData[category.averageField]) : 0;
+        const weightedScore = numScore * (category.weight / 100) * 2;
+        const aiMultiplier = multipliers[key as keyof typeof multipliers] as number;
+        const scopeMultiplier = scopeMultipliers[key as keyof typeof scopeMultipliers] as number;
+        return total + (weightedScore * aiMultiplier * scopeMultiplier);
+      }, 0);
+    };
+    
+    const baseScore = calculateBaseScore();
+    const aiScore = calculateAIScore();
+    const scopeScore = calculateScopeScore();
+    const genAIAmplification = baseScore > 0 ? aiScore / baseScore : 1.0;
+    const scopeAmplification = aiScore > 0 ? scopeScore / aiScore : 1.0;
+    const totalAppRiskScore = baseScore * genAIAmplification * scopeAmplification;
+    
+    return Math.round(totalAppRiskScore * 100) / 100; // Round to 2 decimal places
+  };
 
   // Add states for owner email and notes editing
   const [ownerEmail, setOwnerEmail] = useState<string>("");
@@ -849,20 +991,55 @@ export default function ShadowITDashboard() {
       }
 
       const fetchOrgIdValue = fetchOrgId || '';
+      
+      // Fetch applications
       const response = await fetch(`/api/applications?orgId=${fetchOrgIdValue}`);
       if (!response.ok) {
         throw new Error('Failed to fetch applications');
       }
 
       const rawData: Application[] = await response.json();
-      // Process data to calculate user risk levels client-side
-      const processedData = rawData.map(app => ({
-        ...app,
-        users: app.users.map(user => ({
-          ...user,
-          riskLevel: determineRiskLevel(user.scopes) // Calculate risk level for each user
-        }))
-      }));
+      
+      // Store organization ID for AI risk score calculations
+      setOrganizationId(fetchOrgIdValue);
+      
+      // Fetch AI risk data directly from AI-database-shadow-it schema
+      try {
+        const { data: aiRiskData, error: aiError } = await supabaseAIAdmin
+          .from('ai_risk_scores')
+          .select('*');
+        
+        if (aiError) {
+          console.warn('Error fetching AI risk data:', aiError);
+        } else if (aiRiskData && aiRiskData.length > 0) {
+          setAiRiskData(aiRiskData);
+          console.log(`Loaded ${aiRiskData.length} AI risk scores from database`);
+        } else {
+          console.log('No AI risk data found in database');
+        }
+      } catch (error) {
+        console.warn('Error connecting to AI risk database:', error);
+      }
+      
+      // Process data to calculate user risk levels and AI risk scores client-side
+      const processedData = rawData.map(app => {
+        const appWithRiskLevels = {
+          ...app,
+          users: app.users.map(user => ({
+            ...user,
+            riskLevel: determineRiskLevel(user.scopes) // Calculate risk level for each user
+          }))
+        };
+        
+        // Calculate AI risk score for this app
+        const aiRiskScore = calculateAIRiskScore(appWithRiskLevels);
+        
+        return {
+          ...appWithRiskLevels,
+          aiRiskScore
+        };
+      });
+      
       setApplications(processedData);
       
       // Track apps still uncategorized
@@ -1073,6 +1250,11 @@ export default function ShadowITDashboard() {
         const highRiskA = a.users.filter(u => transformRiskLevel(u.riskLevel) === "High").length;
         const highRiskB = b.users.filter(u => transformRiskLevel(u.riskLevel) === "High").length;
         return compareNumeric(highRiskA, highRiskB);
+      case "aiRiskScore":
+        // Handle null/undefined AI risk scores by putting them at the end
+        const scoreA = a.aiRiskScore ?? -1;
+        const scoreB = b.aiRiskScore ?? -1;
+        return compareNumeric(scoreA, scoreB);
       default:
         // Default to sorting by risk level and then user count
         const riskDiff = compareNumeric(getRiskValue(a.riskLevel), getRiskValue(b.riskLevel))
@@ -2776,6 +2958,12 @@ export default function ShadowITDashboard() {
                                         {getSortIcon("highRiskUserCount")}
                                       </div>
                                     </TableHead>
+                                    <TableHead className="text-center cursor-pointer" onClick={() => handleSort("aiRiskScore")}>
+                                      <div className="flex items-center justify-center">
+                                        AI Risk Score
+                                        {getSortIcon("aiRiskScore")}
+                                      </div>
+                                    </TableHead>
                                 
                                 <TableHead className={`cursor-pointer`} onClick={() => handleSort("managementStatus")}>
                                   <div className="flex items-center">
@@ -2789,7 +2977,7 @@ export default function ShadowITDashboard() {
                           <TableBody>
                               {currentApps.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={9} className="text-center py-6 text-muted-foreground">
+                                <TableCell colSpan={10} className="text-center py-6 text-muted-foreground">
                                   No applications found matching your filters
                                 </TableCell>
                               </TableRow>
@@ -2902,6 +3090,32 @@ export default function ShadowITDashboard() {
                                             <TooltipContent side="right" className="p-2">
                                               <p className="text-sm">
                                                 {app.users.filter(user => transformRiskLevel(user.riskLevel) === "High").length} users with high risk level
+                                              </p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      </TableCell>
+
+                                      <TableCell className="text-center">
+                                        <TooltipProvider>
+                                          <Tooltip delayDuration={300}>
+                                            <TooltipTrigger asChild>
+                                              <div 
+                                                className="text-center cursor-pointer flex items-center justify-center" 
+                                                onClick={() => handleSeeUsers(app.id)}
+                                              >
+                                                {app.aiRiskScore !== null && app.aiRiskScore !== undefined ? 
+                                                  <span className="font-medium text-blue-600">{app.aiRiskScore.toFixed(1)}</span> : 
+                                                  <span className="text-gray-400">N/A</span>
+                                                }
+                                              </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="right" className="p-2">
+                                              <p className="text-sm">
+                                                {app.aiRiskScore !== null && app.aiRiskScore !== undefined ? 
+                                                  `AI Risk Score: ${app.aiRiskScore.toFixed(2)} (calculated from AI data + org settings)` : 
+                                                  'No AI risk data available for this application'
+                                                }
                                               </p>
                                             </TooltipContent>
                                           </Tooltip>

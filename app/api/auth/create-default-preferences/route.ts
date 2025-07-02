@@ -74,10 +74,97 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to create default notification preferences' }, { status: 500 });
     }
     
+    // Also create default organization settings if they don't exist
+    const { data: existingOrgSettings, error: orgCheckError } = await supabaseAdmin
+      .from('organization_settings')
+      .select('id')
+      .eq('organization_id', orgId)
+      .single();
+    
+    let orgSettingsData = null;
+    
+    // Only create organization settings if they don't exist yet
+    if (!existingOrgSettings) {
+      const defaultOrgSettings = {
+        organization_id: orgId,
+        bucket_weights: {
+          dataPrivacy: 20,
+          securityAccess: 25,
+          businessImpact: 20,
+          aiGovernance: 20,
+          vendorProfile: 15
+        },
+        ai_multipliers: {
+          native: {
+            dataPrivacy: 1.5,
+            securityAccess: 1.4,
+            businessImpact: 1.3,
+            aiGovernance: 1.6,
+            vendorProfile: 1.2
+          },
+          partial: {
+            dataPrivacy: 1.2,
+            securityAccess: 1.1,
+            businessImpact: 1.1,
+            aiGovernance: 1.3,
+            vendorProfile: 1.0
+          },
+          none: {
+            dataPrivacy: 1.0,
+            securityAccess: 1.0,
+            businessImpact: 1.0,
+            aiGovernance: 1.0,
+            vendorProfile: 1.0
+          }
+        },
+        scope_multipliers: {
+          high: {
+            dataPrivacy: 1.4,
+            securityAccess: 1.5,
+            businessImpact: 1.3,
+            aiGovernance: 1.2,
+            vendorProfile: 1.1
+          },
+          medium: {
+            dataPrivacy: 1.2,
+            securityAccess: 1.2,
+            businessImpact: 1.1,
+            aiGovernance: 1.1,
+            vendorProfile: 1.0
+          },
+          low: {
+            dataPrivacy: 1.0,
+            securityAccess: 1.0,
+            businessImpact: 1.0,
+            aiGovernance: 1.0,
+            vendorProfile: 1.0
+          }
+        }
+      };
+      
+      const { data: orgSettings, error: orgSettingsError } = await supabaseAdmin
+        .from('organization_settings')
+        .insert(defaultOrgSettings)
+        .select()
+        .single();
+      
+      if (orgSettingsError) {
+        console.error('Error creating default organization settings:', orgSettingsError);
+        // Don't fail the request if org settings creation fails, just log it
+        console.log('Continuing without organization settings...');
+      } else {
+        orgSettingsData = orgSettings;
+        console.log('Default organization settings created successfully');
+      }
+    } else {
+      console.log('Organization settings already exist');
+    }
+
     return NextResponse.json({ 
       success: true, 
-      message: 'Default notification preferences created successfully', 
-      preferences: data 
+      message: 'Default preferences and settings created successfully', 
+      preferences: data,
+      organizationSettings: orgSettingsData || existingOrgSettings
     });
   } catch (error) {
     console.error('Error in create-default-preferences:', error);

@@ -1,5 +1,5 @@
 import { transformRiskLevel } from '@/lib/risk-assessment';
-import type { Application } from '@/types';
+import type { Application } from '@/types/ai_risk_application';
 
 interface OrgSettings {
   bucketWeights: {
@@ -124,8 +124,8 @@ export function calculateFinalAIRiskScore(
   
   // Get scope risk from the actual app data (not hardcoded)
   const getCurrentScopeRisk = () => {
-    if (app && app.riskLevel) {
-      const riskLevel = transformRiskLevel(app.riskLevel);
+    if (app && (app.riskLevel || (app as any).risk_level)) {
+      const riskLevel = transformRiskLevel(app.riskLevel || (app as any).risk_level);
       return riskLevel.toUpperCase();
     }
     return 'MEDIUM';
