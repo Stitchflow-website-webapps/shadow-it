@@ -59,6 +59,7 @@ export interface PerformanceAdoptionData {
 }
 
 export interface DetailedApplicationData extends Application {
+  "Tool Name": string;
   aiTechnology: AITechnologyData;
   securityCompliance: SecurityComplianceData;
   businessImpact: BusinessImpactData;

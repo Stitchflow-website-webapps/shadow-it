@@ -74,6 +74,7 @@ import { determineRiskLevel, transformRiskLevel, getRiskLevelColor, evaluateSing
 import { useSearchParams } from "next/navigation"
 import { LabelList } from "recharts"
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { TabbedRiskScoringView } from "@/app/components/TabbedRiskScoringView";
 
 // Type definitions
 type Application = {
@@ -261,24 +262,27 @@ export default function ShadowITDashboard() {
 
   // Add state for AI risk data
   const [aiRiskData, setAiRiskData] = useState<any[]>([])
+  // AI Risk Scoring detailed data for tabbed view
+  const [aiRiskScoringData, setAiRiskScoringData] = useState<any[]>([])
   const [organizationId, setOrganizationId] = useState<string | null>(null)
 
-  // Function to calculate AI Risk Score for a single application
-  const calculateAIRiskScore = (app: Application): number | null => {
-    if (!aiRiskData || aiRiskData.length === 0) return null;
+  // This function is now more robust, accepting all data it needs as arguments
+  // to avoid relying on state that might not be updated yet.
+  const calculateAIRiskScore = (app: Application, currentAiRiskData: any[], currentOrgSettings: any): number | null => {
+    if (!currentAiRiskData || currentAiRiskData.length === 0) return null;
     
     // Fuzzy matching to find AI scoring data
     const findAIScoringData = (appName: string) => {
       const cleanAppName = appName.trim().toLowerCase();
       
       // First try exact match (case insensitive)
-      let exactMatch = aiRiskData.find(ai => 
+      let exactMatch = currentAiRiskData.find(ai => 
         ai["Tool Name"]?.toLowerCase().trim() === cleanAppName
       );
       if (exactMatch) return exactMatch;
       
       // Try fuzzy matching
-      for (const aiData of aiRiskData) {
+      for (const aiData of currentAiRiskData) {
         const aiName = aiData["Tool Name"]?.toLowerCase().trim() || "";
         
         // Skip if either name is too short
@@ -315,17 +319,17 @@ export default function ShadowITDashboard() {
     const aiData = findAIScoringData(app.name);
     if (!aiData) return null;
 
-    // Define scoring criteria
+    // Define scoring criteria using the passed-in settings
     const scoringCriteria = {
-      dataPrivacy: { weight: orgSettings.bucketWeights.dataPrivacy, averageField: "Average 1" },
-      securityAccess: { weight: orgSettings.bucketWeights.securityAccess, averageField: "Average 2" },
-      businessImpact: { weight: orgSettings.bucketWeights.businessImpact, averageField: "Average 3" },
-      aiGovernance: { weight: orgSettings.bucketWeights.aiGovernance, averageField: "Average 4" },
-      vendorProfile: { weight: orgSettings.bucketWeights.vendorProfile, averageField: "Average 5" }
+      dataPrivacy: { weight: currentOrgSettings.bucketWeights.dataPrivacy, averageField: "Average 1" },
+      securityAccess: { weight: currentOrgSettings.bucketWeights.securityAccess, averageField: "Average 2" },
+      businessImpact: { weight: currentOrgSettings.bucketWeights.businessImpact, averageField: "Average 3" },
+      aiGovernance: { weight: currentOrgSettings.bucketWeights.aiGovernance, averageField: "Average 4" },
+      vendorProfile: { weight: currentOrgSettings.bucketWeights.vendorProfile, averageField: "Average 5" }
     };
 
     // Get AI status
-    const aiStatus = aiData?.["Gen AI-Native"]?.toLowerCase() || "";
+    const aiStatus = aiData?.["AI-Native"]?.toLowerCase() || "";
     
     // Get scope risk from the actual app data
     const getCurrentScopeRisk = () => {
@@ -338,22 +342,22 @@ export default function ShadowITDashboard() {
     
     const currentScopeRisk = getCurrentScopeRisk();
     
-    // Get scope multipliers
+    // Get scope multipliers from the passed-in settings
     const getScopeMultipliers = (scopeRisk: string) => {
-      if (scopeRisk === 'HIGH') return orgSettings.scopeMultipliers.high;
-      if (scopeRisk === 'MEDIUM') return orgSettings.scopeMultipliers.medium;
-      return orgSettings.scopeMultipliers.low;
+      if (scopeRisk === 'HIGH') return currentOrgSettings.scopeMultipliers.high;
+      if (scopeRisk === 'MEDIUM') return currentOrgSettings.scopeMultipliers.medium;
+      return currentOrgSettings.scopeMultipliers.low;
     };
 
     const scopeMultipliers = getScopeMultipliers(currentScopeRisk);
     
-    // Get AI multipliers
+    // Get AI multipliers from the passed-in settings
     const getAIMultipliers = (status: string) => {
       const lowerStatus = status.toLowerCase().trim();
-      if (lowerStatus.includes("partial")) return orgSettings.aiMultipliers.partial;
-      if (lowerStatus.includes("no") || lowerStatus === "" || lowerStatus.includes("not applicable")) return orgSettings.aiMultipliers.none;
-      if (lowerStatus.includes("genai") || lowerStatus.includes("native") || lowerStatus.includes("yes")) return orgSettings.aiMultipliers.native;
-      return orgSettings.aiMultipliers.none;
+      if (lowerStatus.includes("partial")) return currentOrgSettings.aiMultipliers.partial;
+      if (lowerStatus.includes("no") || lowerStatus === "" || lowerStatus.includes("not applicable")) return currentOrgSettings.aiMultipliers.none;
+      if (lowerStatus.includes("genai") || lowerStatus.includes("native") || lowerStatus.includes("yes")) return currentOrgSettings.aiMultipliers.native;
+      return currentOrgSettings.aiMultipliers.none;
     };
 
     const multipliers = getAIMultipliers(aiStatus);
@@ -661,21 +665,19 @@ export default function ShadowITDashboard() {
     try {
       setIsLoading(true);
       
-      // Check URL parameters for orgId (which might be set during OAuth redirect)
-      let fetchOrgId = null;
+      let fetchOrgIdValue = null;
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
         const urlOrgId = urlParams.get('orgId');
         
         if (urlOrgId) {
-          fetchOrgId = urlOrgId;
+          fetchOrgIdValue = urlOrgId;
         } else if (document.cookie.split(';').find(cookie => cookie.trim().startsWith('orgId='))) {
           const orgIdCookie = document.cookie.split(';').find(cookie => cookie.trim().startsWith('orgId='));
-          fetchOrgId = orgIdCookie?.split('=')[1].trim();
+          fetchOrgIdValue = orgIdCookie?.split('=')[1].trim();
         }
       }
       
-      // Only load dummy data if not authenticated
       if (!isAuthenticated()) {
         console.log('Not authenticated, loading dummy data');
         // Use dummy data if no cookies found
@@ -990,49 +992,57 @@ export default function ShadowITDashboard() {
         return;
       }
 
-      const fetchOrgIdValue = fetchOrgId || '';
-      
-      // Fetch applications
-      const response = await fetch(`/api/applications?orgId=${fetchOrgIdValue}`);
-      if (!response.ok) {
+      // Fetch all data sources concurrently to avoid race conditions
+      const [appsResponse, aiRiskResponse, orgSettingsResponse] = await Promise.all([
+        fetch(`/api/applications?orgId=${fetchOrgIdValue}`),
+        fetch('/api/ai-risk-data'), // The browser automatically sends the orgId cookie
+        fetch(`/api/organization-settings?org_id=${fetchOrgIdValue}`)
+      ]);
+
+      if (!appsResponse.ok) {
         throw new Error('Failed to fetch applications');
       }
+      const rawData: Application[] = await appsResponse.json();
 
-      const rawData: Application[] = await response.json();
-      
-      // Store organization ID for AI risk score calculations
-      setOrganizationId(fetchOrgIdValue);
-      
-      // Fetch AI risk data directly from AI-database-shadow-it schema
-      try {
-        const { data: aiRiskData, error: aiError } = await supabaseAIAdmin
-          .from('ai_risk_scores')
-          .select('*');
-        
-        if (aiError) {
-          console.warn('Error fetching AI risk data:', aiError);
-        } else if (aiRiskData && aiRiskData.length > 0) {
-          setAiRiskData(aiRiskData);
-          console.log(`Loaded ${aiRiskData.length} AI risk scores from database`);
-        } else {
-          console.log('No AI risk data found in database');
+      let fetchedAiRiskData: any[] = [];
+      if (aiRiskResponse.ok) {
+        const result = await aiRiskResponse.json();
+        if (result.success && result.data) {
+          fetchedAiRiskData = result.data;
+          console.log(`Loaded ${result.data.length} org-specific AI risk scores.`);
         }
-      } catch (error) {
-        console.warn('Error connecting to AI risk database:', error);
+      } else {
+        console.warn('Could not fetch AI risk data.');
+      }
+
+      // Use default settings as a fallback
+      let fetchedOrgSettings = orgSettings; 
+      if (orgSettingsResponse.ok) {
+        const result = await orgSettingsResponse.json();
+        if (result.settings) {
+          // Transform snake_case from DB to camelCase for the frontend
+          fetchedOrgSettings = {
+            bucketWeights: result.settings.bucket_weights,
+            aiMultipliers: result.settings.ai_multipliers,
+            scopeMultipliers: result.settings.scope_multipliers
+          };
+        }
+      } else {
+        console.warn('Could not fetch org settings, using defaults.');
       }
       
-      // Process data to calculate user risk levels and AI risk scores client-side
+      // Now that all data is fetched, process the applications
       const processedData = rawData.map(app => {
         const appWithRiskLevels = {
           ...app,
           users: app.users.map(user => ({
             ...user,
-            riskLevel: determineRiskLevel(user.scopes) // Calculate risk level for each user
+            riskLevel: determineRiskLevel(user.scopes)
           }))
         };
         
-        // Calculate AI risk score for this app
-        const aiRiskScore = calculateAIRiskScore(appWithRiskLevels);
+        // Calculate the score using the data we just fetched
+        const aiRiskScore = calculateAIRiskScore(appWithRiskLevels, fetchedAiRiskData, fetchedOrgSettings);
         
         return {
           ...appWithRiskLevels,
@@ -1040,20 +1050,23 @@ export default function ShadowITDashboard() {
         };
       });
       
+      // Update all state at once to trigger a single re-render with all data
       setApplications(processedData);
+      setAiRiskData(fetchedAiRiskData);
+      setOrgSettings(fetchedOrgSettings);
+      setOrganizationId(fetchOrgIdValue || null);
       
-      // Track apps still uncategorized
       const unknownIds = new Set<string>();
-      processedData.forEach((app: Application) => { // Use processedData here
+      processedData.forEach((app: Application) => {
         if (app.category === 'Unknown') unknownIds.add(app.id);
       });
       setUncategorizedApps(unknownIds);
       
-      setIsLoading(false);
     } catch (error) {
       console.error("Error fetching application data:", error);
-      setIsLoading(false);
       setApplications([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -2792,7 +2805,11 @@ export default function ShadowITDashboard() {
                     {isAuthenticated() && (
                       <OrganizationSettingsDialog
                         initialSettings={orgSettings}
-                        onSave={setOrgSettings}
+                        onSave={(newSettings) => {
+                          setOrgSettings(newSettings);
+                          // Refetch data to recalculate AI risk scores with new settings
+                          fetchData();
+                        }}
                       />
                     )}
                   </div>
@@ -3983,6 +4000,9 @@ export default function ShadowITDashboard() {
                         <TabsTrigger value="scopes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
                         Scope User Groups
                         </TabsTrigger>
+                        <TabsTrigger value="ai-risk-scoring" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                        AI Risk Scoring
+                        </TabsTrigger>
                         {/* <TabsTrigger value="similar" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
                           Similar Apps
                         </TabsTrigger> */}
@@ -4462,6 +4482,62 @@ export default function ShadowITDashboard() {
                           </div>
                         </div>
                       </TabsContent> */}
+
+                      <TabsContent value="ai-risk-scoring">
+                        <div className="p-5 border border-gray-200 rounded-md bg-white">
+                          <TabbedRiskScoringView 
+                            app={(() => {
+                              // Find the AI risk data for the selected app
+                              const findAIScoringData = (appName: string) => {
+                                const cleanAppName = appName.trim().toLowerCase();
+                                
+                                // First try exact match (case insensitive)
+                                let exactMatch = aiRiskData.find(ai => 
+                                  ai["Tool Name"]?.toLowerCase().trim() === cleanAppName
+                                );
+                                if (exactMatch) return exactMatch;
+                                
+                                // Try fuzzy matching
+                                for (const aiData of aiRiskData) {
+                                  const aiName = aiData["Tool Name"]?.toLowerCase().trim() || "";
+                                  
+                                  // Skip if either name is too short
+                                  if (cleanAppName.length <= 3 || aiName.length <= 3) continue;
+                                  
+                                  // Check if one name contains the other
+                                  if (cleanAppName.includes(aiName) || aiName.includes(cleanAppName)) {
+                                    return aiData;
+                                  }
+                                  
+                                  // Check similarity score using a simple string similarity function
+                                  const calculateStringSimilarity = (str1: string, str2: string): number => {
+                                    const words1 = new Set(str1.split(/\s+/));
+                                    const words2 = new Set(str2.split(/\s+/));
+                                    
+                                    const intersection = new Set([...words1].filter(x => words2.has(x)));
+                                    const union = new Set([...words1, ...words2]);
+                                    
+                                    if (union.size === 0) return 0;
+                                    return intersection.size / union.size;
+                                  };
+                                  
+                                  const similarity = calculateStringSimilarity(cleanAppName, aiName);
+                                  if (similarity > 0.8) {
+                                    return aiData;
+                                  }
+                                }
+                                
+                                return null; // No match found
+                              };
+                              
+                              return selectedApp ? findAIScoringData(selectedApp.name) : null;
+                            })()}
+                            allApps={aiRiskData}
+                            orgSettings={orgSettings}
+                            selectedAppData={selectedApp}
+                          />
+                        </div>
+                      </TabsContent>
 
                       <TabsContent value="notes">
                         <div className="p-5 border border-gray-200 rounded-md bg-white">

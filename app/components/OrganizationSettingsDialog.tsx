@@ -47,22 +47,83 @@ interface OrganizationSettingsDialogProps {
 export const OrganizationSettingsDialog: React.FC<OrganizationSettingsDialogProps> = ({ initialSettings, onSave }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [tempSettings, setTempSettings] = useState(initialSettings);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // When the dialog is opened, reset tempSettings to match the initial ones
   useEffect(() => {
     if (isOpen) {
       setTempSettings(initialSettings);
+      setSaveError(null);
+      setSaveSuccess(false);
     }
   }, [isOpen, initialSettings]);
 
-  const handleSave = () => {
+  // Helper function to get orgId from cookie
+  const getOrgIdFromCookie = (): string | null => {
+    if (typeof window !== 'undefined') {
+      const cookies = document.cookie.split(';');
+      const orgIdCookie = cookies.find(cookie => cookie.trim().startsWith('orgId='));
+      if (orgIdCookie) {
+        return orgIdCookie.split('=')[1].trim();
+      }
+    }
+    return null;
+  };
+
+  const handleSave = async () => {
     const totalWeight = Object.values(tempSettings.bucketWeights).reduce((sum, weight) => sum + weight, 0);
-    if (totalWeight === 100) {
-      onSave(tempSettings);
-      setIsOpen(false);
-    } else {
-      // This case is handled by disabling the button, but as a safeguard:
+    if (totalWeight !== 100) {
       alert("Total weight must be 100%.");
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+
+    try {
+      const orgId = getOrgIdFromCookie();
+      if (!orgId) {
+        throw new Error('Organization ID not found. Please try logging in again.');
+      }
+
+      const response = await fetch('/api/organization-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          organization_id: orgId,
+          bucket_weights: tempSettings.bucketWeights,
+          ai_multipliers: tempSettings.aiMultipliers,
+          scope_multipliers: tempSettings.scopeMultipliers,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to save organization settings');
+      }
+
+      const result = await response.json();
+      console.log('Organization settings saved successfully:', result);
+
+      // Update the parent component with the new settings
+      onSave(tempSettings);
+      setSaveSuccess(true);
+      
+      // Close dialog after a short delay to show success message
+      setTimeout(() => {
+        setIsOpen(false);
+      }, 1500);
+
+    } catch (error) {
+      console.error('Error saving organization settings:', error);
+      setSaveError(error instanceof Error ? error.message : 'Failed to save settings');
+    } finally {
+      setIsSaving(false);
     }
   };
   
@@ -188,9 +249,33 @@ export const OrganizationSettingsDialog: React.FC<OrganizationSettingsDialogProp
           </div>
         </div>
         
-        <div className="flex justify-end space-x-2 pt-3 px-2 border-t bg-white flex-shrink-0">
-          <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={totalWeight !== 100}>Save Settings</Button>
+        <div className="flex flex-col space-y-3 pt-3 px-2 border-t bg-white flex-shrink-0">
+          {/* Error Message */}
+          {saveError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded">
+              <p className="text-sm text-red-700">❌ {saveError}</p>
+            </div>
+          )}
+          
+          {/* Success Message */}
+          {saveSuccess && (
+            <div className="p-3 bg-green-50 border border-green-200 rounded">
+              <p className="text-sm text-green-700">✅ Settings saved successfully! Closing dialog...</p>
+            </div>
+          )}
+          
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSave} 
+              disabled={totalWeight !== 100 || isSaving}
+            >
+              {isSaving ? 'Saving...' : 'Save Settings'}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

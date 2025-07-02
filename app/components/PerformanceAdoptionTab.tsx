@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PerformanceAdoptionData } from "@/types/application";
+import { PerformanceAdoptionData } from "@/types/ai_risk_application";
 
 interface PerformanceAdoptionTabProps {
   data: PerformanceAdoptionData;

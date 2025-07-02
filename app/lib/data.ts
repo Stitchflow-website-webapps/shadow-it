@@ -1,7 +1,7 @@
 import Papa from "papaparse"
 import { Application, AppUser } from "@/types"
 import { determineRiskLevel } from "@/lib/risk-assessment"
-import { DetailedApplicationData, AITechnologyData, SecurityComplianceData, BusinessImpactData, PerformanceAdoptionData } from "@/types/application"
+import { DetailedApplicationData, AITechnologyData, SecurityComplianceData, BusinessImpactData, PerformanceAdoptionData } from "@/types/ai_risk_application"
 
 export const fetchData = async (): Promise<Application[]> => {
   try {
@@ -117,122 +117,102 @@ export const fetchAIScoringData = async (): Promise<any[]> => {
 // Parse CSV with detailed data for AI Risk tabs
 export const fetchDetailedAppData = async (): Promise<DetailedApplicationData[]> => {
   try {
-    // Fetch the detailed CSV file from public folder
-    const response = await fetch("/Adam_revised_latest_app.csv");
-    const csvText = await response.text();
+    // Fetch the detailed data from the API instead of CSV files
+    const response = await fetch("/api/ai-risk-data");
     
-    // Parse CSV into structured data
-    const parsedData = parseDetailedCSV(csvText);
-    return parsedData;
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    if (!result.success || !result.data) {
+      throw new Error('Failed to fetch data from API');
+    }
+    
+    // Transform the database data into the expected format
+    const transformedData: DetailedApplicationData[] = result.data.map((rawData: any) => 
+      transformToDetailedAppData(rawData)
+    );
+    
+    return transformedData;
   } catch (error) {
     console.error("Error fetching detailed data:", error);
     return [];
   }
 };
 
-const parseDetailedCSV = (csvText: string): DetailedApplicationData[] => {
-  const lines = csvText.split("\n");
-  const headers = lines[0].split(",").map(header => header.replace(/"/g, "").trim());
-  
-  return lines
-    .slice(1)
-    .filter(line => line.trim())
-    .map(line => {
-      const values = parseCSVLine(line);
-      const rawApp: any = {};
-      headers.forEach((header, index) => {
-        rawApp[header] = values[index] || "";
-      });
-      
-      // Transform raw data into structured format
-      return transformToDetailedAppData(rawApp);
-    });
-};
-
-// Handle CSV parsing with quoted values
-const parseCSVLine = (line: string): string[] => {
-  const result = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === "," && !inQuotes) {
-      result.push(current.trim());
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  
-  result.push(current.trim());
-  return result;
-};
-
 const transformToDetailedAppData = (rawData: any): DetailedApplicationData => {
-  // Create base application data
+  // Helper function to safely get field value with trimming
+  const getField = (fieldName: string): string => {
+    const value = rawData[fieldName];
+    return (value && typeof value === 'string') ? value.trim() : "";
+  };
+
+  // Create base application data - preserve original field names for matching
   const baseApp = {
-    "Tool Name": rawData["Tool Name"] || "",
-    "Vendor": rawData["Vendor"] || "",
-    "What the app does": rawData["What the app does"] || "",
-    "URL / Website": rawData["URL / Website"] || "",
-    "Pricing": rawData["Pricing"] || "",
-    "Gen AI-Native": rawData["Gen AI-Native"] || "",
-    // Add other existing fields as needed
-    ...rawData
+    id: rawData.app_id?.toString() || "",
+    name: getField("Tool Name"),
+    category: getField("Vendor") || "Uncategorized",
+    lastUsed: "",
+    userCount: 0,
+    riskScore: 0,
+    riskLevel: "Medium" as const,
+    // Preserve the original "Tool Name" field for matching logic
+    "Tool Name": getField("Tool Name")
   };
 
   // Structure detailed data into categories
   const aiTechnology: AITechnologyData = {
-    "Key AI Features": rawData["Key AI Features"] || "",
-    "Proprietary Model or 3rd Party?": rawData["Proprietary Model or 3rd Party?"] || "",
-    "AI Model Hosting Location / Data Residency": rawData["AI Model Hosting Location / Data Residency"] || "",
-    "Data Sent to AI Model?": rawData["Data Sent to AI Model?\t"] || rawData["Data Sent to AI Model?"] || "",
-    "Type of Data Sent": rawData["Type of Data Sent\t\t"] || rawData["Type of Data Sent"] || "",
-    "Customer/Org Data Used for Model Training?": rawData["Customer/Org Data Used for Model Training?"] || "",
-    "User Opt-Out of AI?": rawData["User Opt-Out of AI?"] || "",
+    "Key AI Features": getField("Key AI Features"),
+    "Proprietary Model or 3rd Party?": getField("Proprietary Model or 3rd Party?"),
+    "AI Model Hosting Location / Data Residency": getField("AI Model Hosting Location / Data Residency"),
+    "Data Sent to AI Model?": getField("Data Sent to AI Model?"),
+    "Type of Data Sent": getField("Type of Data Sent"),
+    "Customer/Org Data Used for Model Training?": getField("Customer/Org Data Used for Model Training?"),
+    "User Opt-Out of AI?": getField("User Opt-Out of AI?"),
   };
 
   const securityCompliance: SecurityComplianceData = {
-    "Data Retention Policy": rawData["Data Retention Policy"] || "",
-    "Data Backup/Retrieval/Deletion Details": rawData["Data Backup/Retrieval/Deletion Details "] || rawData["Data Backup/Retrieval/Deletion Details"] || "",
-    "Human Review Involvement": rawData["Human Review Involvement"] || "",
-    "Security Certifications": rawData["Security Certifications"] || "",
-    "AI Specific Security Standards": rawData["AI Specific Security Standards"] || "",
-    "Vulnerability Disclosure": rawData["Vulnerability Disclosure"] || "",
-    "Recently Known Breaches/ Incidents / Public Issues": rawData["Recently Known Breaches/ Incidents / Public Issues"] || "",
-    "Supports SSO/SAML/SCIM": rawData["Supports SSO/SAML/SCIM"] || "",
-    "Authentication Methods": rawData["Authentication Methods "] || rawData["Authentication Methods"] || "",
-    "APIs Available?": rawData["APIs Available?"] || "",
-    "Supports RBAC (or some form of user permissions and roles)?": rawData["Supports RBAC (or some form of user permissions and roles)?"] || "",
-    "Bug Bounty System Available?": rawData["Bug Bounty System Available?"] || "",
-    "Trust Contact Info (email ID if available)": rawData["Trust Contact Info (email ID if available)"] || "",
-    "Other AI-Specific Terms / Disclosures": rawData["Other AI-Specific Terms / Disclosures"] || "",
+    "Data Retention Policy": getField("Data Retention Policy"),
+    "Data Backup/Retrieval/Deletion Details": getField("Data Backup/Retrieval/Deletion Details"),
+    "Human Review Involvement": getField("Human Review Involvement"),
+    "Security Certifications": getField("Security Certifications"),
+    "AI Specific Security Standards": getField("AI Specific Security Standards"),
+    "Vulnerability Disclosure": getField("Vulnerability Disclosure"),
+    "Recently Known Breaches/ Incidents / Public Issues": getField("Recently Known Breaches/ Incidents / Public Issues"),
+    "Supports SSO/SAML/SCIM": getField("Supports SSO/SAML/SCIM"),
+    "Authentication Methods": getField("Authentication Methods"),
+    "APIs Available?": getField("APIs Available?"),
+    "Supports RBAC (or some form of user permissions and roles)?": getField("Supports RBAC (or some form of user permissions and roles)?"),
+    "Bug Bounty System Available?": getField("Bug Bounty System Available?"),
+    "Trust Contact Info (email ID if available)": getField("Trust Contact Info (email ID if available)"),
+    "Other AI-Specific Terms / Disclosures": getField("Other AI-Specific Terms / Disclosures"),
   };
 
   const businessImpact: BusinessImpactData = {
-    "Org Level Criticality (company wide/ specific usage)": rawData["Org Level Criticality (company wide/ specific usage)"] || "",
-    "Departments/Teams Suitable for App Usage": rawData["Departments/Teams Suitable for App Usage "] || rawData["Departments/Teams Suitable for App Usage"] || "",
-    "Impact to Business (when app data/functionality is compromised)": rawData["Impact to Business (when app data/functionality is compromised)"] || "",
-    "App Performance/Popularity Sentiment": rawData["App Performance/Popularity Sentiment"] || "",
-    "Ease of App Setup": rawData["Ease of App Setup"] || "",
-    "Need Employee Training Before Usage?": rawData["Need Employee Training Before Usage?\t"] || rawData["Need Employee Training Before Usage?"] || "",
-    "Overall Security Risk Factor & Tier": rawData["Overall Security Risk Factor & Tier"] || "",
-    "Renewals & Upgrade Terms": rawData["Renewals & Upgrade Terms"] || "",
-    "Notes / Observations": rawData["Notes / Observations"] || "",
+    "Org Level Criticality (company wide/ specific usage)": getField("Org Level Criticality (company wide/ specific usage)"),
+    "Departments/Teams Suitable for App Usage": getField("Departments/Teams Suitable for App Usage"),
+    "Impact to Business (when app data/functionality is compromised)": getField("Impact to Business (when app data/functionality is compromised)"),
+    "App Performance/Popularity Sentiment": getField("App Performance/Popularity Sentiment"),
+    "Ease of App Setup": getField("Ease of App Setup"),
+    "Need Employee Training Before Usage?": getField("Need Employee Training Before Usage?"),
+    "Overall Security Risk Factor & Tier": getField("Overall Security Risk Factor & Tier"),
+    "Renewals & Upgrade Terms": getField("Renewals & Upgrade Terms"),
+    "Notes / Observations": getField("Notes / Observations"),
   };
 
   const performanceAdoption: PerformanceAdoptionData = {
-    "Global Adoption Rank": rawData["Global Adoption Rank"] || "",
-    "No. of Active Customers (Reported)": rawData["No. of Active Customers (Reported)"] || "",
-    "Popularity percentage": rawData["Popularity percentage"] || "",
-    "Benchmark Usage by Peers": rawData["Benchmark Usage by Peers"] || "",
-    "Stack Inclusion Rate": rawData["Stack Inclusion Rate"] || "",
-    "Best paired with": rawData["Best paired with"] || "",
-    "Other popular apps in this space": rawData["Other popular apps in this space"] || "",
+    "Global Adoption Rank": getField("Global Adoption Rank"),
+    "No. of Active Customers (Reported)": getField("No. of Active Customers (Reported)"),
+    "Popularity percentage": getField("Popularity percentage"),
+    "Benchmark Usage by Peers": getField("Benchmark Usage by Peers"),
+    "Stack Inclusion Rate": getField("Stack Inclusion Rate"),
+    "Best paired with": getField("Best paired with"),
+    "Other popular apps in this space": getField("Other popular apps in this space"),
   };
+
+  console.log("Transforming data for:", baseApp["Tool Name"], "- Raw data keys:", Object.keys(rawData));
 
   return {
     ...baseApp,

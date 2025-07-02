@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SecurityComplianceData } from "@/types/application";
+import { SecurityComplianceData } from "@/types/ai_risk_application";
 
 interface SecurityComplianceTabProps {
   data: SecurityComplianceData;

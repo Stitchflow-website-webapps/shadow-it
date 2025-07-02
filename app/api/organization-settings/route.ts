@@ -9,6 +9,9 @@ const supabaseAdmin = createClient(
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    db: {
+      schema: 'shadow_it'
     }
   }
 );

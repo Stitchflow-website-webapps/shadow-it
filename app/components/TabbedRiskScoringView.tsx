@@ -6,7 +6,7 @@ import { SecurityComplianceTab } from './SecurityComplianceTab';
 import { BusinessImpactTab } from './BusinessImpactTab';
 import { PerformanceAdoptionTab } from './PerformanceAdoptionTab';
 import { fetchDetailedAppData } from '@/app/lib/data';
-import { DetailedApplicationData } from '@/types/application';
+import { DetailedApplicationData } from '@/types/ai_risk_application';
 
 interface App {
   [key: string]: string;
@@ -54,6 +54,12 @@ export const TabbedRiskScoringView: React.FC<TabbedRiskScoringViewProps> = ({
     const loadDetailedData = async () => {
       try {
         const data = await fetchDetailedAppData();
+        console.log("Fetched detailed data:", data);
+        console.log("Number of records:", data.length);
+        if (data.length > 0) {
+          console.log("Sample record:", data[0]);
+          console.log("Available tool names:", data.map(d => d["Tool Name"]));
+        }
         setDetailedData(data);
       } catch (error) {
         console.error("Error loading detailed data:", error);
@@ -70,7 +76,13 @@ export const TabbedRiskScoringView: React.FC<TabbedRiskScoringViewProps> = ({
     if (!app || !detailedData.length) return null;
     
     const appName = app["Tool Name"];
-    return detailedData.find(data => (data as any)["Tool Name"] === appName) || null;
+    console.log("Looking for app:", appName);
+    console.log("Available apps in detailed data:", detailedData.map(d => d["Tool Name"]));
+    
+    const foundData = detailedData.find(data => data["Tool Name"] === appName);
+    console.log("Found detailed data:", foundData ? "Yes" : "No");
+    
+    return foundData || null;
   }, [app, detailedData]);
 
   if (!app) {
@@ -121,11 +133,16 @@ export const TabbedRiskScoringView: React.FC<TabbedRiskScoringViewProps> = ({
         </TabsContent>
         
         <TabsContent value="ai-technology" className="space-y-4">
+          
+          
           {currentAppDetailedData ? (
             <AITechnologyTab data={currentAppDetailedData.aiTechnology} />
           ) : (
             <div className="text-center py-8">
               <p className="text-gray-500">No detailed AI & Technology data available for this application.</p>
+              <p className="text-xs text-gray-400 mt-2">
+                App: {app?.["Tool Name"] || "Unknown"} | Available data: {detailedData.length} records
+              </p>
             </div>
           )}
         </TabsContent>

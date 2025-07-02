@@ -120,7 +120,7 @@ export function calculateFinalAIRiskScore(
   };
 
   // Get AI status
-  const aiStatus = aiData?.["Gen AI-Native"]?.toLowerCase() || "";
+  const aiStatus = aiData?.["AI-Native"]?.toLowerCase() || "";
   
   // Get scope risk from the actual app data (not hardcoded)
   const getCurrentScopeRisk = () => {

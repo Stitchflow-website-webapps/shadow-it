@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AITechnologyData } from "@/types/application";
+import { AITechnologyData } from "@/types/ai_risk_application";
 
 interface AITechnologyTabProps {
   data: AITechnologyData;
