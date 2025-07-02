@@ -20,7 +20,7 @@ const EMERGENCY_LIMITS = {
   MAX_TOKENS_IN_MEMORY: 8000,  // Hard limit on tokens loaded at once (reduced for stability)
   MAX_APPS_IN_MEMORY: 1500,    // Hard limit on applications processed at once
   MAX_RELATIONS_IN_MEMORY: 12000, // Hard limit on relations in memory
-  FORCE_CLEANUP_THRESHOLD: 1300,  // Force cleanup at 1.3GB (81% of 1.6GB limit)
+  FORCE_CLEANUP_THRESHOLD: 1000,  // Force cleanup at 1.0GB (consistent with test-cron-google)
 };
 
 // Helper function to sleep
@@ -260,7 +260,7 @@ const forceMemoryCleanup = () => {
   // Clear any lingering references
   if (typeof process !== 'undefined' && process.memoryUsage) {
     const memUsage = process.memoryUsage();
-    if (memUsage.heapUsed > 1024 * 1024 * 1024) { // If using > 1GB heap
+    if (memUsage.heapUsed > EMERGENCY_LIMITS.FORCE_CLEANUP_THRESHOLD * 1024 * 1024) { // Use configured threshold
       console.log(`Memory usage high: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB, forcing cleanup`);
       if (global.gc) global.gc();
     }
