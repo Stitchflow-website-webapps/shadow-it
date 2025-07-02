@@ -114,7 +114,7 @@ const forceMemoryCleanup = () => {
   // Clear any lingering references
   if (typeof process !== 'undefined' && process.memoryUsage) {
     const memUsage = process.memoryUsage();
-    if (memUsage.heapUsed > 800 * 1024 * 1024) { // If using > 800MB heap (conservative for 2GB total)
+    if (memUsage.heapUsed > 1500 * 1024 * 1024) { // If using > 1.5GB heap
       console.log(`Memory usage: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB, forcing cleanup`);
       if (global.gc) global.gc();
     }
@@ -219,47 +219,52 @@ async function processRelations(
     
     // Only fetch if there are app IDs to look for
     if (appIds.length > 0) {
-      // Use resource-aware batching for fetching existing relations
-      const fetchBatchSize = 500; // Increased batch size for efficiency
-      
+      // **FIXED: Use smaller, parallel batches to avoid 'fetch failed' errors on large datasets, as seen in test-cron-google**
+      const fetchBatchSize = 100; // Reduced batch size to prevent URI too long errors
+      const fetchPromises = [];
+
       for (let i = 0; i < appIds.length; i += fetchBatchSize) {
         const batchAppIds = appIds.slice(i, i + fetchBatchSize);
         
-        // Wait for resources before each fetch
-        await monitor.waitForResources();
+        // Add the promise to the array
+        fetchPromises.push(
+          (async () => {
+            // Wait for resources before each fetch
+            await monitor.waitForResources();
+            
+            const { data, error } = await supabaseAdmin
+              .from('user_applications')
+              .select('id, user_id, application_id, scopes')
+              .in('application_id', batchAppIds);
+            
+            if (error) {
+              console.error(`[Relations ${sync_id}] Error fetching existing relationships for batch starting at index ${i}:`, error);
+              throw error; // Rethrow to fail the Promise.all
+            }
+            return data;
+          })()
+        );
+      }
+      
+      try {
+        // Execute all fetches in parallel
+        const results = await Promise.all(fetchPromises);
         
-        const { data: existingRelations, error: relError } = await supabaseAdmin
-          .from('user_applications')
-          .select('id, user_id, application_id, scopes')
-          .in('application_id', batchAppIds); // Filter by application_id
-        
-        if (relError) {
-          console.error('Error fetching existing relationships:', relError);
-          throw relError;
-        }
-        
-        if (existingRelations && existingRelations.length > 0) {
-          // Add to our map
-          existingRelations.forEach(rel => {
-            const key = `${rel.user_id}-${rel.application_id}`;
-            existingRelMap.set(key, {
-              id: rel.id,
-              scopes: rel.scopes || []
+        // Process results
+        for (const existingRelations of results) {
+          if (existingRelations && existingRelations.length > 0) {
+            existingRelations.forEach(rel => {
+              const key = `${rel.user_id}-${rel.application_id}`;
+              existingRelMap.set(key, {
+                id: rel.id,
+                scopes: rel.scopes || []
+              });
             });
-          });
+          }
         }
-        
-        // Log progress and resource usage
-        monitor.logResourceUsage(`Relations ${sync_id} FETCH BATCH ${Math.floor(i / fetchBatchSize) + 1}`);
-        
-        // Adaptive delay based on resource usage
-        const usage = monitor.getCurrentUsage();
-        const memoryRatio = Math.max(usage.heapUsed / 1600, usage.rss / 1600);
-        const delay = memoryRatio > 0.7 ? 200 : memoryRatio > 0.5 ? 100 : 50;
-        
-        if (i + fetchBatchSize < appIds.length) {
-            await sleep(delay);
-        }
+      } catch (relError) {
+        console.error('Error fetching existing relationships in parallel:', relError);
+        throw relError;
       }
     }
     

@@ -111,9 +111,9 @@ function LoadingContent() {
             setLastProgressUpdate(Date.now());
           }
 
-          // Check for stuck sync (no progress for 30 seconds and not complete)
+          // Check for stuck sync (no progress for 90 seconds and not complete)
           const timeSinceLastUpdate = Date.now() - lastProgressUpdate;
-          if (timeSinceLastUpdate > 30000 && data.status === 'IN_PROGRESS') {
+          if (timeSinceLastUpdate > 90000 && data.status === 'IN_PROGRESS') {
             setStuckSync(true);
           }
 
@@ -170,13 +170,13 @@ function LoadingContent() {
     // Check status immediately
     checkSyncStatus();
 
-    // Then set up polling with a shorter initial interval
-    const initialInterval = setInterval(checkSyncStatus, 1000); // Check every second initially
+    // Then set up polling with a less aggressive interval
+    const initialInterval = setInterval(checkSyncStatus, 2000); // Check every 2 seconds initially
 
     // After 10 seconds, switch to a longer interval
     const timeoutId = setTimeout(() => {
       clearInterval(initialInterval);
-      const regularInterval = setInterval(checkSyncStatus, 3000); // Then every 3 seconds
+      const regularInterval = setInterval(checkSyncStatus, 5000); // Then every 5 seconds
       return () => clearInterval(regularInterval);
     }, 10000);
 

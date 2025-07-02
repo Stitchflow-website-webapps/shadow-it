@@ -14,7 +14,7 @@ const PROCESSING_CONFIG = {
 // **NEW: Emergency limits for huge organizations**
 const EMERGENCY_LIMITS = {
   MAX_USERS_IN_MEMORY: 20000, // Hard limit on users processed at once (reduced for stability)
-  FORCE_CLEANUP_THRESHOLD: 1300, // Force cleanup at 1.3GB (81% of 1.6GB limit)
+  FORCE_CLEANUP_THRESHOLD: 1000, // Force cleanup at 1.0GB (81% of 1.6GB limit)
 };
 
 // Helper function to sleep
@@ -70,7 +70,7 @@ const forceMemoryCleanup = () => {
   // Clear any lingering references
   if (typeof process !== 'undefined' && process.memoryUsage) {
     const memUsage = process.memoryUsage();
-    if (memUsage.heapUsed > 800 * 1024 * 1024) { // If using > 800MB heap (conservative for 2GB total)
+    if (memUsage.heapUsed > 1500 * 1024 * 1024) { // If using > 1.5GB heap
       console.log(`Memory usage: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB, forcing cleanup`);
       if (global.gc) global.gc();
     }
