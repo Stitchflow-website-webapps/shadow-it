@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ 
         error: 'Could not find any tokens in sync_status',
         details: 'The user needs to complete the admin consent flow first.',
-        suggestion: `Have ${user_email} log in with admin consent at https://stitchflow.com/tools/shadow-it-scan/`,
+        suggestion: `Have ${user_email} log in with admin consent at https://stitchflow.com/`,
         debugInfo: syncError?.message 
       }, { status: 404 });
     }

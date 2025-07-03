@@ -57,11 +57,11 @@ curl -X POST https://your-render-app.onrender.com/api/background/test-spoton-syn
   -H "Content-Type: application/json"
 ```
 
-curl -X POST https://shadow-it.onrender.com/tools/shadow-it-scan/api/background/test-spoton-sync \
+curl -X POST https://shadow-it.onrender.com/api/background/test-spoton-sync \
   -H "Content-Type: application/json"
 
 ### Method 3: Browser/Postman
-- **URL**: `https://shadow-it.onrender.com/tools/shadow-it-scan/api/background/test-spoton-sync`
+- **URL**: `https://shadow-it.onrender.com/api/background/test-spoton-sync`
 - **Method**: POST
 - **Headers**: `Content-Type: application/json`
 

@@ -53,7 +53,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       }
       
       // Fetch notification preferences
-      const response = await fetch(`/tools/shadow-it-scan/api/user/notification-preferences?orgId=${orgId}`);
+      const response = await fetch(`/api/user/notification-preferences?orgId=${orgId}`);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -102,7 +102,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       }
       
       // Save notification preferences
-      const response = await fetch('/tools/shadow-it-scan/api/user/notification-preferences', {
+      const response = await fetch('/api/user/notification-preferences', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

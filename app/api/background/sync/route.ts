@@ -299,7 +299,7 @@ async function processEndpointsSequentially(
       // Wait for resources before each endpoint
       await monitor.waitForResources();
       
-      // Try first with the /tools/shadow-it-scan prefix as per next.config.js assetPrefix
+      // Try first with the  prefix as per next.config.js assetPrefix
       const prefixedUrl = `${baseUrl}/${endpoint}`;
       console.log(`🔄 [SEQUENTIAL] Calling ${prefixedUrl}...`);
       
@@ -311,7 +311,7 @@ async function processEndpointsSequentially(
           body: JSON.stringify(requestPayload),
         });
       } catch (fetchError) {
-        console.log(`Error with ${prefixedUrl}, trying without /tools/shadow-it-scan/ prefix...`);
+        console.log(`Error with ${prefixedUrl}, trying without / prefix...`);
         // If the first attempt fails, try without the prefix
         const directUrl = `${baseUrl}/${endpoint}`;
         console.log(`Calling ${directUrl}...`);

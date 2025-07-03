@@ -444,9 +444,9 @@ export default function ShadowITDashboard() {
     
     // Check if we're on localhost
     if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1'))) {
-      redirectURI = `${window.location.origin}/tools/shadow-it-scan/api/auth/google/callback`;
+      redirectURI = `${window.location.origin}/api/auth/google/callback`;
     } else {
-      redirectURI = `https://stitchflow.com/tools/shadow-it-scan/api/auth/google`;
+      redirectURI = `https://stitchflow.com/api/auth/google`;
     }
     
     const scopes = [
@@ -481,9 +481,9 @@ export default function ShadowITDashboard() {
     
     // Check if we're on localhost
     if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1'))) {
-      redirectURI = `${window.location.origin}/tools/shadow-it-scan/api/auth/microsoft/callback`;
+      redirectURI = `${window.location.origin}/api/auth/microsoft/callback`;
     } else {
-      redirectURI = `https://stitchflow.com/tools/shadow-it-scan/api/auth/microsoft`;
+      redirectURI = `https://stitchflow.com/api/auth/microsoft`;
     }
     
     const scopes = [
@@ -629,7 +629,7 @@ export default function ShadowITDashboard() {
       const uncategorizedIds = Array.from(uncategorizedApps);
       if (uncategorizedIds.length === 0) return;
 
-      const response = await fetch(`/tools/shadow-it-scan/api/applications/categories?ids=${uncategorizedIds.join(',')}&orgId=${categoryOrgId}`);
+      const response = await fetch(`/api/applications/categories?ids=${uncategorizedIds.join(',')}&orgId=${categoryOrgId}`);
       if (!response.ok) return;
 
       const data = await response.json();
@@ -808,7 +808,7 @@ export default function ShadowITDashboard() {
     // Fetch user info directly from our new API endpoint
     const fetchUserData = async () => {
       try {
-        const response = await fetch('/tools/shadow-it-scan/api/session-info');
+        const response = await fetch('/api/session-info');
         
         if (response.ok) {
           const userData = await response.json();
@@ -835,7 +835,7 @@ export default function ShadowITDashboard() {
       // Specifically clear the critical cookies with all path/domain combinations
       const cookiesToClear = ['orgId', 'userEmail', 'accessToken', 'refreshToken'];
       const domains = [window.location.hostname, '', null, 'stitchflow.com', `.${window.location.hostname}`];
-      const paths = ['/', '/tools/shadow-it-scan', '/tools/shadow-it-scan/', '', null];
+      const paths = ['/', '', '/', '', null];
       
       // Try all combinations to ensure cookies are cleared
       for (const cookieName of cookiesToClear) {
@@ -872,7 +872,7 @@ export default function ShadowITDashboard() {
       console.log('Cookies after clearing:', document.cookie);
       
       // Redirect and force refresh (using a timestamp to prevent caching)
-      window.location.href = `/tools/shadow-it-scan/`;
+      window.location.href = `/`;
     }
   };
 
@@ -1202,7 +1202,7 @@ export default function ShadowITDashboard() {
   // Handle status change
   const handleStatusChange = async (appId: string, newStatus: string) => {
     try {
-      const response = await fetch('/tools/shadow-it-scan/api/applications', {
+      const response = await fetch('/api/applications', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -1231,7 +1231,7 @@ export default function ShadowITDashboard() {
       }));
 
       // Fetch updated data from the server
-      const updatedResponse = await fetch(`/tools/shadow-it-scan/api/applications?orgId=${new URLSearchParams(window.location.search).get('orgId')}`);
+      const updatedResponse = await fetch(`/api/applications?orgId=${new URLSearchParams(window.location.search).get('orgId')}`);
       if (updatedResponse.ok) {
         const updatedData = await updatedResponse.json();
         setApplications(updatedData);
@@ -1968,7 +1968,7 @@ export default function ShadowITDashboard() {
 
     // Custom Reddit logo component - Moved from SignInDialog
     const RedditLogo = () => (
-      <img src="/tools/shadow-it-scan/reddit-logo.svg" alt="Reddit Logo" width="20" height="20" className="text-orange-500" />
+      <img src="/reddit-logo.svg" alt="Reddit Logo" width="20" height="20" className="text-orange-500" />
     );
 
     const testimonials = [
@@ -2024,9 +2024,9 @@ export default function ShadowITDashboard() {
 
         // If we're on localhost, use the current origin
         if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
-          redirectUri = `${window.location.origin}/tools/shadow-it-scan/api/auth/google/callback`;
+          redirectUri = `${window.location.origin}/api/auth/google/callback`;
         } else {
-          redirectUri = 'https://stitchflow.com/tools/shadow-it-scan/api/auth/google';
+          redirectUri = 'https://stitchflow.com/api/auth/google';
         }
         
         console.log('Using redirectUri:', redirectUri);
@@ -2291,7 +2291,7 @@ export default function ShadowITDashboard() {
       setIsSaving(true);
       setSaveMessage(null);
 
-      const response = await fetch('/tools/shadow-it-scan/api/applications', {
+      const response = await fetch('/api/applications', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

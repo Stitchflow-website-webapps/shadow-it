@@ -2,8 +2,8 @@
  * Microsoft Auth Configuration
  * 
  * IMPORTANT: In Azure portal, ensure ALL your redirect URIs use your production domain:
- * - https://stitchflow.com/tools/shadow-it-scan/api/auth/microsoft (CORRECT)
- * - https://www.stitchflow.com/tools/shadow-it-scan/api/auth/microsoft (CORRECT)
+ * - https://stitchflow.com/api/auth/microsoft (CORRECT)
+ * - https://www.stitchflow.com/api/auth/microsoft (CORRECT)
  * 
  * Remove any localhost redirect URIs from production:
  * - http://localhost:3000/api/auth/microsoft (REMOVE FROM PRODUCTION APP)
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
     
     if (!code) {
       console.error('No authorization code received from Microsoft');
-      return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=no_code', request.url));
+      return NextResponse.redirect(new URL('/?error=no_code', request.url));
     }
 
     // Exchange code for tokens
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
     
     if (!clientId || !clientSecret || !redirectUri) {
       console.error('Missing Microsoft OAuth configuration');
-      return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=config_missing', request.url));
+      return NextResponse.redirect(new URL('/?error=config_missing', request.url));
     }
 
     // Ensure redirect URI matches what was used in the authorization request
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text();
       console.error('Token exchange failed:', errorData);
-      return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=auth_failed', request.url));
+      return NextResponse.redirect(new URL('/?error=auth_failed', request.url));
     }
 
     const tokenData = await tokenResponse.json();
@@ -209,7 +209,7 @@ export async function GET(request: NextRequest) {
 
     if (!userResponse.ok) {
       console.error('Failed to fetch user data');
-      return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=user_data_failed', request.url));
+      return NextResponse.redirect(new URL('/?error=user_data_failed', request.url));
     }
 
     const userData = await userResponse.json();
@@ -223,7 +223,7 @@ export async function GET(request: NextRequest) {
       const orgDomain = searchParams.get('org');
       if (!orgDomain) {
         console.error('Re-authentication requires organization domain');
-        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=missing_org`);
+        return NextResponse.redirect(`https://stitchflow.com/?error=missing_org`);
       }
 
       const { data: org, error: orgError } = await supabaseAdmin
@@ -234,7 +234,7 @@ export async function GET(request: NextRequest) {
 
       if (orgError || !org) {
         console.error('Organization not found for re-authentication:', orgDomain);
-        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=org_not_found`);
+        return NextResponse.redirect(`https://stitchflow.com/?error=org_not_found`);
       }
 
       // Update the sync_status with new tokens
@@ -252,13 +252,13 @@ export async function GET(request: NextRequest) {
 
       if (updateError) {
         console.error('Error updating tokens during re-authentication:', updateError);
-        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=token_update_failed`);
+        return NextResponse.redirect(`https://stitchflow.com/?error=token_update_failed`);
       }
 
       console.log('Successfully updated tokens for re-authentication');
       
       // Redirect back to dashboard with success message
-      const redirectUrl = new URL('https://stitchflow.com/tools/shadow-it-scan/');
+      const redirectUrl = new URL('https://stitchflow.com/');
       redirectUrl.searchParams.set('reauth_success', 'true');
       redirectUrl.searchParams.set('orgId', org.id);
       
@@ -392,7 +392,7 @@ export async function GET(request: NextRequest) {
         console.error('Error recording failed signup:', err);
       }
       
-      return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=not_work_account', request.url));
+      return NextResponse.redirect(new URL('/?error=not_work_account', request.url));
     }
     
     // Check if user is an admin by checking directory roles
@@ -762,7 +762,7 @@ export async function GET(request: NextRequest) {
 
     if (syncStatusError) {
       console.error('Error creating sync status:', syncStatusError);
-      return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=sync_failed', request.url));
+      return NextResponse.redirect(new URL('/?error=sync_failed', request.url));
     }
 
     // Create URL for loading page with syncId parameter
@@ -917,6 +917,6 @@ export async function GET(request: NextRequest) {
     return loadingResponse;
   } catch (error) {
     console.error('Auth error:', error);
-    return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=unknown', request.url));
+    return NextResponse.redirect(new URL('/?error=unknown', request.url));
   }
 }

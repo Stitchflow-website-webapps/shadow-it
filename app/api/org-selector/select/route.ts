@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     const response = NextResponse.json({ 
       success: true, 
       organization: organization,
-      redirectUrl: 'https://stitchflow.com/tools/shadow-it-scan/'
+      redirectUrl: 'https://stitchflow.com/'
     });
 
     // Set cookies for the selected organization

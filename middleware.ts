@@ -7,21 +7,21 @@ export function middleware(request: NextRequest) {
   
   // Skip auth check for public routes and internal API calls
   const publicRoutes = [
-    '/tools/shadow-it-scan/login',
-    '/tools/shadow-it-scan/api/auth/google',
-    '/tools/shadow-it-scan/api/auth/microsoft',
-    '/tools/shadow-it-scan/api/auth/session/create',
-    '/tools/shadow-it-scan/api/auth/session/validate',
-    '/tools/shadow-it-scan/api/auth/session/refresh',
-    '/tools/shadow-it-scan/api/auth/session/logout',
-    '/tools/shadow-it-scan/api/background/sync',
-    '/tools/shadow-it-scan/api/background/sync/google',
-    '/tools/shadow-it-scan/api/background/sync/microsoft',
-    '/tools/shadow-it-scan/api/background/sync/tokens',
-    '/tools/shadow-it-scan/api/background/sync/users',
-    '/tools/shadow-it-scan/api/background/sync/relations',
-    '/tools/shadow-it-scan/api/background/sync/categorize',
-    '/tools/shadow-it-scan/api/background/check-notifications',
+    '/login',
+    '/api/auth/google',
+    '/api/auth/microsoft',
+    '/api/auth/session/create',
+    '/api/auth/session/validate',
+    '/api/auth/session/refresh',
+    '/api/auth/session/logout',
+    '/api/background/sync',
+    '/api/background/sync/google',
+    '/api/background/sync/microsoft',
+    '/api/background/sync/tokens',
+    '/api/background/sync/users',
+    '/api/background/sync/relations',
+    '/api/background/sync/categorize',
+    '/api/background/check-notifications',
     '/api/background/sync',
     '/api/background/sync/users',
     '/api/background/sync/tokens',
@@ -29,14 +29,14 @@ export function middleware(request: NextRequest) {
     '/api/background/sync/categorize',
     '/api/background/sync/microsoft',
     '/api/background/sync/google',
-    '/tools/shadow-it-scan/api/categorize',  // Add the categorization API
-    '/tools/shadow-it-scan/loading',
-    '/tools/shadow-it-scan/api/user',
-    '/tools/shadow-it-scan/api/session-info', // Add the new session-info API
-    '/tools/shadow-it-scan/api/sync/status',
-    '/tools/shadow-it-scan/favicon.ico',
-    '/tools/shadow-it-scan/images',  // Add images directory
-    '/tools/shadow-it-scan/.*\\.(?:jpg|jpeg|gif|png|svg|ico|css|js)$'
+    '/api/categorize',  // Add the categorization API
+    '/loading',
+    '/api/user',
+    '/api/session-info', // Add the new session-info API
+    '/api/sync/status',
+    '/favicon.ico',
+    '/images',  // Add images directory
+    '/.*\\.(?:jpg|jpeg|gif|png|svg|ico|css|js)$'
   ];
   
   // Check if current URL is a public route
@@ -57,18 +57,18 @@ export function middleware(request: NextRequest) {
   // // // Redirect logic
   // if (!isAuthenticated && !isPublicRoute) {
   //   // Redirect to login page if not authenticated and trying to access protected route
-  //   return NextResponse.redirect(new URL('/tools/shadow-it-scan/login', request.url));
+  //   return NextResponse.redirect(new URL('/login', request.url));
   // }
   
-  if (isAuthenticated && request.nextUrl.pathname === '/tools/shadow-it-scan/login' && !isInternalApiCall) {
+  if (isAuthenticated && request.nextUrl.pathname === '/login' && !isInternalApiCall) {
     // Redirect to home page if already authenticated and trying to access login page
-    return NextResponse.redirect(new URL(`/tools/shadow-it-scan/`, request.url));
+    return NextResponse.redirect(new URL(`/`, request.url));
   }
   
   // Check if the request is for the shadow-it-scan API
   const pathname = request.nextUrl.pathname;
   
-  if (pathname.startsWith('/tools/shadow-it-scan/api/categorization/status')) {
+  if (pathname.startsWith('/api/categorization/status')) {
     // Create a new URL for the rewritten endpoint
     const url = new URL(request.url);
     // Change the pathname to the actual API endpoint
@@ -79,7 +79,7 @@ export function middleware(request: NextRequest) {
   }
   
   // Add rewrite for session-info endpoint
-  if (pathname.startsWith('/tools/shadow-it-scan/api/session-info')) {
+  if (pathname.startsWith('/api/session-info')) {
     const url = new URL(request.url);
     url.pathname = `/api/session-info`;
     
@@ -89,13 +89,13 @@ export function middleware(request: NextRequest) {
   }
   
   // Check if user is authenticated for protected routes
-  if (pathname.startsWith('/tools/shadow-it-scan') &&
-      !pathname.startsWith('/tools/shadow-it-scan/login') &&
-      !pathname.startsWith('/tools/shadow-it-scan/api/')) {
+  if (pathname.startsWith('') &&
+      !pathname.startsWith('/login') &&
+      !pathname.startsWith('/api/')) {
     
     // Check for the new session cookie first, then fallback to legacy cookies
     if (!hasSessionCookie && !hasLegacyAuthCookie) {
-      return NextResponse.redirect(new URL('/tools/shadow-it-scan/login', request.url));
+      return NextResponse.redirect(new URL('/login', request.url));
     }
   }
   
@@ -114,6 +114,6 @@ export const config = {
      * - public folder
      */
     '/((?!_next/static|_next/image|favicon.ico|public/).*)',
-    '/tools/shadow-it-scan/api/categorization/status/:path*',
+    '/api/categorization/status/:path*',
   ],
 }; 

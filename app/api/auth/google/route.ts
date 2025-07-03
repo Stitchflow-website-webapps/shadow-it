@@ -191,16 +191,16 @@ export async function GET(request: Request) {
       // redirect to the auth URL with a full consent flow
       if (isPromptNone && (error === 'login_required' || error === 'interaction_required')) {
         console.log('Silent auth failed, redirecting to full auth flow');
-        return NextResponse.redirect(new URL('/tools/shadow-it-scan/?trigger_consent=true', request.url));
+        return NextResponse.redirect(new URL('/?trigger_consent=true', request.url));
       }
       
       console.error('OAuth error received:', error);
-      return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=${error}`);
+      return NextResponse.redirect(`https://stitchflow.com/?error=${error}`);
     }
 
     if (!code) {
       console.error('No authorization code received');
-      return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=no_code`);
+      return NextResponse.redirect(`https://stitchflow.com/?error=no_code`);
     }
 
     console.log('2. Initializing Google Workspace service...');
@@ -237,7 +237,7 @@ export async function GET(request: Request) {
       const orgDomain = searchParams.get('org');
       if (!orgDomain) {
         console.error('Re-authentication requires organization domain');
-        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=missing_org`);
+        return NextResponse.redirect(`https://stitchflow.com/?error=missing_org`);
       }
 
       const { data: org, error: orgError } = await supabaseAdmin
@@ -248,7 +248,7 @@ export async function GET(request: Request) {
 
       if (orgError || !org) {
         console.error('Organization not found for re-authentication:', orgDomain);
-        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=org_not_found`);
+        return NextResponse.redirect(`https://stitchflow.com/?error=org_not_found`);
       }
 
       // Update the sync_status with new tokens
@@ -267,13 +267,13 @@ export async function GET(request: Request) {
 
       if (updateError) {
         console.error('Error updating tokens during re-authentication:', updateError);
-        return NextResponse.redirect(`https://stitchflow.com/tools/shadow-it-scan/?error=token_update_failed`);
+        return NextResponse.redirect(`https://stitchflow.com/?error=token_update_failed`);
       }
 
       console.log('Successfully updated tokens for re-authentication');
       
       // Redirect back to dashboard with success message
-      const redirectUrl = new URL('https://stitchflow.com/tools/shadow-it-scan/');
+      const redirectUrl = new URL('https://stitchflow.com/');
       redirectUrl.searchParams.set('reauth_success', 'true');
       redirectUrl.searchParams.set('orgId', org.id);
       
@@ -305,7 +305,7 @@ export async function GET(request: Request) {
         
       if (userError) {
         console.error('Error upserting special user:', userError);
-        return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=user_creation_failed', request.url));
+        return NextResponse.redirect(new URL('/?error=user_creation_failed', request.url));
       }
 
       // Create session
@@ -327,11 +327,11 @@ export async function GET(request: Request) {
 
       if (sessionError) {
         console.error('Error creating session for special user:', sessionError);
-        return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=session_creation_failed', request.url));
+        return NextResponse.redirect(new URL('/?error=session_creation_failed', request.url));
       }
 
       // Create redirect to org selector
-      const redirectUrl = new URL('https://stitchflow.com/tools/shadow-it-scan/org-selector');
+      const redirectUrl = new URL('https://stitchflow.com/org-selector');
       
       // Create HTML response with localStorage and redirect
       const htmlResponse = `
@@ -467,7 +467,7 @@ export async function GET(request: Request) {
       // Create a direct URL to Google's auth/consent endpoint, bypassing the account chooser
       // This is the key change - use the specific endpoint for direct consent
       const redirectUri = process.env.NODE_ENV === 'production' 
-        ? 'https://stitchflow.com/tools/shadow-it-scan/api/auth/google'
+        ? 'https://stitchflow.com/api/auth/google'
         : `${createRedirectUrl('/api/auth/google')}`;
 
       // Use the v2/auth endpoint that better respects login_hint instead of oauthchooseaccount
@@ -557,7 +557,7 @@ export async function GET(request: Request) {
     //   // Add a more user-friendly error and instructions.
     //   const error_message = 'no_refresh_token&cause=reauth_failed&hint=revoke_google_access';
     //   await sendFailedSignupEmail(userInfo.email, 'Could not get a refresh token from Google. Please revoke app access in your Google account settings and try again.', userInfo.name);
-    //   return NextResponse.redirect(new URL(`https://www.stitchflow.com/tools/shadow-it-scan/?error=${error_message}`, request.url));
+    //   return NextResponse.redirect(new URL(`https://www.stitchflow.com/?error=${error_message}`, request.url));
     // }
 
     if (oauthTokens.refresh_token && !hasRequiredAdminScopes) {
@@ -735,7 +735,7 @@ export async function GET(request: Request) {
 
         if (syncStatusError) {
           console.error('Error creating sync status:', syncStatusError);
-          return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=sync_failed', request.url));
+          return NextResponse.redirect(new URL('/?error=sync_failed', request.url));
         }
         
         syncStatus = newSyncStatus;
@@ -762,7 +762,7 @@ export async function GET(request: Request) {
 
       if (syncStatusError) {
         console.error('Error creating sync status:', syncStatusError);
-        return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=sync_failed', request.url));
+        return NextResponse.redirect(new URL('/?error=sync_failed', request.url));
       }
       
       syncStatus = newSyncStatus;
@@ -791,7 +791,7 @@ export async function GET(request: Request) {
       
     if (userError) {
       console.error('Error upserting user profile:', userError);
-      return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=user_creation_failed', request.url));
+      return NextResponse.redirect(new URL('/?error=user_creation_failed', request.url));
     }
     
     // Create the session record in database with the proper user_id
@@ -821,7 +821,7 @@ export async function GET(request: Request) {
     let redirectUrl;
     if (isNewSyncRequired) {
       // For new users or users without data, redirect to loading page with sync status
-      redirectUrl = new URL('https://stitchflow.com/tools/shadow-it-scan/loading');
+      redirectUrl = new URL('https://stitchflow.com/loading');
       if (syncStatus) {
         redirectUrl.searchParams.set('syncId', syncStatus.id);
       }
@@ -829,7 +829,7 @@ export async function GET(request: Request) {
       console.log('Redirecting new user to loading page');
     } else {
       // For returning users with existing data, go straight to dashboard
-      redirectUrl = new URL('https://stitchflow.com/tools/shadow-it-scan/');
+      redirectUrl = new URL('https://stitchflow.com/');
       redirectUrl.searchParams.set('orgId', org.id);
       console.log('Redirecting returning user directly to dashboard');
     }
@@ -945,6 +945,6 @@ export async function GET(request: Request) {
     return response;
   } catch (error) {
     console.error('Auth error:', error);
-    return NextResponse.redirect(new URL('/tools/shadow-it-scan/?error=unknown', request.url));
+    return NextResponse.redirect(new URL('/?error=unknown', request.url));
   }
 } 

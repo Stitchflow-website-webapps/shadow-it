@@ -221,7 +221,7 @@ export class EmailService {
     if (provider === 'google') {
       const clientId = process.env.GOOGLE_CLIENT_ID;
       const redirectUri = process.env.NODE_ENV === 'production' 
-        ? 'https://stitchflow.com/tools/shadow-it-scan/api/auth/google'
+        ? 'https://stitchflow.com/api/auth/google'
         : `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/google`;
       
       const scopes = [
