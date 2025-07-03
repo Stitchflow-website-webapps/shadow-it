@@ -127,16 +127,48 @@ export default function OrganizationSettingsPage() {
   const loadSettings = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/organization-settings', {
+      
+      // Get orgId from cookie
+      const orgId = getOrgIdFromCookie();
+      if (!orgId) {
+        console.error('Organization ID not found');
+        return;
+      }
+      
+      const response = await fetch(`/api/organization-settings?org_id=${orgId}`, {
         method: 'GET',
         credentials: 'include',
       });
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Organization settings API response:', data);
         if (data.settings) {
-          setTempSettings(data.settings);
-        }
+          // Transform snake_case from DB to camelCase for the frontend
+          const transformedSettings = {
+            bucketWeights: data.settings.bucket_weights || {
+              dataPrivacy: 20,
+              securityAccess: 25,
+              businessImpact: 20,
+              aiGovernance: 15,
+              vendorProfile: 20
+            },
+            aiMultipliers: data.settings.ai_multipliers || {
+              native: { dataPrivacy: 1.5, securityAccess: 1.8, businessImpact: 1.3, aiGovernance: 2.0, vendorProfile: 1.2 },
+              partial: { dataPrivacy: 1.2, securityAccess: 1.4, businessImpact: 1.1, aiGovernance: 1.5, vendorProfile: 1.1 },
+              none: { dataPrivacy: 1.0, securityAccess: 1.0, businessImpact: 1.0, aiGovernance: 1.0, vendorProfile: 1.0 }
+            },
+            scopeMultipliers: data.settings.scope_multipliers || {
+              high: { dataPrivacy: 1.8, securityAccess: 2.0, businessImpact: 1.4, aiGovernance: 1.6, vendorProfile: 1.3 },
+              medium: { dataPrivacy: 1.3, securityAccess: 1.5, businessImpact: 1.2, aiGovernance: 1.2, vendorProfile: 1.1 },
+              low: { dataPrivacy: 1.1, securityAccess: 1.2, businessImpact: 1.0, aiGovernance: 1.0, vendorProfile: 1.0 }
+            }
+                      };
+            console.log('Transformed settings:', transformedSettings);
+            setTempSettings(transformedSettings);
+          }
+      } else {
+        console.error('Failed to load organization settings:', response.status);
       }
     } catch (error) {
       console.error('Error loading organization settings:', error);
@@ -158,6 +190,11 @@ export default function OrganizationSettingsPage() {
   };
 
   const handleSave = async () => {
+    if (!tempSettings.bucketWeights) {
+      alert("Settings not loaded properly. Please refresh the page.");
+      return;
+    }
+    
     const totalWeight = Object.values(tempSettings.bucketWeights).reduce((sum, weight) => sum + weight, 0);
     if (totalWeight !== 100) {
       alert("Total weight must be 100%.");
@@ -211,7 +248,9 @@ export default function OrganizationSettingsPage() {
     }
   };
   
-  const totalWeight = Object.values(tempSettings.bucketWeights).reduce((sum, weight) => sum + weight, 0);
+  const totalWeight = tempSettings.bucketWeights 
+    ? Object.values(tempSettings.bucketWeights).reduce((sum, weight) => sum + weight, 0)
+    : 0;
 
   if (isLoading) {
     return (
@@ -276,7 +315,7 @@ export default function OrganizationSettingsPage() {
               <h3 className="text-lg font-semibold ml-1">Category Weights</h3>
               <p className="text-sm text-gray-600 ml-1">Adjust the importance of each risk category. Total must equal 100%.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Object.entries(tempSettings.bucketWeights).map(([key, value]) => (
+                {tempSettings.bucketWeights && Object.entries(tempSettings.bucketWeights).map(([key, value]) => (
                   <div className="space-y-1" key={key}>
                     <Label htmlFor={key} className="text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1')}</Label>
                     <div className="flex items-center space-x-2">
@@ -312,7 +351,7 @@ export default function OrganizationSettingsPage() {
             <div className="space-y-4">
               <h3 className="text-lg font-semibold ml-1">GenAI Risk Multipliers</h3>
               <p className="text-sm text-gray-600 ml-1">Adjust risk multipliers based on GenAI's impact on an app.</p>
-              {Object.entries(tempSettings.aiMultipliers).map(([level, multipliers]) => (
+              {tempSettings.aiMultipliers && Object.entries(tempSettings.aiMultipliers).map(([level, multipliers]) => (
                 <div key={level} className="space-y-3">
                   <h4 className="text-base font-medium text-gray-900 ml-1 capitalize">{level}</h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
@@ -342,7 +381,7 @@ export default function OrganizationSettingsPage() {
             <div className="space-y-4">
               <h3 className="text-lg font-semibold ml-1">Scope Risk Multipliers</h3>
               <p className="text-sm text-gray-600 ml-1">Adjust risk multipliers based on an application's scope permissions.</p>
-              {Object.entries(tempSettings.scopeMultipliers).map(([level, multipliers]) => (
+              {tempSettings.scopeMultipliers && Object.entries(tempSettings.scopeMultipliers).map(([level, multipliers]) => (
                 <div key={level} className="space-y-3">
                   <h4 className="text-base font-medium text-gray-900 ml-1 capitalize">{level}</h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">

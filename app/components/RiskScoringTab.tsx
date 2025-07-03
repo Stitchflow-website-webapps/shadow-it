@@ -43,6 +43,13 @@ interface RiskScoringTabProps {
 
 export const RiskScoringTab: React.FC<RiskScoringTabProps> = ({ app, allApps, orgSettings, selectedAppData }) => {
   
+  // Debug organization settings
+  console.log('DEBUG - Organization Settings:', {
+    bucketWeights: orgSettings.bucketWeights,
+    aiMultipliers: orgSettings.aiMultipliers,
+    scopeMultipliers: orgSettings.scopeMultipliers
+  });
+  
   // Memoize scoring criteria to ensure it only updates when orgSettings change
   const scoringCriteria = useMemo(() => ({
     dataPrivacy: {
@@ -105,7 +112,24 @@ export const RiskScoringTab: React.FC<RiskScoringTabProps> = ({ app, allApps, or
     if (!app) return null;
     
     const finalScore = app?.["Final Risk Score - Aggregated"];
-    const aiStatus = app?.["Gen AI-Native"]?.toLowerCase() || "";
+    
+    // Debug: Check what AI status fields are available
+    const aiStatusField = app?.["AI-Native"];
+    
+    // console.log('DEBUG - AI Data Check:', {
+    //   'AI-Native': aiStatusField,
+    //   'App Tool Name': app?.["Tool Name"],
+    //   'App Object Keys': Object.keys(app || {}),
+    //   'AI-related keys': Object.keys(app || {}).filter(key => key.toLowerCase().includes('ai')),
+    //   'OrgSettings AI Multipliers': orgSettings.aiMultipliers,
+    //   'Full app object': app
+    // });
+    
+    // Get AI status from the correct field
+    const aiStatus = (aiStatusField || "").toString().toLowerCase().trim();
+    
+    // console.log('DEBUG - Final AI Status:', `"${aiStatus}"`);
+    // console.log('DEBUG - AI Status is empty?', aiStatus === "");
     
     // Get the actual scope risk from the selected app's real risk level calculation
     const getCurrentScopeRisk = () => {
@@ -130,6 +154,19 @@ export const RiskScoringTab: React.FC<RiskScoringTabProps> = ({ app, allApps, or
     
     const getAIMultipliers = (status: string) => {
       const lowerStatus = status.toLowerCase().trim();
+      // console.log('DEBUG - AI Status Processing:', { 
+      //   originalStatus: status, 
+      //   lowerStatus: lowerStatus,
+      //   isEmpty: lowerStatus === "",
+      //   containsKeywords: {
+      //     partial: lowerStatus.includes("partial"),
+      //     native: lowerStatus.includes("native"),
+      //     genai: lowerStatus.includes("genai"),
+      //     yes: lowerStatus.includes("yes"),
+      //     no: lowerStatus.includes("no")
+      //   }
+      // });
+      
       if (lowerStatus.includes("partial")) return orgSettings.aiMultipliers.partial;
       if (lowerStatus.includes("no") || lowerStatus === "" || lowerStatus.includes("not applicable")) return orgSettings.aiMultipliers.none;
       if (lowerStatus.includes("genai") || lowerStatus.includes("native") || lowerStatus.includes("yes")) return orgSettings.aiMultipliers.native;
@@ -137,6 +174,7 @@ export const RiskScoringTab: React.FC<RiskScoringTabProps> = ({ app, allApps, or
     };
 
     const multipliers = getAIMultipliers(aiStatus);
+    console.log('DEBUG - Selected multipliers:', multipliers);
     
     const calculateBaseScore = () => {
       return Object.values(scoringCriteria).reduce((total, category) => {

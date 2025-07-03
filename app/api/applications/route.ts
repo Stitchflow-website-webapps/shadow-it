@@ -666,12 +666,17 @@ async function fixApplicationRiskLevels(orgId: string) {
           });
         }
 
-        // Also include scopes from all_scopes if available
+        // Risk assessment based on ACTUAL user permissions only
+        // Don't include all_scopes to avoid inflating risk for unused permissions
+        const userScopes = Array.from(allUserScopes);
+        
+        // Keep all_scopes for reference but use user scopes for risk calculation
+        const allAppScopes = new Set<string>(allUserScopes);
         if (app.all_scopes && Array.isArray(app.all_scopes)) {
-          app.all_scopes.forEach((scope: string) => allUserScopes.add(scope));
+          app.all_scopes.forEach((scope: string) => allAppScopes.add(scope));
         }
-
-        const allScopes = Array.from(allUserScopes);
+        
+        const allScopes = userScopes; // Use only user scopes for risk calculation
         
         // Recalculate risk level based on all scopes
         const newRiskLevel = determineRiskLevel(allScopes);
@@ -682,8 +687,8 @@ async function fixApplicationRiskLevels(orgId: string) {
           .from('applications')
           .update({
             risk_level: normalizedRiskLevel,
-            total_permissions: allScopes.length,
-            all_scopes: allScopes,
+            total_permissions: allScopes.length, // User scope count for risk calculation
+            all_scopes: Array.from(allAppScopes), // Preserve all application scopes for reference
             updated_at: new Date().toISOString()
           })
           .eq('id', app.id);
@@ -708,7 +713,7 @@ async function fixApplicationRiskLevels(orgId: string) {
         fixedCount++;
         
         if (normalizedRiskLevel !== 'LOW') {
-          console.log(`Fixed ${app.name}: ${allScopes.length} scopes → ${normalizedRiskLevel} risk`);
+          console.log(`Fixed ${app.name}: ${allScopes.length} user scopes → ${normalizedRiskLevel} risk (${Array.from(allAppScopes).length} total app scopes)`);
         }
 
       } catch (error) {

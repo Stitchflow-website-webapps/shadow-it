@@ -4206,12 +4206,19 @@ export default function ShadowITDashboard() {
                               // Find the AI risk data for the selected app
                               const findAIScoringData = (appName: string) => {
                                 const cleanAppName = appName.trim().toLowerCase();
+                                console.log('DEBUG - Fuzzy Matching for:', cleanAppName);
+                                console.log('DEBUG - Available AI data count:', aiRiskData.length);
+                                console.log('DEBUG - Sample AI tools:', aiRiskData.slice(0, 5).map(ai => ai["Tool Name"]));
                                 
                                 // First try exact match (case insensitive)
                                 let exactMatch = aiRiskData.find(ai => 
                                   ai["Tool Name"]?.toLowerCase().trim() === cleanAppName
                                 );
-                                if (exactMatch) return exactMatch;
+                                if (exactMatch) {
+                                  console.log('DEBUG - Found exact match:', exactMatch["Tool Name"]);
+                                  console.log('DEBUG - AI-Native value:', exactMatch["AI-Native"]);
+                                  return exactMatch;
+                                }
                                 
                                 // Try fuzzy matching
                                 for (const aiData of aiRiskData) {
@@ -4222,6 +4229,8 @@ export default function ShadowITDashboard() {
                                   
                                   // Check if one name contains the other
                                   if (cleanAppName.includes(aiName) || aiName.includes(cleanAppName)) {
+                                    console.log('DEBUG - Found fuzzy match:', aiData["Tool Name"]);
+                                    console.log('DEBUG - AI-Native value:', aiData["AI-Native"]);
                                     return aiData;
                                   }
                                   
@@ -4239,14 +4248,19 @@ export default function ShadowITDashboard() {
                                   
                                   const similarity = calculateStringSimilarity(cleanAppName, aiName);
                                   if (similarity > 0.8) {
+                                    console.log('DEBUG - Found similarity match:', aiData["Tool Name"], 'similarity:', similarity);
+                                    console.log('DEBUG - AI-Native value:', aiData["AI-Native"]);
                                     return aiData;
                                   }
                                 }
                                 
+                                console.log('DEBUG - No AI data match found for:', cleanAppName);
                                 return null; // No match found
                               };
                               
-                              return selectedApp ? findAIScoringData(selectedApp.name) : null;
+                              const result = selectedApp ? findAIScoringData(selectedApp.name) : null;
+                              console.log('DEBUG - Final app data passed to RiskScoringTab:', result);
+                              return result;
                             })()}
                             allApps={aiRiskData}
                             orgSettings={orgSettings}
