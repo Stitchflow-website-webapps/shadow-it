@@ -331,7 +331,7 @@ export async function GET(request: Request) {
       }
 
       // Create redirect to org selector
-      const redirectUrl = new URL('https://stitchflow.com/org-selector');
+      const redirectUrl = new URL('https://managed.stitchflow.com/org-selector');
       
       // Create HTML response with localStorage and redirect
       const htmlResponse = `
@@ -821,7 +821,7 @@ export async function GET(request: Request) {
     let redirectUrl;
     if (isNewSyncRequired) {
       // For new users or users without data, redirect to loading page with sync status
-      redirectUrl = new URL('https://stitchflow.com/loading');
+      redirectUrl = new URL('https://managed.stitchflow.com/loading');
       if (syncStatus) {
         redirectUrl.searchParams.set('syncId', syncStatus.id);
       }
@@ -829,7 +829,7 @@ export async function GET(request: Request) {
       console.log('Redirecting new user to loading page');
     } else {
       // For returning users with existing data, go straight to dashboard
-      redirectUrl = new URL('https://stitchflow.com/');
+      redirectUrl = new URL('https://managed.stitchflow.com/');
       redirectUrl.searchParams.set('orgId', org.id);
       console.log('Redirecting returning user directly to dashboard');
     }

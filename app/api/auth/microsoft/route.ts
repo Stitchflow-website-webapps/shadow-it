@@ -223,7 +223,7 @@ export async function GET(request: NextRequest) {
       const orgDomain = searchParams.get('org');
       if (!orgDomain) {
         console.error('Re-authentication requires organization domain');
-        return NextResponse.redirect(`https://stitchflow.com/?error=missing_org`);
+        return NextResponse.redirect(`https://managed.stitchflow.com/?error=missing_org`);
       }
 
       const { data: org, error: orgError } = await supabaseAdmin
@@ -234,7 +234,7 @@ export async function GET(request: NextRequest) {
 
       if (orgError || !org) {
         console.error('Organization not found for re-authentication:', orgDomain);
-        return NextResponse.redirect(`https://stitchflow.com/?error=org_not_found`);
+        return NextResponse.redirect(`https://managed.stitchflow.com/?error=org_not_found`);
       }
 
       // Update the sync_status with new tokens
@@ -252,13 +252,13 @@ export async function GET(request: NextRequest) {
 
       if (updateError) {
         console.error('Error updating tokens during re-authentication:', updateError);
-        return NextResponse.redirect(`https://stitchflow.com/?error=token_update_failed`);
+        return NextResponse.redirect(`https://managed.stitchflow.com/?error=token_update_failed`);
       }
 
       console.log('Successfully updated tokens for re-authentication');
       
       // Redirect back to dashboard with success message
-      const redirectUrl = new URL('https://stitchflow.com/');
+      const redirectUrl = new URL('https://managed.stitchflow.com/');
       redirectUrl.searchParams.set('reauth_success', 'true');
       redirectUrl.searchParams.set('orgId', org.id);
       
