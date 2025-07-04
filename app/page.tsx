@@ -439,73 +439,126 @@ export default function ShadowITDashboard() {
   });
 
   // Helper function to redirect to Google consent screen
-  const redirectToGoogleConsent = () => {
-    let redirectURI;
-    
-    // Check if we're on localhost
-    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1'))) {
-      redirectURI = `${window.location.origin}/api/auth/google/callback`;
-    } else {
-      redirectURI = `https://stitchflow.com/api/auth/google`;
+  const handleGoogleLogin = async () => {
+    try {
+      setIsLoading(true);
+      setLoginError(''); // Clear previous errors specifically for a new login attempt
+
+      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+      const redirectUri = 'https://www.managed.stitchflow.com/api/auth/google';
+
+      if (!clientId) {
+        setLoginError("Missing Google OAuth configuration");
+        console.error('Missing client ID');
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('Using redirectUri:', redirectUri);
+      
+      // Use minimal scopes initially - just enough to identify the user
+      const scopes = [
+        'openid',
+        'profile',
+        'email'
+      ].join(' ');
+
+      // Generate a state parameter to verify the response and enable cross-browser detection
+      const state = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+      
+      // Always store in localStorage to identify this browser session
+      localStorage.setItem('oauthState', state);
+      localStorage.setItem('auth_provider', 'google');
+      localStorage.setItem('lastLogin', Date.now().toString());
+      localStorage.setItem('login_attempt_time', Date.now().toString());
+      
+      // Direct account selection - show the accounts dialog directly
+      // This bypasses the initial email input screen
+      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+      authUrl.searchParams.append('client_id', clientId);
+      authUrl.searchParams.append('redirect_uri', redirectUri);
+      authUrl.searchParams.append('response_type', 'code');
+      authUrl.searchParams.append('scope', scopes);
+      authUrl.searchParams.append('access_type', 'offline'); 
+      authUrl.searchParams.append('include_granted_scopes', 'true');
+      authUrl.searchParams.append('state', state);
+      
+      // Clean URL before redirecting
+      const cleanUrl = new URL(window.location.href);
+      if (cleanUrl.searchParams.has('error')) {
+        cleanUrl.searchParams.delete('error');
+        window.history.replaceState({}, document.title, cleanUrl.toString());
+      }
+
+      window.location.href = authUrl.toString();
+    } catch (err) {
+      console.error('Login error:', err);
+      setLoginError('Failed to initialize login. Please try again.');
+      setIsLoading(false);
     }
-    
-    const scopes = [
-      'openid',
-      'profile',
-      'email',
-      'https://www.googleapis.com/auth/admin.directory.user.readonly',
-      'https://www.googleapis.com/auth/admin.directory.domain.readonly',
-      'https://www.googleapis.com/auth/admin.directory.user.security',
-    ];
-    
-    const state = Math.random().toString(36).substring(2, 15);
-    localStorage.setItem('oauth_state', state);
-    localStorage.setItem('auth_provider', 'google');
-    
-    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    url.searchParams.append('client_id', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '');
-    url.searchParams.append('redirect_uri', redirectURI);
-    url.searchParams.append('response_type', 'code');
-    url.searchParams.append('scope', scopes.join(' '));
-    url.searchParams.append('access_type', 'offline');
-    url.searchParams.append('state', state);
-    url.searchParams.append('prompt', 'consent');
-    
-    console.log("Redirecting to Google with URI:", redirectURI);
-    window.location.href = url.toString();
   };
   
   // Helper function to redirect to Microsoft consent screen
-  const redirectToMicrosoftConsent = () => {
-    let redirectURI;
-    
-    // Check if we're on localhost
-    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1'))) {
-      redirectURI = `${window.location.origin}/api/auth/microsoft/callback`;
-    } else {
-      redirectURI = `https://stitchflow.com/api/auth/microsoft`;
+  const handleMicrosoftLogin = async () => {
+    try {
+      setIsLoading(true);
+      setLoginError(''); // Clear previous errors specifically for a new login attempt
+
+      const clientId = process.env.NEXT_PUBLIC_MICROSOFT_CLIENT_ID;
+      const redirectUri = 'https://www.managed.stitchflow.com/api/auth/microsoft';
+
+      if (!clientId) {
+        setLoginError("Missing Microsoft OAuth configuration");
+        console.error('Missing env variables:', { 
+          clientId: clientId ? 'present' : 'missing',
+          redirectUri: redirectUri ? 'present' : 'missing'
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('Using redirectUri:', redirectUri);
+      
+      const scopes = [
+        // Start with minimal scopes; we'll request admin scopes later if needed
+        'User.Read',
+        'offline_access',
+        'openid',
+        'profile',
+        'email'
+      ].join(' ');
+
+      // Generate a state parameter to verify the response and enable cross-browser detection
+      const state = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+      
+      // Always store in localStorage to identify this browser session
+      localStorage.setItem('oauthState', state);
+      localStorage.setItem('auth_provider', 'microsoft');
+      localStorage.setItem('lastLogin', Date.now().toString());
+      localStorage.setItem('login_attempt_time', Date.now().toString());
+      
+      const authUrl = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
+      authUrl.searchParams.append('client_id', clientId);
+      authUrl.searchParams.append('redirect_uri', redirectUri);
+      authUrl.searchParams.append('response_type', 'code');
+      authUrl.searchParams.append('scope', scopes);
+      authUrl.searchParams.append('response_mode', 'query');
+      authUrl.searchParams.append('prompt', 'select_account');
+      authUrl.searchParams.append('state', state);
+
+      // Clean URL before redirecting
+      const cleanUrl = new URL(window.location.href);
+      if (cleanUrl.searchParams.has('error')) {
+        cleanUrl.searchParams.delete('error');
+        window.history.replaceState({}, document.title, cleanUrl.toString());
+      }
+
+      window.location.href = authUrl.toString();
+    } catch (err) {
+      console.error('Microsoft login error:', err);
+      setLoginError('Failed to initialize Microsoft login. Please try again.');
+      setIsLoading(false);
     }
-    
-    const scopes = [
-      'user.read',
-      'User.ReadBasic.All',
-      'Directory.Read.All'
-    ];
-    
-    const state = Math.random().toString(36).substring(2, 15);
-    localStorage.setItem('oauth_state', state);
-    localStorage.setItem('auth_provider', 'microsoft');
-    
-    const url = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
-    url.searchParams.append('client_id', process.env.NEXT_PUBLIC_MICROSOFT_CLIENT_ID || '');
-    url.searchParams.append('redirect_uri', redirectURI);
-    url.searchParams.append('response_type', 'code');
-    url.searchParams.append('scope', scopes.join(' '));
-    url.searchParams.append('state', state);
-    url.searchParams.append('prompt', 'consent');
-    
-    console.log("Redirecting to Microsoft with URI:", redirectURI);
-    window.location.href = url.toString();
   };
   
   // Add a useEffect to check for error parameters in the URL
@@ -535,9 +588,9 @@ export default function ShadowITDashboard() {
         window.history.replaceState({}, document.title, cleanUrl.toString());
 
         if (provider === 'google') {
-          redirectToGoogleConsent();
+          handleGoogleLogin();
         } else if (provider === 'microsoft') {
-          redirectToMicrosoftConsent();
+          handleMicrosoftLogin();
         }
         return; // Exit after redirecting
       }
@@ -595,7 +648,7 @@ export default function ShadowITDashboard() {
           window.history.replaceState({}, document.title, cleanUrl.toString());
       }
     }
-  }, [searchParams, redirectToGoogleConsent, redirectToMicrosoftConsent, setLoginError, setShowLoginModal]);
+  }, [searchParams, handleGoogleLogin, handleMicrosoftLogin, setLoginError, setShowLoginModal]);
 
   // Add new function to check categories
   const checkCategories = async () => {
@@ -2362,7 +2415,7 @@ export default function ShadowITDashboard() {
 
               <div className="space-y-4">
                 <button
-                  onClick={redirectToGoogleConsent}
+                  onClick={handleGoogleLogin}
                   disabled={isLoading}
                   className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -2376,7 +2429,7 @@ export default function ShadowITDashboard() {
                 </button>
 
                 <button
-                  onClick={redirectToMicrosoftConsent}
+                  onClick={handleMicrosoftLogin}
                   disabled={isLoading}
                   className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
