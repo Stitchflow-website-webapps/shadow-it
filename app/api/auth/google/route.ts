@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleWorkspaceService } from '@/lib/google-workspace';
 import { supabaseAdmin } from '@/lib/supabase';
+import { organizeSupabaseAdmin } from '@/lib/supabase/organize-client';
 import { sendSuccessSignupWebhook, sendFailedSignupWebhook } from '@/lib/webhook';
 import { determineRiskLevel } from '@/lib/risk-assessment';
 import { getAdminScopedTokens } from '@/lib/token-utils';
@@ -652,6 +653,32 @@ export async function GET(request: Request) {
     if (orgError) {
       console.error('Organization upsert error:', orgError);
       throw orgError;
+    }
+
+    // Create corresponding organization in organize-app-inbox schema
+    try {
+      const { error: organizeOrgError } = await organizeSupabaseAdmin
+        .from('organizations')
+        .upsert({
+          name: `${userInfo.hd}'s Organization`,
+          identity_provider: '',
+          email_provider: '',
+          shadow_org_id: org.id,
+          updated_at: new Date().toISOString()
+        }, { 
+          onConflict: 'shadow_org_id',
+          ignoreDuplicates: false 
+        });
+      
+      if (organizeOrgError) {
+        console.error('Error creating organize-app-inbox organization:', organizeOrgError);
+        // Don't throw - this shouldn't block the main auth flow
+      } else {
+        console.log('Created organize-app-inbox organization for:', userInfo.hd);
+      }
+    } catch (organizeError) {
+      console.error('Error in organize-app-inbox org creation:', organizeError);
+      // Don't throw - this shouldn't block the main auth flow
     }
 
     // Check if we already have data for this organization 

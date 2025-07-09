@@ -65,6 +65,10 @@ import SettingsModal from "@/app/components/SettingsModal";
 import Sidebar from "@/app/components/Sidebar";
 // Import the OrganizationSettingsDialog component
 import { OrganizationSettingsDialog } from "@/app/components/OrganizationSettingsDialog";
+// Import the OrganizeAppInbox component
+import { OrganizeAppInbox } from "@/app/components/OrganizeAppInbox";
+// Import the AppInboxSettings component
+import AppInboxSettings from "@/app/components/AppInboxSettings";
 // Import risk assessment utilities
 import { HIGH_RISK_SCOPES, MEDIUM_RISK_SCOPES } from "@/lib/risk-assessment";
 // Import AI risk utilities
@@ -234,6 +238,9 @@ export default function ShadowITDashboard() {
       // Route to the dedicated AI Risk Analysis page
       router.push("/Risk_analysis")
       return
+    } else if (view === "organize-app-inbox") {
+      // Handle organize-app-inbox view locally, don't route to separate page
+      // This will be handled by the conditional rendering below
     } else if (view === "email-notifications") {
       // Route to the Email Notifications settings page
       router.push("/email-notifications")
@@ -242,6 +249,9 @@ export default function ShadowITDashboard() {
       // Route to the Organization Settings page
       router.push("/organization-settings")
       return
+    } else if (view === "app-inbox-settings") {
+      // Handle app-inbox-settings view locally
+      // This will be handled by the conditional rendering below
     }
     // Close sidebar on mobile after selection
     setIsSidebarOpen(false)
@@ -2519,7 +2529,11 @@ export default function ShadowITDashboard() {
                   <LayoutGrid className="h-4 w-4" />
                 </Button>
               )}
-              <h2 className="text-xl font-bold">Shadow IT Overview</h2>
+              <h2 className="text-xl font-bold">
+                {currentView === "organize-app-inbox" ? "App Inbox" : 
+                 currentView === "app-inbox-settings" ? "App Inbox Settings" : 
+                 "Shadow IT Overview"}
+              </h2>
               <Share url="https://www.managed.stitchflow.com/" />
             </div>
 
@@ -2532,6 +2546,10 @@ export default function ShadowITDashboard() {
                   </div>
                 </div>
               </div>
+            ) : currentView === "organize-app-inbox" ? (
+              <OrganizeAppInbox />
+            ) : currentView === "app-inbox-settings" ? (
+              <AppInboxSettings />
             ) : !selectedAppId ? (
               <div ref={mainContentRef} className="space-y-6"> {/* Added ref here */}
                 <div className="flex justify-between items-center mt-[-4px]">

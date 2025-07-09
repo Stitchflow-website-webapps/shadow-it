@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { organizeSupabaseAdmin } from '@/lib/supabase/organize-client';
 import { sendSuccessSignupWebhook, sendFailedSignupWebhook } from '@/lib/webhook';
 import crypto from 'crypto';
 
@@ -557,6 +558,32 @@ export async function GET(request: NextRequest) {
         throw createError;
       }
       org = newOrg;
+    }
+
+    // Create corresponding organization in organize-app-inbox schema
+    try {
+      const { error: organizeOrgError } = await organizeSupabaseAdmin
+        .from('organizations')
+        .upsert({
+          name: `${emailDomain}'s Organization`,
+          identity_provider: '',
+          email_provider: '',
+          shadow_org_id: org.id,
+          updated_at: new Date().toISOString()
+        }, { 
+          onConflict: 'shadow_org_id',
+          ignoreDuplicates: false 
+        });
+      
+      if (organizeOrgError) {
+        console.error('Error creating organize-app-inbox organization:', organizeOrgError);
+        // Don't throw - this shouldn't block the main auth flow
+      } else {
+        console.log('Created organize-app-inbox organization for:', emailDomain);
+      }
+    } catch (organizeError) {
+      console.error('Error in organize-app-inbox org creation:', organizeError);
+      // Don't throw - this shouldn't block the main auth flow
     }
 
     // Check if this organization already has completed a successful sync

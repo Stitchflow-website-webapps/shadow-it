@@ -293,7 +293,7 @@ export default function OrganizationSettingsPage() {
               <Settings className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-[#363338]">Organization Score Settings</h1>
+                              <h1 className="text-2xl font-bold text-[#363338]">Organization Settings</h1>
               <p className="text-[#7B7481]">Customize scoring weights and multipliers for your organization's risk assessment methodology</p>
             </div>
           </div>

@@ -8,12 +8,10 @@ import {
   BarChart3,
   LogOut,
   User,
-  Settings,
-  ChevronDown,
-  ChevronUp,
   Bell,
   Sliders,
-  Mail
+  Mail,
+  Inbox
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -46,7 +44,6 @@ export default function Sidebar({
   userInfo,
   onSignOut
 }: SidebarProps) {
-  const [isSettingsExpanded, setIsSettingsExpanded] = React.useState(false);
   const sidebarWidth = isCollapsed ? 'w-16' : 'w-56';
   const contentVisibility = isCollapsed ? 'hidden' : 'block';
 
@@ -185,121 +182,127 @@ export default function Sidebar({
             </nav>
           </div>
 
+          {/* Organize Section */}
+          <div className="mt-6">
+            <h3 className={`font-semibold text-[#7B7481] mb-3 ${contentVisibility}`} style={{ fontSize: '14px', lineHeight: '18px' }}>
+              Organize
+            </h3>
+            <nav className="space-y-1">
+              <button
+                onClick={() => onViewChange('organize-app-inbox')}
+                className={`
+                  w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
+                  transition-all duration-200 ease-in-out
+                  group relative
+                  ${currentView === 'organize-app-inbox' 
+                    ? 'bg-[#363338] text-white shadow-sm' 
+                    : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
+                  }
+                  ${isCollapsed ? 'justify-center px-2' : 'justify-start'}
+                `}
+              >
+                <Inbox className={`h-4 w-4 flex-shrink-0 transition-colors duration-200 ${
+                  currentView === 'organize-app-inbox' 
+                    ? 'text-white' 
+                    : 'text-[#7B7481] group-hover:text-[#363338]'
+                }`} />
+                <span className={`font-medium transition-colors duration-200 ${contentVisibility} ${
+                  currentView === 'organize-app-inbox'
+                    ? 'text-white'
+                    : 'group-hover:text-[#1A1A1A]'
+                }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
+                  App Inbox
+                </span>
+              </button>
+            </nav>
+          </div>
+
           {/* Settings Section */}
           <div className="mt-6">
             <h3 className={`font-semibold text-[#7B7481] mb-3 ${contentVisibility}`} style={{ fontSize: '14px', lineHeight: '18px' }}>
               Settings
             </h3>
             <nav className="space-y-1">
-              {/* Settings Main Button */}
-              <div>
-                <button
-                  onClick={() => {
-                    if (isCollapsed) {
-                      onViewChange('settings');
-                    } else {
-                      setIsSettingsExpanded(!isSettingsExpanded);
-                    }
-                  }}
-                  className={`
-                    w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
-                    transition-all duration-200 ease-in-out
-                    group relative
-                    ${(currentView === 'email-notifications' || currentView === 'organization-settings' || isSettingsExpanded)
-                      ? 'bg-[#363338] text-white shadow-sm' 
-                      : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
-                    }
-                    ${isCollapsed ? 'justify-center px-2' : 'justify-start'}
-                  `}
-                >
-                  <Settings className={`h-4 w-4 flex-shrink-0 transition-colors duration-200 ${
-                    (currentView === 'email-notifications' || currentView === 'organization-settings' || isSettingsExpanded)
-                      ? 'text-white' 
-                      : 'text-[#7B7481] group-hover:text-[#363338]'
-                  }`} />
-                  <span className={`font-medium transition-colors duration-200 ${contentVisibility} ${
-                    (currentView === 'email-notifications' || currentView === 'organization-settings' || isSettingsExpanded)
-                      ? 'text-white'
-                      : 'group-hover:text-[#1A1A1A]'
-                  }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
-                    Settings
-                  </span>
-                  {!isCollapsed && (
-                    <div className="ml-auto">
-                      {isSettingsExpanded ? (
-                        <ChevronUp className={`h-3 w-3 transition-colors duration-200 ${
-                          (currentView === 'email-notifications' || currentView === 'organization-settings' || isSettingsExpanded)
-                            ? 'text-white' 
-                            : 'text-[#7B7481] group-hover:text-[#363338]'
-                        }`} />
-                      ) : (
-                        <ChevronDown className={`h-3 w-3 transition-colors duration-200 ${
-                          (currentView === 'email-notifications' || currentView === 'organization-settings' || isSettingsExpanded)
-                            ? 'text-white' 
-                            : 'text-[#7B7481] group-hover:text-[#363338]'
-                        }`} />
-                      )}
-                    </div>
-                  )}
-                </button>
-                
-                {/* Settings Submenu */}
-                {!isCollapsed && isSettingsExpanded && (
-                  <div className="ml-6 mt-1 space-y-1">
-                    <button
-                      onClick={() => onViewChange('email-notifications')}
-                      className={`
-                        w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
-                        transition-all duration-200 ease-in-out
-                        group relative text-sm
-                        ${currentView === 'email-notifications' 
-                          ? 'bg-[#4A444B] text-white shadow-sm' 
-                          : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm'
-                        }
-                      `}
-                    >
-                      <Bell className={`h-3 w-3 flex-shrink-0 transition-colors duration-200 ${
-                        currentView === 'email-notifications' 
-                          ? 'text-white' 
-                          : 'text-[#7B7481] group-hover:text-[#363338]'
-                      }`} />
-                      <span className={`transition-colors duration-200 ${
-                        currentView === 'email-notifications'
-                          ? 'text-white'
-                          : 'group-hover:text-[#1A1A1A]'
-                      }`} style={{ fontSize: '14px', lineHeight: '18px' }}>
-                        Email Notifications
-                      </span>
-                    </button>
-                    
-                    <button
-                      onClick={() => onViewChange('organization-settings')}
-                      className={`
-                        w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
-                        transition-all duration-200 ease-in-out
-                        group relative text-sm
-                        ${currentView === 'organization-settings' 
-                          ? 'bg-[#4A444B] text-white shadow-sm' 
-                          : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm'
-                        }
-                      `}
-                    >
-                      <Sliders className={`h-3 w-3 flex-shrink-0 transition-colors duration-200 ${
-                        currentView === 'organization-settings' 
-                          ? 'text-white' 
-                          : 'text-[#7B7481] group-hover:text-[#363338]'
-                      }`} />
-                      <span className={`transition-colors duration-200 ${
-                        currentView === 'organization-settings'
-                          ? 'text-white'
-                          : 'group-hover:text-[#1A1A1A]'
-                      }`} style={{ fontSize: '14px', lineHeight: '18px' }}>
-                        Organization Score Settings
-                      </span>
-                    </button>
-                  </div>
-                )}
-              </div>
+              <button
+                onClick={() => onViewChange('email-notifications')}
+                className={`
+                  w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
+                  transition-all duration-200 ease-in-out
+                  group relative
+                  ${currentView === 'email-notifications' 
+                    ? 'bg-[#363338] text-white shadow-sm' 
+                    : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
+                  }
+                  ${isCollapsed ? 'justify-center px-2' : 'justify-start'}
+                `}
+              >
+                <Bell className={`h-4 w-4 flex-shrink-0 transition-colors duration-200 ${
+                  currentView === 'email-notifications' 
+                    ? 'text-white' 
+                    : 'text-[#7B7481] group-hover:text-[#363338]'
+                }`} />
+                <span className={`font-medium transition-colors duration-200 ${contentVisibility} ${
+                  currentView === 'email-notifications'
+                    ? 'text-white'
+                    : 'group-hover:text-[#1A1A1A]'
+                }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
+                  Email Notifications
+                </span>
+              </button>
+              
+              <button
+                onClick={() => onViewChange('organization-settings')}
+                className={`
+                  w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
+                  transition-all duration-200 ease-in-out
+                  group relative
+                  ${currentView === 'organization-settings' 
+                    ? 'bg-[#363338] text-white shadow-sm' 
+                    : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
+                  }
+                  ${isCollapsed ? 'justify-center px-2' : 'justify-start'}
+                `}
+              >
+                <Sliders className={`h-4 w-4 flex-shrink-0 transition-colors duration-200 ${
+                  currentView === 'organization-settings' 
+                    ? 'text-white' 
+                    : 'text-[#7B7481] group-hover:text-[#363338]'
+                }`} />
+                <span className={`font-medium transition-colors duration-200 ${contentVisibility} ${
+                  currentView === 'organization-settings'
+                    ? 'text-white'
+                    : 'group-hover:text-[#1A1A1A]'
+                }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
+                  Organization Settings
+                </span>
+              </button>
+              
+              <button
+                onClick={() => onViewChange('app-inbox-settings')}
+                className={`
+                  w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
+                  transition-all duration-200 ease-in-out
+                  group relative
+                  ${currentView === 'app-inbox-settings' 
+                    ? 'bg-[#363338] text-white shadow-sm' 
+                    : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
+                  }
+                  ${isCollapsed ? 'justify-center px-2' : 'justify-start'}
+                `}
+              >
+                <Sliders className={`h-4 w-4 flex-shrink-0 transition-colors duration-200 ${
+                  currentView === 'app-inbox-settings' 
+                    ? 'text-white' 
+                    : 'text-[#7B7481] group-hover:text-[#363338]'
+                }`} />
+                <span className={`font-medium transition-colors duration-200 ${contentVisibility} ${
+                  currentView === 'app-inbox-settings'
+                    ? 'text-white'
+                    : 'group-hover:text-[#1A1A1A]'
+                }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
+                  App Inbox Settings
+                </span>
+              </button>
             </nav>
           </div>
         </div>
