@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Settings } from "lucide-react";
-import Sidebar from "@/app/components/Sidebar";
+import { Settings } from "lucide-react";
 
 // --- TYPE DEFINITIONS ---
 
@@ -40,14 +39,8 @@ interface OrgSettings {
     };
 }
 
-export default function OrganizationSettingsPage() {
+export default function OrganizationSettings() {
   const router = useRouter();
-
-  // Sidebar state
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [currentView, setCurrentView] = useState('organization-settings');
-  const [userInfo, setUserInfo] = useState<{ name: string; email: string; avatar_url: string | null } | null>(null);
   const [tempSettings, setTempSettings] = useState<OrgSettings>({
     bucketWeights: {
       dataPrivacy: 20,
@@ -76,53 +69,7 @@ export default function OrganizationSettingsPage() {
   useEffect(() => {
     // Load settings on mount
     loadSettings();
-    fetchUserInfo();
   }, []);
-
-  const fetchUserInfo = async () => {
-    try {
-      const response = await fetch('/api/session-info', {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUserInfo(data.user);
-      }
-    } catch (error) {
-      console.error('Error fetching user info:', error);
-    }
-  };
-
-  const handleSidebarToggle = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
-
-  const handleSidebarCollapse = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
-  };
-
-  const handleViewChange = (view: string) => {
-    setCurrentView(view);
-    if (view === "applications") {
-      router.push("/");
-    } else if (view === "ai-risk-analysis") {
-      router.push("/Risk_analysis");
-    } else if (view === "email-notifications") {
-      router.push("/email-notifications");  
-    }
-    setIsSidebarOpen(false);
-  };
-
-  const handleSignOut = () => {
-    // Clear cookies and redirect to login
-    const cookiesToClear = ['orgId', 'userEmail', 'accessToken', 'refreshToken'];
-    cookiesToClear.forEach(cookieName => {
-      document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-    });
-    router.push('/login');
-  };
 
   const loadSettings = async () => {
     try {
@@ -163,10 +110,10 @@ export default function OrganizationSettingsPage() {
               medium: { dataPrivacy: 1.3, securityAccess: 1.5, businessImpact: 1.2, aiGovernance: 1.2, vendorProfile: 1.1 },
               low: { dataPrivacy: 1.1, securityAccess: 1.2, businessImpact: 1.0, aiGovernance: 1.0, vendorProfile: 1.0 }
             }
-                      };
-            console.log('Transformed settings:', transformedSettings);
-            setTempSettings(transformedSettings);
-          }
+          };
+          console.log('Transformed settings:', transformedSettings);
+          setTempSettings(transformedSettings);
+        }
       } else {
         console.error('Failed to load organization settings:', response.status);
       }
@@ -235,10 +182,10 @@ export default function OrganizationSettingsPage() {
 
       setSaveSuccess(true);
       
-      // Refresh the page after a short delay to show success message
+      // Hide success message after a short delay
       setTimeout(() => {
-        window.location.reload();
-      }, 1500);
+        setSaveSuccess(false);
+      }, 3000);
 
     } catch (error) {
       console.error('Error saving organization settings:', error);
@@ -254,46 +201,28 @@ export default function OrganizationSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F8F6F3] to-[#E8E3DC] flex items-center justify-center">
-        <div className="text-[#7B7481]">Loading...</div>
+      <div className="min-h-screen bg-gradient-to-br from-[#F8F6F3] to-[#E8E3DC]">
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading Organization Settings...</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F8F6F3] to-[#E8E3DC] flex">
-      {/* Sidebar */}
-      <Sidebar
-        isOpen={isSidebarOpen}
-        isCollapsed={isSidebarCollapsed}
-        onToggle={handleSidebarToggle}
-        onCollapse={handleSidebarCollapse}
-        currentView={currentView}
-        onViewChange={handleViewChange}
-        userInfo={userInfo}
-        onSignOut={handleSignOut}
-      />
-
-      {/* Main Content */}
-      <div className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-16' : 'ml-56'}`}>
+    <div className="min-h-screen bg-gradient-to-br from-[#F8F6F3] to-[#E8E3DC]">
       <div className="container mx-auto px-6 py-8 max-w-5xl">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => router.back()}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-[#363338] rounded-lg">
               <Settings className="h-5 w-5 text-white" />
             </div>
             <div>
-                              <h1 className="text-2xl font-bold text-[#363338]">Organization Settings</h1>
+              <h1 className="text-2xl font-bold text-[#363338]">Organization Settings</h1>
               <p className="text-[#7B7481]">Customize scoring weights and multipliers for your organization's risk assessment methodology</p>
             </div>
           </div>
@@ -419,7 +348,7 @@ export default function OrganizationSettingsPage() {
             {/* Success Message */}
             {saveSuccess && (
               <div className="p-3 bg-green-50 border border-green-200 rounded">
-                <p className="text-sm text-green-700">✅ Settings saved successfully! Refreshing page...</p>
+                <p className="text-sm text-green-700">✅ Settings saved successfully!</p>
               </div>
             )}
           
@@ -437,7 +366,6 @@ export default function OrganizationSettingsPage() {
               </Button>
             </div>
           </div>
-        </div>
         </div>
       </div>
     </div>

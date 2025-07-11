@@ -4,8 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Bell } from "lucide-react";
-import Sidebar from "@/app/components/Sidebar";
+import { Bell } from "lucide-react";
 
 interface NotificationPreferences {
   new_app_detected: boolean;
@@ -13,7 +12,7 @@ interface NotificationPreferences {
   new_user_in_review_app: boolean;
 }
 
-export default function EmailNotificationsPage() {
+export default function EmailNotificationsSettings() {
   const router = useRouter();
   const [notificationSettings, setNotificationSettings] = useState<NotificationPreferences>({
     new_app_detected: true,
@@ -26,62 +25,10 @@ export default function EmailNotificationsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Sidebar state
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [currentView, setCurrentView] = useState('email-notifications');
-  const [userInfo, setUserInfo] = useState<{ name: string; email: string; avatar_url: string | null } | null>(null);
-
   // Load user notification preferences on mount
   useEffect(() => {
     loadNotificationPreferences();
-    fetchUserInfo();
   }, []);
-
-  const fetchUserInfo = async () => {
-    try {
-      const response = await fetch('/api/session-info', {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUserInfo(data.user);
-      }
-    } catch (error) {
-      console.error('Error fetching user info:', error);
-    }
-  };
-
-  const handleSidebarToggle = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
-
-  const handleSidebarCollapse = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
-  };
-
-  const handleViewChange = (view: string) => {
-    setCurrentView(view);
-    if (view === "applications") {
-      router.push("/");
-    } else if (view === "ai-risk-analysis") {
-      router.push("/Risk_analysis");
-    } else if (view === "organization-settings") {
-      router.push("/organization-settings");
-    }
-    setIsSidebarOpen(false);
-  };
-
-  const handleSignOut = () => {
-    // Clear cookies and redirect to login
-    const cookiesToClear = ['orgId', 'userEmail', 'accessToken', 'refreshToken'];
-    cookiesToClear.forEach(cookieName => {
-      document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-    });
-    router.push('/login');
-  };
 
   const loadNotificationPreferences = async () => {
     try {
@@ -223,43 +170,20 @@ export default function EmailNotificationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F8F6F3] to-[#E8E3DC] flex">
-      {/* Sidebar */}
-      <Sidebar
-        isOpen={isSidebarOpen}
-        isCollapsed={isSidebarCollapsed}
-        onToggle={handleSidebarToggle}
-        onCollapse={handleSidebarCollapse}
-        currentView={currentView}
-        onViewChange={handleViewChange}
-        userInfo={userInfo}
-        onSignOut={handleSignOut}
-      />
-
-      {/* Main Content */}
-      <div className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-16' : 'ml-56'}`}>
-        <div className="container mx-auto px-6 py-8 max-w-2xl">
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-8">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => router.back()}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Button>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-[#363338] rounded-lg">
-                <Bell className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-[#363338]">Email Notifications</h1>
-                <p className="text-[#7B7481]">Customize your notification preferences</p>
-              </div>
+    <div className="min-h-screen bg-gradient-to-br from-[#F8F6F3] to-[#E8E3DC]">
+      <div className="container mx-auto px-6 py-8 max-w-2xl">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-[#363338] rounded-lg">
+              <Bell className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-[#363338]">Email Notifications</h1>
+              <p className="text-[#7B7481]">Customize your notification preferences</p>
             </div>
           </div>
+        </div>
 
         {/* Content */}
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -330,7 +254,6 @@ export default function EmailNotificationsPage() {
               {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
-        </div>
         </div>
       </div>
     </div>

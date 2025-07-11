@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils"
 import type { OrganizeApp } from "@/lib/supabase/organize-client"
 import type { App } from "@/types/app"
 import { OrgSettingsDialog } from "@/components/org-settings"
-import AppInboxSettings from "./AppInboxSettings"
+
 
 // Import all the helper components from the original file
 interface OrganizationSettings {

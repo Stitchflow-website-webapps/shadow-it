@@ -11,7 +11,8 @@ import {
   Bell,
   Sliders,
   Mail,
-  Inbox
+  Inbox,
+  ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -211,7 +212,7 @@ export default function Sidebar({
                     ? 'text-white'
                     : 'group-hover:text-[#1A1A1A]'
                 }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
-                  App Inbox
+                  Managed App List
                 </span>
               </button>
             </nav>
@@ -273,7 +274,7 @@ export default function Sidebar({
                     ? 'text-white'
                     : 'group-hover:text-[#1A1A1A]'
                 }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
-                  Organization Settings
+                 AI Risk Weights
                 </span>
               </button>
               
@@ -290,7 +291,7 @@ export default function Sidebar({
                   ${isCollapsed ? 'justify-center px-2' : 'justify-start'}
                 `}
               >
-                <Sliders className={`h-4 w-4 flex-shrink-0 transition-colors duration-200 ${
+                <ShieldCheck className={`h-4 w-4 flex-shrink-0 transition-colors duration-200 ${
                   currentView === 'app-inbox-settings' 
                     ? 'text-white' 
                     : 'text-[#7B7481] group-hover:text-[#363338]'
@@ -300,7 +301,7 @@ export default function Sidebar({
                     ? 'text-white'
                     : 'group-hover:text-[#1A1A1A]'
                 }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
-                  App Inbox Settings
+                  Authentication
                 </span>
               </button>
             </nav>
@@ -405,7 +406,6 @@ export default function Sidebar({
                   <div className="space-y-1">
                     <p className="font-medium text-sm">{userInfo.name || 'Unknown User'}</p>
                     <p className="text-xs text-gray-300">{userInfo.email || 'No email'}</p>
-                    <p className="text-xs text-gray-400 mt-2">Hover to sign out</p>
                   </div>
                 </TooltipContent>
               </Tooltip>

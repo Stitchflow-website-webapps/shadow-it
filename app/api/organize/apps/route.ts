@@ -117,6 +117,7 @@ export async function PUT(request: NextRequest) {
       .from('apps')
       .update({
         ...app,
+        org_id: organizeOrg.id,
         updated_at: new Date().toISOString()
       })
       .eq('id', app.id)

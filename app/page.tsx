@@ -59,16 +59,8 @@ import { useRouter } from "next/navigation"
 import { FAQ } from "@/components/ui/faq"
 import { FeedbackChat } from "@/components/ui/feedback";
 import { Share } from "@/components/ui/share";
-// Import the new SettingsModal component
-import SettingsModal from "@/app/components/SettingsModal";
 // Import the Sidebar component
 import Sidebar from "@/app/components/Sidebar";
-// Import the OrganizationSettingsDialog component
-import { OrganizationSettingsDialog } from "@/app/components/OrganizationSettingsDialog";
-// Import the OrganizeAppInbox component
-import { OrganizeAppInbox } from "@/app/components/OrganizeAppInbox";
-// Import the AppInboxSettings component
-import AppInboxSettings from "@/app/components/AppInboxSettings";
 // Import risk assessment utilities
 import { HIGH_RISK_SCOPES, MEDIUM_RISK_SCOPES } from "@/lib/risk-assessment";
 // Import AI risk utilities
@@ -211,8 +203,7 @@ export default function ShadowITDashboard() {
   const searchTerm = useDebounce(searchInput, 300)
   const debouncedUserSearchTerm = useDebounce(userSearchTerm, 300)
 
-  // Add new state for settings
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+
 
   // Add sidebar state management
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -236,22 +227,24 @@ export default function ShadowITDashboard() {
       setMainView("list")
     } else if (view === "ai-risk-analysis") {
       // Route to the dedicated AI Risk Analysis page
-      router.push("/Risk_analysis")
+      router.push("/ai-risk-analysis")
       return
     } else if (view === "organize-app-inbox") {
-      // Handle organize-app-inbox view locally, don't route to separate page
-      // This will be handled by the conditional rendering below
+      // Route to the organize-app-inbox page
+      router.push("/app-list")
+      return
     } else if (view === "email-notifications") {
-      // Route to the Email Notifications settings page
-      router.push("/email-notifications")
+      // Route to the consolidated settings page
+      router.push("/settings?view=email-notifications")
       return
     } else if (view === "organization-settings") {
-      // Route to the Organization Settings page
-      router.push("/organization-settings")
+      // Route to the consolidated settings page
+      router.push("/settings?view=organization-settings")
       return
     } else if (view === "app-inbox-settings") {
-      // Handle app-inbox-settings view locally
-      // This will be handled by the conditional rendering below
+      // Route to the consolidated settings page
+      router.push("/settings?view=authentication")
+      return
     }
     // Close sidebar on mobile after selection
     setIsSidebarOpen(false)
@@ -420,7 +413,7 @@ export default function ShadowITDashboard() {
     
     return Math.round(totalAppRiskScore * 100) / 100; // Round to 2 decimal places
   };
-
+3
   // Add states for owner email and notes editing
   const [ownerEmail, setOwnerEmail] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
@@ -1195,31 +1188,18 @@ export default function ShadowITDashboard() {
       return false; // On server, consider not authenticated
     }
     
-    // Debug: Log all cookies to see what's available
-    const allCookies = document.cookie;
-    console.log("All cookies:", allCookies);
-    
     const cookies = document.cookie.split(';');
-    console.log("Split cookies:", cookies);
     
     // Trim the cookies and check for orgId and userEmail
     const orgIdCookie = cookies.find(cookie => cookie.trim().startsWith('orgId='));
     const userEmailCookie = cookies.find(cookie => cookie.trim().startsWith('userEmail='));
     
-    console.log("orgIdCookie:", orgIdCookie);
-    console.log("userEmailCookie:", userEmailCookie);
-    
     // Use the same logic as in fetchData to also check URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const urlOrgId = urlParams.get('orgId');
     
-    console.log("URL orgId:", urlOrgId);
-    
     // Consider authenticated if either cookies or URL param is present
-    const authenticated = !!(orgIdCookie && userEmailCookie) || !!urlOrgId;
-    console.log("Authentication result:", authenticated);
-    
-    return authenticated;
+    return !!(orgIdCookie && userEmailCookie) || !!urlOrgId;
   };
 
   console.log("isAuthenticated", isAuthenticated());
@@ -1242,10 +1222,7 @@ export default function ShadowITDashboard() {
     });
   };
 
-  // Modify click handlers for settings
-  const handleOpenSettings = () => {
-    checkAuth(() => setIsSettingsOpen(true));
-  };
+
 
   // Modify your click handlers to use checkAuth
   const handleSeeUsers = (appId: string) => {
@@ -1264,45 +1241,72 @@ export default function ShadowITDashboard() {
 
   // Handle status change
   const handleStatusChange = async (appId: string, newStatus: string) => {
+    const appToUpdate = applications.find(app => app.id === appId);
+    if (!appToUpdate) return;
+
+    // Optimistically update the UI
+    const originalApplications = [...applications]
+    const updatedApplications = applications.map(app =>
+      app.id === appId ? { ...app, managementStatus: newStatus as any } : app
+    )
+    setApplications(updatedApplications)
+
     try {
-      const response = await fetch('/api/applications', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: appId,
-          managementStatus: newStatus,
-        }),
-      });
+             // First, update the application in the main 'applications' table
+       const patchResponse = await fetch(`/api/applications`, {
+         method: 'PATCH',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           id: appId,
+           managementStatus: newStatus,
+         }),
+       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update status');
+      if (!patchResponse.ok) {
+        const errorData = await patchResponse.json();
+        throw new Error(errorData.error || 'Failed to update status in main table');
       }
 
-      // Update local state immediately after successful API call
-      setApplications((prevApps) =>
-        prevApps.map((app) =>
-          app.id === appId ? { ...app, managementStatus: newStatus as "Managed" | "Unmanaged" | "Newly discovered" | "Unknown" | "Ignore" | "Not specified" } : app,
-        ),
-      );
+      // Then, sync this change to the 'organize_apps' table
+      const shadowOrgId = getOrgIdFromCookieOrUrl();
+      if (shadowOrgId) {
+        const syncResponse = await fetch('/api/organize/apps/by-name', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appName: appToUpdate.name,
+            managementStatus: newStatus,
+            shadowOrgId: shadowOrgId,
+          }),
+        });
 
-      // Update edited statuses state
-      setEditedStatuses((prev) => ({
-        ...prev,
-        [appId]: newStatus,
-      }));
-
-      // Fetch updated data from the server
-      const updatedResponse = await fetch(`/api/applications?orgId=${new URLSearchParams(window.location.search).get('orgId')}`);
-      if (updatedResponse.ok) {
-        const updatedData = await updatedResponse.json();
-        setApplications(updatedData);
+        if (!syncResponse.ok) {
+          const errorData = await syncResponse.json();
+          // Don't throw an error, just log it, as the primary update succeeded
+          console.error('Failed to sync status to App Inbox:', errorData);
+        }
       }
+
     } catch (error) {
-      console.error('Error updating status:', error);
-      // Optionally, you could add error handling UI feedback here
+      console.error('Error in handleStatusChange:', error);
+      // Revert the UI changes on any failure
+      setApplications(originalApplications)
+      // Optionally, show a toast or notification to the user
     }
+  }
+
+  // Helper function to get orgId from cookies or URL
+  const getOrgIdFromCookieOrUrl = (): string | null => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlOrgId = urlParams.get('orgId');
+      if (urlOrgId) return urlOrgId;
+      
+      const cookies = document.cookie.split(';');
+      const orgIdCookie = cookies.find(cookie => cookie.trim().startsWith('orgId='));
+      if (orgIdCookie) return orgIdCookie.split('=')[1].trim();
+    }
+    return null;
   };
 
   // Helper function to group users by identical scope sets
@@ -2489,33 +2493,6 @@ export default function ShadowITDashboard() {
         <div className="h-screen overflow-y-auto">
           <div className="px-6 py-3">
 
-            {/* Commented out banner since login modal shows directly when not authenticated
-            {!isAuthenticated() && (
-              <div className="bg-black border border-gray-800 rounded-lg p-4 mb-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-yellow-500">👋</span>
-                    <p className="text-gray-200">
-                    This is a preview of the app. Get started with the Shadow IT scan for your workspace
-                    </p>
-                  </div>
-                  <Button_website
-                    onClick={() => {
-                      setShowLoginModal(true)
-                    }}
-                    variant="primary"
-                    type="button"
-                    className="py-2 px-8 w-auto flex group z-50 pointer-events-auto bg-white hover:bg-gray-100 text-[#363338] border border-gray-300 rounded-lg"
-                  >
-                    <span className="font-medium text-base leading-4 whitespace-nowrap">
-                            Sign in
-                        </span>
-                        
-                  </Button_website>
-                </div>
-              </div>
-            )}
-            */}
 
             <div className="flex items-center gap-2 mb-3">
               {/* Mobile menu button - only show when authenticated */}
@@ -2530,11 +2507,9 @@ export default function ShadowITDashboard() {
                 </Button>
               )}
               <h2 className="text-xl font-bold">
-                {currentView === "organize-app-inbox" ? "App Inbox" : 
-                 currentView === "app-inbox-settings" ? "App Inbox Settings" : 
+                {currentView === "app-inbox-settings" ? "Authentication" : 
                  "Shadow IT Overview"}
               </h2>
-              <Share url="https://www.managed.stitchflow.com/" />
             </div>
 
             {isLoading ? (
@@ -2546,10 +2521,6 @@ export default function ShadowITDashboard() {
                   </div>
                 </div>
               </div>
-            ) : currentView === "organize-app-inbox" ? (
-              <OrganizeAppInbox />
-            ) : currentView === "app-inbox-settings" ? (
-              <AppInboxSettings />
             ) : !selectedAppId ? (
               <div ref={mainContentRef} className="space-y-6"> {/* Added ref here */}
                 <div className="flex justify-between items-center mt-[-4px]">
@@ -2599,12 +2570,10 @@ export default function ShadowITDashboard() {
                       onClick={() => {
                         if (checkAuth(() => {
                           setMainView("Insights");
-                          setCurrentView("ai-risk-analysis");
                           handleCloseUserModal();
                         })) {
                           // If authenticated, update immediately
                           setMainView("Insights");
-                          setCurrentView("ai-risk-analysis");
                           handleCloseUserModal();
                         }
                       }}
@@ -4397,12 +4366,6 @@ export default function ShadowITDashboard() {
           </div>
         </div>
       </main>
-
-      {/* Use the new SettingsModal component */}
-      <SettingsModal 
-        isOpen={isSettingsOpen} 
-        onClose={() => setIsSettingsOpen(false)} 
-      />
     
 
       {/* Update the custom styles */}

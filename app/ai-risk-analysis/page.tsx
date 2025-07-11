@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AIRiskAnalysisTable } from '@/components/ui/ai-risk-analysis-table';
@@ -96,6 +97,7 @@ function getDefaultOrgSettings() {
 }
 
 export default function RiskAnalysisPage() {
+  const router = useRouter();
   const [aiRiskData, setAiRiskData] = useState<AIRiskData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -183,13 +185,21 @@ export default function RiskAnalysisPage() {
   const handleViewChange = (view: string) => {
     setCurrentView(view);
     if (view === 'applications') {
-      window.location.href = '/';
+      router.push('/');
+    } else if (view === 'organize-app-inbox') {
+      router.push('/app-list');
+    } else if (view === 'email-notifications') {
+      router.push('/settings?view=email-notifications');
+    } else if (view === 'organization-settings') {
+      router.push('/settings?view=organization-settings');
+    } else if (view === 'app-inbox-settings') {
+      router.push('/settings?view=authentication');
     }
     setIsSidebarOpen(false);
   };
 
   const handleSignOut = () => {
-    window.location.href = '/api/auth/session/logout';
+    router.push('/api/auth/session/logout');
   };
 
   return (
@@ -223,18 +233,6 @@ export default function RiskAnalysisPage() {
           <div className="container mx-auto px-4 py-8 max-w-7xl">
             {/* Header with back button */}
             <div className="mb-8">
-              <div className="flex items-center gap-4 mb-4">
-                <Link href="/">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-2 hover:bg-gray-100"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to Dashboard
-                  </Button>
-                </Link>
-              </div>
               
               <div className="border-b border-gray-200 pb-4">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Risk Analysis</h1>

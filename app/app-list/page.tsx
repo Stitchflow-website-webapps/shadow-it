@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { Plus, Settings, Search, X, ChevronLeft, ChevronRight, KeyRound, Users, Link, CreditCard, Trash2, Edit2, Check } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { AppTable } from "@/components/app-table"
 import { EmptyState } from "@/components/empty-state"
@@ -22,11 +23,19 @@ import { useAppIntegrations, type AppIntegration } from "@/hooks/use-app-integra
 import { cn } from "@/lib/utils"
 import type { OrganizeApp } from "@/lib/supabase/organize-client"
 import type { App } from "@/types/app"
+import Sidebar from "@/app/components/Sidebar"
 
 // Local organization settings interface
 interface OrganizationSettings {
   identityProvider: string
   emailProvider: string
+}
+
+// User info interface
+interface UserInfo {
+  name: string;
+  email: string;
+  avatar_url: string | null;
 }
 
 
@@ -766,6 +775,7 @@ function SimpleEmptyState({ onAddApp, orgSettings, onSettingsUpdate }: {
 }
 
 function AppInboxContent() {
+  const router = useRouter()
   const [apps, setApps] = useState<OrganizeApp[]>([])
   const [selectedApp, setSelectedApp] = useState<OrganizeApp | null>(null)
   const [isDetailTrayOpen, setIsDetailTrayOpen] = useState(false)
@@ -777,6 +787,12 @@ function AppInboxContent() {
   const [shadowOrgId, setShadowOrgId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [orgSettings, setOrgSettings] = useState<OrganizationSettings | null>(null)
+  
+  // Sidebar state management
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [currentView, setCurrentView] = useState('organize-app-inbox')
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
 
   // Get shadow org ID from cookies/localStorage on component mount
   useEffect(() => {
@@ -824,6 +840,55 @@ function AppInboxContent() {
 
     loadApps()
   }, [shadowOrgId])
+
+  // Fetch user info
+  const fetchUserInfo = async () => {
+    try {
+      const response = await fetch('/api/session-info');
+      if (response.ok) {
+        const data = await response.json();
+        setUserInfo(data);
+      }
+    } catch (error) {
+      console.error('Error fetching user info:', error);
+    }
+  };
+
+  // Fetch user info on component mount
+  useEffect(() => {
+    fetchUserInfo();
+  }, []);
+
+  // Sidebar handlers
+  const handleSidebarToggle = () => {
+    setIsSidebarOpen(!isSidebarOpen)
+  }
+
+  const handleSidebarCollapse = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed)
+  }
+
+  const handleViewChange = (view: string) => {
+    setCurrentView(view)
+    if (view === 'applications') {
+      router.push('/');
+    } else if (view === 'ai-risk-analysis') {
+      router.push('/ai-risk-analysis');
+    } else if (view === 'organize-app-inbox') {
+      // Stay on current page
+    } else if (view === 'email-notifications') {
+      router.push('/settings?view=email-notifications');
+    } else if (view === 'organization-settings') {
+      router.push('/settings?view=organization-settings');
+    } else if (view === 'app-inbox-settings') {
+      router.push('/settings?view=authentication');
+    }
+    setIsSidebarOpen(false)
+  }
+
+  const handleSignOut = () => {
+    router.push('/api/auth/session/logout');
+  }
 
   // Handle organization settings update
   const handleOrgSettingsUpdate = (newSettings: OrganizationSettings) => {
@@ -877,6 +942,28 @@ function AppInboxContent() {
       if (selectedApp && selectedApp.id === savedApp.id) {
         setSelectedApp(savedApp)
       }
+
+      // Sync with Shadow IT if managedStatus was changed
+      if (updatedApp.managedStatus) {
+        const syncResponse = await fetch('/api/applications/by-name', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                appName: updatedApp.name,
+                managementStatus: updatedApp.managedStatus,
+                shadowOrgId: shadowOrgId
+            })
+        });
+
+        if (!syncResponse.ok) {
+          const errorData = await syncResponse.json();
+          console.error('Failed to sync status to Shadow IT:', errorData);
+        } else {
+          const successData = await syncResponse.json();
+          console.log('Successfully synced status to Shadow IT:', successData);
+        }
+      }
+
     } catch (error) {
       console.error('Error updating app:', error)
       // TODO: Show error message to user
@@ -914,10 +1001,29 @@ function AppInboxContent() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen bg-bg-light items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading your apps...</p>
+      <div className="min-h-screen bg-gray-50 flex">
+        {/* Sidebar */}
+        <Sidebar
+          isOpen={isSidebarOpen}
+          isCollapsed={isSidebarCollapsed}
+          onToggle={handleSidebarToggle}
+          onCollapse={handleSidebarCollapse}
+          currentView={currentView}
+          onViewChange={handleViewChange}
+          userInfo={userInfo}
+          onSignOut={handleSignOut}
+        />
+
+        {/* Main Content */}
+        <div className={`flex-1 transition-all duration-300 ${
+          isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-56'
+        }`}>
+          <div className="flex h-screen bg-bg-light items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-600 mx-auto mb-4" />
+              <p className="text-gray-600">Loading your apps...</p>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -949,21 +1055,39 @@ function AppInboxContent() {
   const hasOrgSettings = orgSettings?.identityProvider && orgSettings?.emailProvider
 
   return (
-    <div className="min-h-screen bg-bg-light relative">
-      {/* Overlay when tray is open */}
-      {isDetailTrayOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-5 z-30 transition-opacity duration-300"
-          onClick={() => {
-            setIsDetailTrayOpen(false)
-            setSelectedApp(null)
-            setIsEditMode(false)
-          }}
-        />
-      )}
-      
-      {/* Main content */}
-      <div className="max-w-7xl mx-auto p-6">
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Sidebar */}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        isCollapsed={isSidebarCollapsed}
+        onToggle={handleSidebarToggle}
+        onCollapse={handleSidebarCollapse}
+        currentView={currentView}
+        onViewChange={handleViewChange}
+        userInfo={userInfo}
+        onSignOut={handleSignOut}
+      />
+
+      {/* Main Content */}
+      <div className={`flex-1 transition-all duration-300 ${
+        isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-56'
+      }`}>
+  
+        <div className="min-h-screen bg-bg-light relative">
+          {/* Overlay when tray is open */}
+          {isDetailTrayOpen && (
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-5 z-30 transition-opacity duration-300"
+              onClick={() => {
+                setIsDetailTrayOpen(false)
+                setSelectedApp(null)
+                setIsEditMode(false)
+              }}
+            />
+          )}
+          
+          {/* Main content */}
+          <div className="max-w-7xl mx-auto p-6">
         {apps.length === 0 || !hasOrgSettings ? (
           <SimpleEmptyState 
             onAddApp={() => setIsAddDialogOpen(true)} 
@@ -1006,44 +1130,46 @@ function AppInboxContent() {
             />
           </div>
         )}
+          </div>
+
+          {/* Right Tray */}
+          <SimpleAppDetailTray
+            app={selectedApp ? organizeAppToApp(selectedApp) : null}
+            isOpen={isDetailTrayOpen}
+            isEditMode={isEditMode}
+            onClose={() => {
+              setIsDetailTrayOpen(false)
+              setSelectedApp(null)
+              setIsEditMode(false)
+            }}
+            onUpdateApp={handleUpdateApp}
+            onRemoveApp={handleRemoveApp}
+            onPrevious={currentAppIndex > 0 ? () => {
+              const prevApp = filteredApps[currentAppIndex - 1]
+              const organizeApp = apps.find(a => a.id === prevApp.id)
+              if (organizeApp) setSelectedApp(organizeApp)
+            } : undefined}
+            onNext={currentAppIndex < filteredApps.length - 1 ? () => {
+              const nextApp = filteredApps[currentAppIndex + 1]
+              const organizeApp = apps.find(a => a.id === nextApp.id)
+              if (organizeApp) setSelectedApp(organizeApp)
+            } : undefined}
+            hasPrevious={currentAppIndex > 0}
+            hasNext={currentAppIndex < filteredApps.length - 1}
+            organization={orgSettings}
+          />
+
+          {hasOrgSettings && (
+            <SimpleAddAppsDialog 
+              open={isAddDialogOpen} 
+              onOpenChange={setIsAddDialogOpen} 
+              onAddApps={handleAddApps} 
+              existingApps={transformedApps}
+              orgSettings={orgSettings}
+            />
+          )}
+        </div>
       </div>
-
-      {/* Right Tray */}
-      <SimpleAppDetailTray
-        app={selectedApp ? organizeAppToApp(selectedApp) : null}
-        isOpen={isDetailTrayOpen}
-        isEditMode={isEditMode}
-        onClose={() => {
-          setIsDetailTrayOpen(false)
-          setSelectedApp(null)
-          setIsEditMode(false)
-        }}
-        onUpdateApp={handleUpdateApp}
-        onRemoveApp={handleRemoveApp}
-        onPrevious={currentAppIndex > 0 ? () => {
-          const prevApp = filteredApps[currentAppIndex - 1]
-          const organizeApp = apps.find(a => a.id === prevApp.id)
-          if (organizeApp) setSelectedApp(organizeApp)
-        } : undefined}
-        onNext={currentAppIndex < filteredApps.length - 1 ? () => {
-          const nextApp = filteredApps[currentAppIndex + 1]
-          const organizeApp = apps.find(a => a.id === nextApp.id)
-          if (organizeApp) setSelectedApp(organizeApp)
-        } : undefined}
-        hasPrevious={currentAppIndex > 0}
-        hasNext={currentAppIndex < filteredApps.length - 1}
-        organization={orgSettings}
-      />
-
-      {hasOrgSettings && (
-        <SimpleAddAppsDialog 
-          open={isAddDialogOpen} 
-          onOpenChange={setIsAddDialogOpen} 
-          onAddApps={handleAddApps} 
-          existingApps={transformedApps}
-          orgSettings={orgSettings}
-        />
-      )}
     </div>
   )
 }
