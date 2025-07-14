@@ -71,6 +71,8 @@ import { useSearchParams } from "next/navigation"
 import { LabelList } from "recharts"
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { TabbedRiskScoringView } from "@/app/components/TabbedRiskScoringView";
+import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Type definitions
 type Application = {
@@ -199,6 +201,9 @@ export default function ShadowITDashboard() {
 
   const [userSortColumn, setUserSortColumn] = useState<"name" | "email" | "created" | "riskLevel">("name")
   const [userSortDirection, setUserSortDirection] = useState<SortDirection>("desc")
+  const [selectedAppIds, setSelectedAppIds] = useState(new Set<string>());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const [isBulkUpdateInProgress, setIsBulkUpdateInProgress] = useState(false);
 
   const searchTerm = useDebounce(searchInput, 300)
   const debouncedUserSearchTerm = useDebounce(userSearchTerm, 300)
@@ -2469,6 +2474,84 @@ export default function ShadowITDashboard() {
     );
   }
 
+  const handleSelection = (index: number, appId: string, isShiftClick: boolean) => {
+    const newSelectedIds = new Set(selectedAppIds);
+
+    if (isShiftClick && lastSelectedIndex !== null) {
+        // For shift-click, we select the range from the last-clicked to the current-clicked item.
+        const start = Math.min(lastSelectedIndex, index);
+        const end = Math.max(lastSelectedIndex, index);
+        for (let i = start; i <= end; i++) {
+            newSelectedIds.add(currentApps[i].id);
+        }
+    } else {
+        // For a regular click, we toggle the item's selection state.
+        if (newSelectedIds.has(appId)) {
+            newSelectedIds.delete(appId);
+        } else {
+            newSelectedIds.add(appId);
+        }
+        // And we set the last-clicked index for future shift-clicks.
+        setLastSelectedIndex(index);
+    }
+    
+    setSelectedAppIds(newSelectedIds);
+  };
+
+  const handleSelectAll = (isSelected: boolean) => {
+    if (isSelected) {
+      // Select all apps currently visible on the page
+      setSelectedAppIds(new Set(currentApps.map((app: Application) => app.id)));
+    } else {
+      // Deselect all
+      setSelectedAppIds(new Set());
+    }
+  };
+
+  const handleBulkUpdate = async (newStatus: string) => {
+    if (selectedAppIds.size === 0 || !newStatus) return;
+
+    setIsBulkUpdateInProgress(true);
+    const originalApplications = [...applications];
+
+    // Optimistic UI update
+    const updatedApplications = applications.map(app => 
+      selectedAppIds.has(app.id) ? { ...app, managementStatus: newStatus as any } : app
+    );
+    setApplications(updatedApplications);
+
+    try {
+      const response = await fetch('/api/applications/bulk-update', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appIds: Array.from(selectedAppIds),
+          managementStatus: newStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Bulk update failed:', errorData);
+        throw new Error('Bulk update failed');
+      }
+
+      // On success, clear the selection
+      setSelectedAppIds(new Set());
+    } catch (error) {
+      console.error('Error during bulk update:', error);
+      // Revert UI changes on failure
+      setApplications(originalApplications);
+      alert('Failed to update applications. Please try again.');
+    } finally {
+      setIsBulkUpdateInProgress(false);
+    }
+  };
+
+  const sortedAndFilteredApps = useMemo(() => {
+    return filteredApps.slice(startIndex, endIndex);
+  }, [filteredApps, startIndex, endIndex]);
+
   return (
     <div className="min-h-screen font-sans text-gray-900 bg-[#f8f5f3]">
       {/* Sidebar - only show when authenticated */}
@@ -2702,13 +2785,46 @@ export default function ShadowITDashboard() {
 
                       <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
                         <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
+                        {selectedAppIds.size > 0 && (
+                          <div className="mb-4 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              {selectedAppIds.size} app{selectedAppIds.size > 1 ? 's' : ''} selected
+                            </span>
+                            <div className="flex items-center gap-4">
+                              <Select onValueChange={handleBulkUpdate} disabled={isBulkUpdateInProgress}>
+                                <SelectTrigger className="w-[180px] h-9">
+                                  <SelectValue placeholder="Change status..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Managed">Managed</SelectItem>
+                                  <SelectItem value="Unmanaged">Unmanaged</SelectItem>
+                                  <SelectItem value="Newly discovered">Newly discovered</SelectItem>
+                                  <SelectItem value="Unknown">Unknown</SelectItem>
+                                  <SelectItem value="Ignore">Ignore</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button variant="ghost" size="sm" onClick={() => setSelectedAppIds(new Set())} disabled={isBulkUpdateInProgress}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                         <Table>
                             <TableHeader className="sticky top-0 bg-gray-50/80 backdrop-blur-sm z-10">
                               <TableRow className="border-b border-gray-100">
-                                <TableHead className={`cursor-pointer rounded-tl-lg bg-transparent`} onClick={() => handleSort("name")}>
-                                  <div className="flex items-center">
-                                    Application
-                                    {getSortIcon("name")}
+                                <TableHead className={`rounded-tl-lg bg-transparent`}>
+                                  <div className="flex items-center gap-3">
+                                    <Checkbox
+                                      onCheckedChange={handleSelectAll}
+                                      checked={currentApps.length > 0 && selectedAppIds.size === currentApps.length}
+                                      // @ts-ignore
+                                      indeterminate={selectedAppIds.size > 0 && selectedAppIds.size < currentApps.length}
+                                      aria-label="Select all rows on this page"
+                                    />
+                                    <div className="flex items-center cursor-pointer" onClick={() => handleSort("name")}>
+                                      Application
+                                      {getSortIcon("name")}
+                                    </div>
                                   </div>
                                 </TableHead>
                                 <TableHead className={`cursor-pointer`} onClick={() => handleSort("category")}>
@@ -2772,13 +2888,19 @@ export default function ShadowITDashboard() {
                             ) : (
                                 currentApps.map((app, index) => (
                                   <TableRow 
-                                    key={app.id} 
-                                    className={`${index % 2 === 0 ? "bg-muted/10" : ""} ${
+                                    key={app.id}
+                                    data-state={selectedAppIds.has(app.id) ? 'selected' : 'unselected'}
+                                    className={`data-[state=selected]:bg-blue-50/50 dark:data-[state=selected]:bg-blue-500/10 ${
                                       index === currentApps.length - 1 ? "last-row" : ""
                                     }`}
                                   >
                                   <TableCell>
                                     <div className="flex items-center gap-3">
+                                      <Checkbox
+                                        onClick={(e) => handleSelection(index, app.id, e.shiftKey)}
+                                        checked={selectedAppIds.has(app.id)}
+                                        aria-label={`Select row for ${app.name}`}
+                                      />
                                       <AppIcon name={app.name} logoUrl={app.logoUrl} logoUrlFallback={app.logoUrlFallback} />
                                       <div 
                                         className="font-medium cursor-pointer hover:text-primary transition-colors truncate max-w-[200px]"
