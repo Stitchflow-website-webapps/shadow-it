@@ -817,6 +817,27 @@ function AppInboxContent() {
       } catch (error) {
         console.error('Error parsing org settings:', error)
       }
+    } else if (orgId) {
+      // If not in localStorage, fetch from the server
+      const fetchOrgSettings = async () => {
+        try {
+          const response = await fetch(`/api/organize/organization?shadowOrgId=${orgId}`)
+          if (response.ok) {
+            const data = await response.json()
+            if (data.identity_provider && data.email_provider) {
+              const settings = {
+                identityProvider: data.identity_provider,
+                emailProvider: data.email_provider,
+              }
+              setOrgSettings(settings)
+              localStorage.setItem(`orgSettings_${orgId}`, JSON.stringify(settings))
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching organization settings:', error)
+        }
+      }
+      fetchOrgSettings()
     }
   }, [])
 
