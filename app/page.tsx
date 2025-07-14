@@ -2791,6 +2791,9 @@ export default function ShadowITDashboard() {
                               {selectedAppIds.size} app{selectedAppIds.size > 1 ? 's' : ''} selected
                             </span>
                             <div className="flex items-center gap-4">
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Managed Status:
+                              </span>
                               <Select onValueChange={handleBulkUpdate} disabled={isBulkUpdateInProgress}>
                                 <SelectTrigger className="w-[180px] h-9">
                                   <SelectValue placeholder="Change status..." />

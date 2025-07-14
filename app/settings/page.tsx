@@ -38,7 +38,7 @@ export default function SettingsPage() {
 
         if (response.ok) {
           const data = await response.json();
-          setUserInfo(data.user);
+          setUserInfo(data);
         }
       } catch (error) {
         console.error('Error fetching user info:', error);

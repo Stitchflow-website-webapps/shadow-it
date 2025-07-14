@@ -208,18 +208,6 @@ export function AIRiskAnalysisTable({
             </Label>
           </div>
 
-          {/* Highlight legend */}
-          {highlightTopRows > 0 && data.length > 0 && (
-            <div className="flex items-center py-3 px-4 bg-gray-50 rounded-lg border border-gray-200 mb-6">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full border border-gray-300 bg-[#F7F5F2]"></div>
-                <span className="text-sm text-gray-600">
-                  Top {highlightTopRows} apps highlighted
-                </span>
-              </div>
-            </div>
-          )}
-
           {/* Table container matching project patterns */}
           <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
             <div className="overflow-x-auto">
