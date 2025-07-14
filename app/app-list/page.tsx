@@ -1118,12 +1118,7 @@ function AppInboxContent() {
         ) : (
           <div className="space-y-6">
             {/* Action Bar */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                {userEmail && (
-                  <p className="text-sm text-gray-500">Welcome, {userEmail}!</p>
-                )}
-              </div>
+            <div className="flex items-center justify-end">
               <div className="flex items-center gap-3">
                 <Button onClick={() => setIsAddDialogOpen(true)} size="sm">
                   <Plus className="h-4 w-4 mr-2" />
