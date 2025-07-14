@@ -153,10 +153,8 @@ export default function AuthenticationSettings() {
                       <SelectValue placeholder="Select email provider" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Gmail">Gmail</SelectItem>
-                      <SelectItem value="Outlook">Outlook</SelectItem>
-                      <SelectItem value="Yahoo">Yahoo</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
+                      <SelectItem value="Google">Google</SelectItem>
+                      <SelectItem value="Microsoft">Microsoft</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
