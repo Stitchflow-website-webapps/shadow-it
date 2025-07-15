@@ -809,36 +809,25 @@ function AppInboxContent() {
     setShadowOrgId(orgId)
     setUserEmail(email)
 
-    // Load organization settings from localStorage
-    const savedSettings = localStorage.getItem(`orgSettings_${orgId}`)
-    if (savedSettings) {
+    const fetchOrgSettings = async () => {
+      if (!orgId) return;
       try {
-        setOrgSettings(JSON.parse(savedSettings))
-      } catch (error) {
-        console.error('Error parsing org settings:', error)
-      }
-    } else if (orgId) {
-      // If not in localStorage, fetch from the server
-      const fetchOrgSettings = async () => {
-        try {
-          const response = await fetch(`/api/organize/organization?shadowOrgId=${orgId}`)
-          if (response.ok) {
-            const data = await response.json()
-            if (data.identity_provider && data.email_provider) {
-              const settings = {
-                identityProvider: data.identity_provider,
-                emailProvider: data.email_provider,
-              }
-              setOrgSettings(settings)
-              localStorage.setItem(`orgSettings_${orgId}`, JSON.stringify(settings))
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching organization settings:', error)
+        const response = await fetch(`/api/organize/organization?shadowOrgId=${orgId}`)
+        if (response.ok) {
+          const data = await response.json()
+          const identityProvider = data.identity_provider === 'EMPTY' ? '' : data.identity_provider;
+          const emailProvider = data.email_provider === 'EMPTY' ? '' : data.email_provider;
+          
+          const settings = { identityProvider, emailProvider };
+          setOrgSettings(settings);
+          localStorage.setItem(`orgSettings_${orgId}`, JSON.stringify(settings));
         }
+      } catch (error) {
+        console.error('Error fetching organization settings:', error)
       }
-      fetchOrgSettings()
-    }
+    };
+    
+    fetchOrgSettings();
   }, [])
 
   // Load apps from database when shadowOrgId is available
@@ -1107,9 +1096,20 @@ function AppInboxContent() {
             />
           )}
           
+          {/* Banner for incomplete settings */}
+          {!hasOrgSettings && apps.length > 0 && (
+            <div className="bg-yellow-100 border-b-2 border-yellow-200 p-4 text-center text-sm text-yellow-800">
+              Your organization settings are incomplete. Please configure your Identity and Email providers in{' '}
+              <button onClick={() => router.push('/settings?view=authentication')} className="font-bold underline hover:text-yellow-900">
+                IDP settings
+              </button>
+              .
+            </div>
+          )}
+
           {/* Main content */}
           <div className="max-w-7xl mx-auto p-6">
-        {apps.length === 0 || !hasOrgSettings ? (
+        {apps.length === 0 ? (
           <SimpleEmptyState 
             onAddApp={() => setIsAddDialogOpen(true)} 
             orgSettings={orgSettings}
@@ -1118,7 +1118,8 @@ function AppInboxContent() {
         ) : (
           <div className="space-y-6">
             {/* Action Bar */}
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold text-gray-900">App List</h1>
               <div className="flex items-center gap-3">
                 <Button onClick={() => setIsAddDialogOpen(true)} size="sm">
                   <Plus className="h-4 w-4 mr-2" />

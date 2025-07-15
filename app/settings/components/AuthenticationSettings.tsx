@@ -39,20 +39,53 @@ export default function AuthenticationSettings() {
     setShadowOrgId(orgId);
     setUserEmail(email);
 
-    // Load organization settings from localStorage
-    const savedSettings = localStorage.getItem(`orgSettings_${orgId}`);
-    if (savedSettings) {
-      try {
-        const settings = JSON.parse(savedSettings);
+    // Load organization settings from localStorage or fetch from server
+    const loadSettings = async () => {
+      setIsLoading(true);
+      if (orgId) {
+        const savedSettings = localStorage.getItem(`orgSettings_${orgId}`);
+        if (savedSettings) {
+          try {
+            const settings = JSON.parse(savedSettings);
+            const sanitizedSettings = {
+              identityProvider: settings.identityProvider === 'EMPTY' ? '' : settings.identityProvider,
+              emailProvider: settings.emailProvider === 'EMPTY' ? '' : settings.emailProvider,
+            };
+            setOrgSettings(sanitizedSettings);
+            setTempSettings(sanitizedSettings);
+          } catch (error) {
+            console.error('Error parsing org settings:', error);
+            // Fetch from server if local storage is corrupt
+            await fetchSettings(orgId);
+          }
+        } else {
+          // Fetch from server if not in local storage
+          await fetchSettings(orgId);
+        }
+      }
+      setIsLoading(false);
+    };
+    
+    loadSettings();
+  }, []);
+
+  const fetchSettings = async (orgId: string) => {
+    try {
+      const response = await fetch(`/api/organize/organization?shadowOrgId=${orgId}`);
+      if (response.ok) {
+        const data = await response.json();
+        const settings = {
+          identityProvider: data.identity_provider === 'EMPTY' ? '' : data.identity_provider,
+          emailProvider: data.email_provider === 'EMPTY' ? '' : data.email_provider,
+        };
         setOrgSettings(settings);
         setTempSettings(settings);
-      } catch (error) {
-        console.error('Error parsing org settings:', error);
+        localStorage.setItem(`orgSettings_${orgId}`, JSON.stringify(settings));
       }
+    } catch (error) {
+      console.error('Error fetching organization settings:', error);
     }
-    
-    setIsLoading(false);
-  }, []);
+  };
 
   const handleSave = async () => {
     if (!tempSettings.identityProvider || !tempSettings.emailProvider) {
