@@ -5,6 +5,7 @@ import { determineRiskLevel, transformRiskLevel } from '@/lib/risk-assessment';
 import { categorizeApplication } from '@/app/api/background/sync/categorize/route';
 import { EmailService } from '@/app/lib/services/email-service';
 import { ResourceMonitor, processInBatchesWithResourceControl } from '@/lib/resource-monitor';
+import { syncNewAppsToOrganizeInbox } from '@/lib/organize-app-sync';
 
 // **NEW: Configuration for resource management**
 const PROCESSING_CONFIG = {
@@ -488,6 +489,15 @@ export async function POST(request: Request) {
     }
     if (newRelationships.length > 0) {
       await processNewUserDigestReport(org, newRelationships);
+    }
+
+    // **NEW: Sync newly discovered apps to the organize-app-inbox schema**
+    if (newApps.length > 0) {
+      const appsToSync = newApps.map(app => ({
+        name: app.name,
+        management_status: 'Newly discovered'
+      }));
+      await syncNewAppsToOrganizeInbox(appsToSync, org);
     }
 
     return NextResponse.json({

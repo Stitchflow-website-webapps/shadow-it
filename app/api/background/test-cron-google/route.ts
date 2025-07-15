@@ -5,6 +5,7 @@ import { determineRiskLevel, transformRiskLevel } from '@/lib/risk-assessment';
 import { categorizeApplication } from '@/app/api/background/sync/categorize/route';
 import { EmailService } from '@/app/lib/services/email-service';
 import { ResourceMonitor, processInBatchesWithResourceControl } from '@/lib/resource-monitor';
+import { syncNewAppsToOrganizeInbox } from '@/lib/organize-app-sync';
 
 /**
  * A test cron job for a specific organization.
@@ -519,6 +520,16 @@ export async function POST(request: Request) {
     }
     if (newRelationships.length > 0) {
       await processNewUserDigestReport(org, newRelationships, googleUserMap);
+    }
+
+    // **NEW: Sync newly discovered apps to the organize-app-inbox schema**
+    if (newApps.length > 0) {
+      // We need to transform the newApps data to match the expected interface for the sync function.
+      const appsToSync = newApps.map(app => ({
+        name: app.name,
+        management_status: 'Newly discovered' // This is the default status for new apps.
+      }));
+      await syncNewAppsToOrganizeInbox(appsToSync, org);
     }
 
     return NextResponse.json({

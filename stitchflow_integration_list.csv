@@ -1,0 +1,178 @@
+Stitchflow integrations supported,Stitchflow connection status
+Azure AD (Entra ID),API
+Google Workspace,API
+JumpCloud,API
+Okta,API
+OneLogin,API
+1Password,CSV
+Adobe,CSV
+ADP,CSV
+Aircall,CSV
+Airtable,CSV
+Amplitude,CSV
+Asana,CSV; API coming soon
+Asset Panda,CSV
+Atlassian,API
+Autodesk,CSV
+Automox,API
+AWS,API
+Axero,CSV
+BambooHR,API
+Bill.com,API
+Bitdefender,CSV
+Box,API
+Calendly,CSV
+Canva,CSV; API coming soon
+Carta,CSV
+Central Station,CSV
+ChartHop,CSV; API coming soon
+ChatGPT,CSV
+Checkpoint,CSV
+Checkr,API
+Chili Piper,CSV; API coming soon
+Chorus,API
+Clari,CSV; API coming soon
+Confluence,API
+CleanShot X,CSV
+ClickUp,CSV; API coming soon
+Clockwise,CSV
+Cloudflare,CSV; API coming soon
+Coda,CSV; API coming soon
+Code42,CSV; API coming soon
+Consensus,CSV
+CoreIQ,CSV
+Coupa,CSV
+Crowdstrike,CSV
+Dashlane,CSV
+Datadog,API
+DBTCloud,API
+Deel,API
+Dialpad,API
+Docker,CSV; API coming soon
+Docusign,CSV; API coming soon
+Donut,CSV; API coming soon
+Drata,API
+Dropbox,CSV
+Duo,API
+Egnyte,CSV
+Elastic,API
+Envoy,CSV
+Expensify,CSV; API coming soon
+Figma,CSV
+Fileshare,CSV
+Fireflies.ai,CSV
+Fivetran,API
+Fountain,API
+Freshdesk,CSV
+Freshservice,API
+Front,API
+Fullstory,API
+Gainsight,API
+GCP,CSV; API coming soon
+GDS Link,CSV
+Gem,API
+Github,API
+GoGenuity,CSV
+Gong,API
+Google Cloud,API
+Google Drive,API
+Google Gemini,CSV
+GPT Enterprise,CSV
+Grammarly,CSV; API coming soon
+Greenhouse,API
+HackerRank,CSV
+Harmony SASE,CSV
+Hex,CSV
+HiBob,API
+HotJar,CSV; API coming soon
+HRHold,CSV
+Hubspot,CSV; API coming soon
+Infosec IQ,CSV
+Intercom,CSV; API coming soon
+Intuit Quickbooks,CSV
+Intune,API
+JAMF,API
+Jira Software,API
+Jenkins,CSV; API coming soon
+Jetbrains,CSV
+Kandji,API
+KnowBe4,API
+KungFu,CSV
+Lastpass,API
+Lattice,CSV
+LaunchDarkly,API
+LeadIQ,CSV
+Lever,CSV
+Linear,CSV
+LinkedIn Sales Navigator,CSV
+LinkSquares,CSV
+LoanPro,CSV
+Looker,CSV; API coming soon
+Loom,CSV
+Loopio,CSV
+LucidChart,CSV; API coming soon
+Meraki,CSV; API coming soon
+Microsoft 365,API
+Miro,CSV
+Mode Analytics,API
+Monday.com,API
+Mosyle,CSV; API coming soon
+Netsuite,API
+New Relic,CSV; API coming soon
+Ninjio,CSV
+Northpass,API
+Notion,CSV
+OMG,CSV
+Opal,CSV
+Openpath,CSV
+OpsGenie,API
+Outreach,CSV; API coming soon
+Pagerduty,API
+Paycor,CSV
+Paylocity,CSV
+Pendo,CSV
+Perimeter81,CSV
+Postman,API
+Ramp,CSV; API coming soon
+Relias Training,CSV
+RightFind,CSV
+RingCentral,CSV
+Robin,CSV
+Sage,CSV
+Salesforce,API
+SalesLoft,API
+Segment,API
+Seismic Learning,API
+Sentinel One,CSV; API coming soon
+Sentry,API
+ShareFile,CSV
+Shopify,CSV; API coming soon
+Slack,API
+Smartsheet,CSV
+SnipeIT,CSV; API coming soon
+Snowflake,CSV; API coming soon
+Sophos,CSV
+Spendesk,CSV
+Spotdraft,API
+Superhuman,CSV
+Superuser,CSV
+SurveyMonkey,CSV
+Tableau,CSV; API coming soon
+Talkdesk,CSV
+ThoughtSpot,CSV; API coming soon
+Tray.io,API
+TSYS,CSV
+Typeform,CSV
+UKG,CSV
+Unbounce,CSV
+Vanta,CSV; API coming soon
+Visual Studio,CSV
+Webex,CSV
+Wiz,CSV; API coming soon
+WorkOS,API
+Xeos,CSV
+Zapier,CSV
+Zendesk,API
+Zoho,CSV
+Zoom,API
+ZoomInfo (Chorus),API
