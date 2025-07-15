@@ -97,8 +97,23 @@ export default function AuthenticationSettings() {
     setSaveMessage(null);
 
     try {
-      // Save to localStorage (since this is a shadow/demo environment)
       if (shadowOrgId) {
+        // Save to the database via API
+        const response = await fetch('/api/organize/organization', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shadowOrgId,
+            identity_provider: tempSettings.identityProvider,
+            email_provider: tempSettings.emailProvider
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save settings to the database');
+        }
+
+        // Also save to localStorage for consistency
         localStorage.setItem(`orgSettings_${shadowOrgId}`, JSON.stringify(tempSettings));
         setOrgSettings(tempSettings);
         setSaveMessage({type: "success", text: "Settings saved successfully!"});

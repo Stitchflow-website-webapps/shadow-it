@@ -471,6 +471,8 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
               type: "select",
               placeholder: "Select deprovisioning method",
               options: getDeprovisioningOptions(),
+              disabled: !organization?.identityProvider,
+              disabledText: "Please update your IdP settings to edit this field",
             },
           ]}
         />

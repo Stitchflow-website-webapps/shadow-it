@@ -32,6 +32,7 @@ interface FieldConfig {
   tooltip?: string
   currency?: string
   disabled?: boolean
+  disabledText?: string
 }
 
 interface UserInfo {
@@ -339,22 +340,32 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
       switch (field.type) {
         case "select":
           return (
-            <Select
-              value={currentValue === "Not specified" || currentValue === "" ? undefined : currentValue}
-              onValueChange={(value) => handleFieldChange(field.field, value)}
-              disabled={field.disabled}
-            >
-              <SelectTrigger className={`h-11 mt-3 bg-white border-gray-100 text-primary-text focus:border-bg-dark focus:ring-2 focus:ring-gray-200 transition-all ${field.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                <SelectValue placeholder={field.placeholder} />
-              </SelectTrigger>
-              <SelectContent>
-                {field.options?.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div key={field.field} className="space-y-1">
+              <Label htmlFor={field.field}>{field.label}</Label>
+              <Select
+                value={currentValue === "Not specified" || currentValue === "" ? undefined : currentValue}
+                onValueChange={(value) => handleFieldChange(field.field, value)}
+                disabled={field.disabled}
+              >
+                <SelectTrigger id={field.field} className="w-full">
+                  <SelectValue placeholder={field.placeholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  {field.options?.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {field.disabled && field.disabledText && (
+                <div className="mt-2">
+                  <Badge variant="outline" className="bg-amber-50 border-amber-200 text-amber-800 font-normal">
+                    {field.disabledText}
+                  </Badge>
+                </div>
+              )}
+            </div>
           )
         case "textarea":
           return (
