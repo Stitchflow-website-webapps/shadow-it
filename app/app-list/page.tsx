@@ -796,6 +796,9 @@ function AppInboxContent() {
   const [currentView, setCurrentView] = useState('organize-app-inbox')
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
 
+  // New apps tracking
+  const [newAppIds, setNewAppIds] = useState<Set<string>>(new Set())
+
   // Get shadow org ID from cookies/localStorage on component mount
   useEffect(() => {
     const orgId = document.cookie
@@ -841,6 +844,28 @@ function AppInboxContent() {
         setIsLoading(true)
         const appsData = await organizeApi.getApps(shadowOrgId)
         setApps(appsData)
+        
+        // Always store current app IDs for comparison
+        const currentAppIds = appsData.map(app => app.id)
+        localStorage.setItem(`allAppIds_${shadowOrgId}`, JSON.stringify(currentAppIds))
+        
+        // Load new app IDs from localStorage
+        const storedNewAppIds = localStorage.getItem(`newAppIds_${shadowOrgId}`)
+        console.log('Loading from localStorage:', storedNewAppIds)
+        if (storedNewAppIds) {
+          try {
+            const parsedIds = JSON.parse(storedNewAppIds)
+            console.log('Parsed IDs:', parsedIds)
+            setNewAppIds(new Set(parsedIds))
+          } catch (error) {
+            console.error('Error parsing new app IDs:', error)
+          }
+        } else {
+          // If no stored new app IDs, initialize all apps as new
+          console.log('No stored new app IDs, initializing all apps as new')
+          setNewAppIds(new Set(currentAppIds))
+          localStorage.setItem(`newAppIds_${shadowOrgId}`, JSON.stringify(currentAppIds))
+        }
         
         // No auto-selection needed for table view
       } catch (error) {
@@ -928,6 +953,19 @@ function AppInboxContent() {
       setApps([...apps, ...savedApps])
       setIsAddDialogOpen(false)
       
+      // Track new app IDs in localStorage
+      const newIds = savedApps.map(app => app.id)
+      const updatedNewAppIds = new Set([...newAppIds, ...newIds])
+      console.log('New app IDs added:', newIds)
+      console.log('Updated newAppIds:', Array.from(updatedNewAppIds))
+      setNewAppIds(updatedNewAppIds)
+      localStorage.setItem(`newAppIds_${shadowOrgId}`, JSON.stringify(Array.from(updatedNewAppIds)))
+      
+      // Also update the allAppIds to include the new apps
+      const updatedApps = [...apps, ...savedApps]
+      const allAppIds = updatedApps.map(app => app.id)
+      localStorage.setItem(`allAppIds_${shadowOrgId}`, JSON.stringify(allAppIds))
+      
       // Auto-open edit mode for the last added app
       if (savedApps.length > 0) {
         const lastAddedApp = savedApps[savedApps.length - 1]
@@ -990,6 +1028,10 @@ function AppInboxContent() {
       const updatedApps = apps.filter((app) => app.id !== appId)
       setApps(updatedApps)
       
+      // Update allAppIds localStorage to reflect removal
+      const allAppIds = updatedApps.map(app => app.id)
+      localStorage.setItem(`allAppIds_${shadowOrgId}`, JSON.stringify(allAppIds))
+      
       // If the removed app was selected in tray, close tray
       if (selectedApp && selectedApp.id === appId) {
         setSelectedApp(null)
@@ -1045,6 +1087,8 @@ function AppInboxContent() {
     // Convert the transformed app back to OrganizeApp format
     const organizeApp = apps.find(a => a.id === app.id)
     if (organizeApp) {
+      // Remove from new apps when viewed
+      markAppAsViewed(app.id)
       setSelectedApp(organizeApp)
       setIsEditMode(false)
       setIsDetailTrayOpen(true)
@@ -1055,9 +1099,20 @@ function AppInboxContent() {
     // Convert the transformed app back to OrganizeApp format
     const organizeApp = apps.find(a => a.id === app.id)
     if (organizeApp) {
+      // Remove from new apps when edited
+      markAppAsViewed(app.id)
       setSelectedApp(organizeApp)
       setIsEditMode(true)
       setIsDetailTrayOpen(true)
+    }
+  }
+
+  const markAppAsViewed = (appId: string) => {
+    if (newAppIds.has(appId) && shadowOrgId) {
+      const updatedNewAppIds = new Set(newAppIds)
+      updatedNewAppIds.delete(appId)
+      setNewAppIds(updatedNewAppIds)
+      localStorage.setItem(`newAppIds_${shadowOrgId}`, JSON.stringify(Array.from(updatedNewAppIds)))
     }
   }
 
@@ -1065,6 +1120,9 @@ function AppInboxContent() {
 
   // Check if organization settings are configured
   const hasOrgSettings = orgSettings?.identityProvider && orgSettings?.emailProvider
+
+  console.log('Main component - newAppIds:', Array.from(newAppIds))
+  console.log('Main component - newAppIds.size:', newAppIds.size)
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -1146,6 +1204,7 @@ function AppInboxContent() {
               onViewApp={handleViewApp}
               onEditApp={handleEditApp}
               onRemoveApp={handleRemoveApp}
+              newAppIds={newAppIds}
             />
           </div>
         )}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { 
   Grid3X3, 
@@ -33,6 +33,7 @@ interface SidebarProps {
   onViewChange: (view: string) => void;
   userInfo: UserInfo | null;
   onSignOut: () => void;
+  newAppCount?: number; // Keep this for backward compatibility, but we'll compute it internally
 }
 
 export default function Sidebar({ 
@@ -43,10 +44,131 @@ export default function Sidebar({
   currentView, 
   onViewChange,
   userInfo,
-  onSignOut
+  onSignOut,
+  newAppCount = 0
 }: SidebarProps) {
+  const [internalNewAppCount, setInternalNewAppCount] = useState(0);
+  
+  // Get organization ID from cookies/localStorage
+  const getOrgId = () => {
+    if (typeof window === 'undefined') return null;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlOrgId = urlParams.get('orgId');
+    
+    if (urlOrgId) return urlOrgId;
+    
+    const cookies = document.cookie.split(';');
+    const orgIdCookie = cookies.find(cookie => cookie.trim().startsWith('orgId='));
+    return orgIdCookie ? orgIdCookie.split('=')[1].trim() : null;
+  };
+
+  // Load and monitor newAppCount from localStorage and detect new apps from database
+  useEffect(() => {
+    const updateNewAppCount = async () => {
+      const orgId = getOrgId();
+      if (!orgId) {
+        setInternalNewAppCount(0);
+        return;
+      }
+
+      try {
+        // Fetch all apps from the database
+        const response = await fetch(`/api/organize/apps?shadowOrgId=${orgId}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch apps');
+        }
+        const appsData = await response.json();
+        
+        // Get stored new app IDs from localStorage
+        const storedNewAppIds = localStorage.getItem(`newAppIds_${orgId}`);
+        let currentNewAppIds = new Set<string>();
+        
+        if (storedNewAppIds) {
+          try {
+            const parsedIds = JSON.parse(storedNewAppIds);
+            currentNewAppIds = new Set(parsedIds);
+          } catch (error) {
+            console.error('Error parsing new app IDs in sidebar:', error);
+          }
+        }
+        
+        // Get stored app IDs to detect truly new apps
+        const storedAppIds = localStorage.getItem(`allAppIds_${orgId}`);
+        let previousAppIds = new Set<string>();
+        
+        if (storedAppIds) {
+          try {
+            const parsedIds = JSON.parse(storedAppIds) as string[];
+            previousAppIds = new Set(parsedIds);
+          } catch (error) {
+            console.error('Error parsing stored app IDs:', error);
+          }
+        }
+        
+        // Current app IDs from database
+        const currentAppIds = new Set<string>(appsData.map((app: any) => String(app.id)));
+        
+        // Find newly added apps (apps in database but not in previous localStorage)
+        const newlyAddedApps = Array.from(currentAppIds).filter(id => !previousAppIds.has(id));
+        
+        // Add newly discovered apps to newAppIds
+        newlyAddedApps.forEach(id => currentNewAppIds.add(id));
+        
+        // Update localStorage with current state
+        localStorage.setItem(`allAppIds_${orgId}`, JSON.stringify(Array.from(currentAppIds)));
+        localStorage.setItem(`newAppIds_${orgId}`, JSON.stringify(Array.from(currentNewAppIds)));
+        
+        // Update badge count
+        setInternalNewAppCount(currentNewAppIds.size);
+        
+      } catch (error) {
+        console.error('Error checking for new apps:', error);
+        // Fallback to localStorage only
+        const storedNewAppIds = localStorage.getItem(`newAppIds_${orgId}`);
+        if (storedNewAppIds) {
+          try {
+            const parsedIds = JSON.parse(storedNewAppIds);
+            setInternalNewAppCount(parsedIds.length);
+          } catch (error) {
+            console.error('Error parsing new app IDs in sidebar:', error);
+            setInternalNewAppCount(0);
+          }
+        } else {
+          setInternalNewAppCount(0);
+        }
+      }
+    };
+
+    // Initial load
+    updateNewAppCount();
+
+    // Set up interval to check for changes every 5 seconds
+    const interval = setInterval(updateNewAppCount, 5000);
+
+    // Also listen for storage events (when localStorage changes in other tabs)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith('newAppIds_')) {
+        updateNewAppCount();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
+  // Use internal count instead of prop
+  const displayNewAppCount = internalNewAppCount;
+
   const sidebarWidth = isCollapsed ? 'w-16' : 'w-56';
   const contentVisibility = isCollapsed ? 'hidden' : 'block';
+
+  // Debug logging
+  console.log('Sidebar - displayNewAppCount:', displayNewAppCount);
 
   // Helper function to get initials from a name
   const getInitials = (name: string): string => {
@@ -202,18 +324,28 @@ export default function Sidebar({
                   ${isCollapsed ? 'justify-center px-2' : 'justify-start'}
                 `}
               >
-                <Inbox className={`h-4 w-4 flex-shrink-0 transition-colors duration-200 ${
-                  currentView === 'organize-app-inbox' 
-                    ? 'text-white' 
-                    : 'text-[#7B7481] group-hover:text-[#363338]'
-                }`} />
-                <span className={`font-medium transition-colors duration-200 ${contentVisibility} ${
-                  currentView === 'organize-app-inbox'
-                    ? 'text-white'
-                    : 'group-hover:text-[#1A1A1A]'
-                }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
-                  Managed App List
-                </span>
+                <div className="relative">
+                  <Inbox className={`h-4 w-4 flex-shrink-0 transition-colors duration-200 ${
+                    currentView === 'organize-app-inbox' 
+                      ? 'text-white' 
+                      : 'text-[#7B7481] group-hover:text-[#363338]'
+                  }`} />
+                  {displayNewAppCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[18px] h-4 flex items-center justify-center font-medium text-[10px] leading-none">
+                      {displayNewAppCount}
+                    </span>
+                  )}
+                </div>
+                <div className={`flex items-center justify-between w-full ${contentVisibility}`}>
+                  <span className={`font-medium transition-colors duration-200 ${
+                    currentView === 'organize-app-inbox'
+                      ? 'text-white'
+                      : 'group-hover:text-[#1A1A1A]'
+                  }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
+                    Managed App List
+                  </span>
+                  
+                </div>
               </button>
             </nav>
           </div>

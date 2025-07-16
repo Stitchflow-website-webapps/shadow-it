@@ -16,6 +16,7 @@ interface AppTableProps {
   onViewApp: (app: App) => void
   onEditApp: (app: App) => void
   onRemoveApp: (appId: string) => void
+  newAppIds?: Set<string>
 }
 
 type SortField = 'name' | 'renewalDate' | 'deprovisioning' | 'managedStatus' | 'stitchflowStatus' | 'appTier' | 'appPlan' | 'planLimit' | 'licensesUsed' | 'costPerUser'
@@ -71,9 +72,13 @@ const getDaysUntilRenewal = (renewalDate: string): number => {
   }
 }
 
-export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp }: AppTableProps) {
+export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp, newAppIds = new Set() }: AppTableProps) {
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+
+  // Debug logging
+  console.log('AppTable - newAppIds:', Array.from(newAppIds))
+  console.log('AppTable - app IDs:', apps.map(app => app.id))
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -249,12 +254,19 @@ export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp }: AppTablePr
             {sortedApps.map((app) => (
               <tr 
                 key={app.id} 
-                className="hover:bg-gray-50 cursor-pointer transition-colors"
+                className={cn(
+                  "hover:bg-gray-50 cursor-pointer transition-colors",
+                  newAppIds.has(app.id) && "border-2 border-orange-300"
+                )}
+                style={newAppIds.has(app.id) ? { backgroundColor: "#FFF8EB" } : {}}
                 onClick={() => onViewApp(app)}
               >
                 <td className="px-4 py-4">
                   <div className="space-y-2">
-                    <div className="text-sm font-medium text-gray-900 truncate">{app.name}</div>
+                    <div className="text-sm font-medium text-gray-900 truncate">
+                      {app.name}
+                      {newAppIds.has(app.id) && <span className="ml-2 text-orange-600 font-bold">[NEW]</span>}
+                    </div>
                     <div className="flex items-center gap-2">
                       {getStitchflowBadge(app.stitchflowStatus || '')}
                       {app.department && (
