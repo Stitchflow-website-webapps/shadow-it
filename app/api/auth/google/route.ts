@@ -468,7 +468,7 @@ export async function GET(request: Request) {
       // Create a direct URL to Google's auth/consent endpoint, bypassing the account chooser
       // This is the key change - use the specific endpoint for direct consent
       const redirectUri = process.env.NODE_ENV === 'production' 
-        ? 'https://stitchflow.com/api/auth/google'
+        ? 'https://managed.stitchflow.com/api/auth/google'
         : `${createRedirectUrl('/api/auth/google')}`;
 
       // Use the v2/auth endpoint that better respects login_hint instead of oauthchooseaccount
