@@ -113,7 +113,6 @@ type AppUser = {
 // Sort types
 type SortColumn =
   | "name"
-  | "category"
   | "userCount"
   | "riskLevel"
   | "totalPermissions"
@@ -1014,8 +1013,6 @@ export default function ShadowITDashboard() {
     switch (sortColumn) {
       case "name":
         return compareString(a.name, b.name)
-      case "category":
-        return compareString(a.category, b.category)
       case "userCount":
         return compareNumeric(a.userCount, b.userCount)
       case "riskLevel":
@@ -2830,12 +2827,6 @@ export default function ShadowITDashboard() {
                                     </div>
                                   </div>
                                 </TableHead>
-                                <TableHead className={`cursor-pointer`} onClick={() => handleSort("category")}>
-                                  <div className="flex items-center">
-                                    Category
-                                    {getSortIcon("category")}
-                                  </div>
-                                </TableHead>
                                 <TableHead className={`text-center cursor-pointer`} onClick={() => handleSort("userCount")}>
                                   <div className="flex items-center justify-center">
                                     Users
@@ -2884,7 +2875,7 @@ export default function ShadowITDashboard() {
                           <TableBody>
                               {currentApps.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={10} className="text-center py-6 text-muted-foreground">
+                                <TableCell colSpan={9} className="text-center py-6 text-muted-foreground">
                                   No applications found matching your filters
                                 </TableCell>
                               </TableRow>
@@ -2906,19 +2897,21 @@ export default function ShadowITDashboard() {
                                       />
                                       <AppIcon name={app.name} logoUrl={app.logoUrl} logoUrlFallback={app.logoUrlFallback} />
                                       <div 
-                                        className="font-medium cursor-pointer hover:text-primary transition-colors truncate max-w-[200px]"
+                                        className="cursor-pointer hover:text-primary transition-colors"
                                         onClick={() => handleSeeUsers(app.id)}
                                       >
-                                        {app.name}
+                                        <div className="font-medium truncate max-w-[200px]">
+                                          {app.name}
+                                        </div>
+                                        <div className="mt-1">
+                                          <CategoryBadge 
+                                            category={app.category} 
+                                            appId={app.id} 
+                                            isCategorizing={uncategorizedApps.has(app.id)} 
+                                          />
+                                        </div>
                                       </div>
                                     </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <CategoryBadge 
-                                      category={app.category} 
-                                      appId={app.id} 
-                                      isCategorizing={uncategorizedApps.has(app.id)} 
-                                    />
                                   </TableCell>
                                   <TableCell className="text-center">
                                       <TooltipProvider>
