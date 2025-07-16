@@ -196,12 +196,12 @@ export async function GET(request: Request) {
       }
       
       console.error('OAuth error received:', error);
-      return NextResponse.redirect(`https://stitchflow.com/?error=${error}`);
+      return NextResponse.redirect(`https://managed.stitchflow.com/?error=${error}`);
     }
 
     if (!code) {
       console.error('No authorization code received');
-      return NextResponse.redirect(`https://stitchflow.com/?error=no_code`);
+      return NextResponse.redirect(`https://managed.stitchflow.com/?error=no_code`);
     }
 
     console.log('2. Initializing Google Workspace service...');
@@ -238,7 +238,7 @@ export async function GET(request: Request) {
       const orgDomain = searchParams.get('org');
       if (!orgDomain) {
         console.error('Re-authentication requires organization domain');
-        return NextResponse.redirect(`https://stitchflow.com/?error=missing_org`);
+        return NextResponse.redirect(`https://managed.stitchflow.com/?error=missing_org`);
       }
 
       const { data: org, error: orgError } = await supabaseAdmin
@@ -249,7 +249,7 @@ export async function GET(request: Request) {
 
       if (orgError || !org) {
         console.error('Organization not found for re-authentication:', orgDomain);
-        return NextResponse.redirect(`https://stitchflow.com/?error=org_not_found`);
+        return NextResponse.redirect(`https://managed.stitchflow.com/?error=org_not_found`);
       }
 
       // Update the sync_status with new tokens
@@ -268,13 +268,13 @@ export async function GET(request: Request) {
 
       if (updateError) {
         console.error('Error updating tokens during re-authentication:', updateError);
-        return NextResponse.redirect(`https://stitchflow.com/?error=token_update_failed`);
+        return NextResponse.redirect(`https://managed.stitchflow.com/?error=token_update_failed`);
       }
 
       console.log('Successfully updated tokens for re-authentication');
       
       // Redirect back to dashboard with success message
-      const redirectUrl = new URL('https://stitchflow.com/');
+      const redirectUrl = new URL('https://managed.stitchflow.com/');
       redirectUrl.searchParams.set('reauth_success', 'true');
       redirectUrl.searchParams.set('orgId', org.id);
       
@@ -468,7 +468,7 @@ export async function GET(request: Request) {
       // Create a direct URL to Google's auth/consent endpoint, bypassing the account chooser
       // This is the key change - use the specific endpoint for direct consent
       const redirectUri = process.env.NODE_ENV === 'production' 
-        ? 'https://managed.stitchflow.com/api/auth/google'
+        ? 'https://www.managed.stitchflow.com/api/auth/google'
         : `${createRedirectUrl('/api/auth/google')}`;
 
       // Use the v2/auth endpoint that better respects login_hint instead of oauthchooseaccount

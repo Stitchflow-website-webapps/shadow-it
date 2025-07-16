@@ -341,7 +341,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
         case "select":
           return (
             <div key={field.field} className="space-y-1">
-              <Label htmlFor={field.field}>{field.label}</Label>
+              {/* <Label htmlFor={field.field}>{field.label}</Label> */}
               <Select
                 value={currentValue === "Not specified" || currentValue === "" ? undefined : currentValue}
                 onValueChange={(value) => handleFieldChange(field.field, value)}
