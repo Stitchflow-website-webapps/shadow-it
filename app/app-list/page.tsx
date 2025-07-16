@@ -728,7 +728,7 @@ function SimpleEmptyState({ onAddApp, orgSettings, onSettingsUpdate }: {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center p-6 space-y-8">
         <div className="space-y-3">
-          <h1 className="text-3xl font-semibold text-gray-900">Welcome to App Inbox</h1>
+          <h1 className="text-3xl font-semibold text-gray-900">Welcome to App List</h1>
           <p className="text-lg text-gray-600">
             Please configure your organization settings in the sidebar to start adding apps.
           </p>
@@ -743,7 +743,7 @@ function SimpleEmptyState({ onAddApp, orgSettings, onSettingsUpdate }: {
               </div>
               
               <p className="text-sm text-gray-600">
-                Go to Settings → App Inbox Settings in the sidebar to configure your organization settings.
+                Go to Settings → IdP in the sidebar to configure your organization settings.
               </p>
             </div>
           </div>
@@ -755,7 +755,7 @@ function SimpleEmptyState({ onAddApp, orgSettings, onSettingsUpdate }: {
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center p-6 space-y-8">
       <div className="space-y-3">
-        <h1 className="text-3xl font-semibold text-gray-900">Welcome to App Inbox</h1>
+        <h1 className="text-3xl font-semibold text-gray-900">Welcome to App List</h1>
         <p className="text-lg text-gray-600">
           Your organization is configured. Add your first app to get started.
         </p>
