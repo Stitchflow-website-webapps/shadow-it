@@ -89,15 +89,15 @@ export function middleware(request: NextRequest) {
   }
   
   // Check if user is authenticated for protected routes
-  if (pathname.startsWith('') &&
-      !pathname.startsWith('/login') &&
-      !pathname.startsWith('/api/')) {
-    
-    // Check for the new session cookie first, then fallback to legacy cookies
-    if (!hasSessionCookie && !hasLegacyAuthCookie) {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-  }
+  // if (pathname.startsWith('') &&
+  //     !pathname.startsWith('/login') &&
+  //     !pathname.startsWith('/api/')) {
+  //   
+  //   // Check for the new session cookie first, then fallback to legacy cookies
+  //   if (!hasSessionCookie && !hasLegacyAuthCookie) {
+  //     return NextResponse.redirect(new URL('/login', request.url));
+  //   }
+  // }
   
   // Continue with the request
   return NextResponse.next();
