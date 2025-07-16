@@ -417,7 +417,7 @@ export default function ShadowITDashboard() {
     
     return Math.round(totalAppRiskScore * 100) / 100; // Round to 2 decimal places
   };
-3
+
   // Add states for owner email and notes editing
   const [ownerEmail, setOwnerEmail] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
