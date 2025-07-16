@@ -263,9 +263,9 @@ export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp, newAppIds = 
               >
                 <td className="px-4 py-4">
                   <div className="space-y-2">
-                    <div className="text-sm font-medium text-gray-900 truncate">
+                    <div className="text-sm font-medium text-gray-900 truncate flex items-center">
                       {app.name}
-                      {newAppIds.has(app.id) && <span className="ml-2 text-orange-600 font-bold">[NEW]</span>}
+                      {newAppIds.has(app.id) && <div className="ml-2 w-1.5 h-1.5 bg-orange-500 rounded-full"></div>}
                     </div>
                     <div className="flex items-center gap-2">
                       {getStitchflowBadge(app.stitchflowStatus || '')}

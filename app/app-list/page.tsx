@@ -1116,6 +1116,13 @@ function AppInboxContent() {
     }
   }
 
+  const markAllAsRead = () => {
+    if (shadowOrgId) {
+      setNewAppIds(new Set())
+      localStorage.setItem(`newAppIds_${shadowOrgId}`, JSON.stringify([]))
+    }
+  }
+
   const currentAppIndex = selectedApp ? filteredApps.findIndex(app => app.id === selectedApp.id) : -1
 
   // Check if organization settings are configured
@@ -1185,6 +1192,12 @@ function AppInboxContent() {
                   <Plus className="h-4 w-4 mr-2" />
                   Add app
                 </Button>
+                {newAppIds.size > 0 && (
+                  <Button onClick={markAllAsRead} size="sm" variant="outline">
+                    <Check className="h-4 w-4 mr-2" />
+                    Mark all as read
+                  </Button>
+                )}
               </div>
             </div>
 
