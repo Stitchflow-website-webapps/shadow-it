@@ -237,15 +237,15 @@ export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp, newAppIds = 
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <SortableHeader field="name" className="w-[16%]">App Name</SortableHeader>
-              <SortableHeader field="deprovisioning" className="w-[10%]">Deprovisioning</SortableHeader>
-              <SortableHeader field="appTier" className="w-[8%]">Tier</SortableHeader>
-              <SortableHeader field="appPlan" className="w-[10%]">Plan</SortableHeader>
-              <SortableHeader field="planLimit" className="w-[9%]">Limit</SortableHeader>
-              <SortableHeader field="licensesUsed" className="w-[11%]">Licenses Used</SortableHeader>
+              <SortableHeader field="name" className="w-[15%]">App Name</SortableHeader>
+              <SortableHeader field="deprovisioning" className="w-[9%]">Deprovisioning</SortableHeader>
+              <SortableHeader field="appTier" className="w-[7%]">Tier</SortableHeader>
+              <SortableHeader field="appPlan" className="w-[9%]">Plan</SortableHeader>
+              <SortableHeader field="planLimit" className="w-[8%]">Limit</SortableHeader>
+              <SortableHeader field="licensesUsed" className="w-[10%]">Licenses Used</SortableHeader>
               <SortableHeader field="costPerUser" className="w-[8%]">Cost/User</SortableHeader>
-              <SortableHeader field="renewalDate" className="w-[15%]">Renewal</SortableHeader>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[13%]">
+              <SortableHeader field="renewalDate" className="w-[18%]">Renewal</SortableHeader>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[16%]">
                 Actions
               </th>
             </tr>
@@ -320,39 +320,34 @@ export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp, newAppIds = 
                   </span>
                 </td>
                 <td className="px-4 py-4">
-                  <div className="space-y-1">
-                    <span className="text-sm text-gray-900 block truncate">{formatDate(app.renewalDate)}</span>
+                  <div className="space-y-1 min-w-0">
+                    <div className="text-sm text-gray-900 truncate">{formatDate(app.renewalDate)}</div>
                     {app.renewalDate && (() => {
                       const daysUntil = getDaysUntilRenewal(app.renewalDate)
+                      const getStatusInfo = (days: number) => {
+                        if (days < 0) return { label: "Overdue", color: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500 animate-pulse" }
+                        if (days <= 30) return { label: "Due soon", color: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500 animate-pulse" }
+                        if (days <= 90) return { label: "Upcoming", color: "bg-yellow-50 text-yellow-700 border-yellow-200", dot: "bg-yellow-500" }
+                        return { label: "On Track", color: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" }
+                      }
+                      
+                      const statusInfo = getStatusInfo(daysUntil)
                       return (
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-xs font-medium rounded-full px-1.5 py-0.5 border flex items-center gap-1 w-fit",
-                            daysUntil < 0
-                              ? "bg-red-50 text-red-700 border-red-200"
-                              : daysUntil <= 30
-                              ? "bg-red-50 text-red-700 border-red-200"
-                              : daysUntil <= 90
-                              ? "bg-yellow-50 text-yellow-700 border-yellow-200"
-                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          )}
-                        >
-                          <div className={cn(
-                            "w-1 h-1 rounded-full",
-                            daysUntil < 0 || daysUntil <= 30 
-                              ? "bg-red-500 animate-pulse" 
-                              : daysUntil <= 90 
-                              ? "bg-yellow-500" 
-                              : "bg-emerald-500"
-                          )} />
-                          <span className="font-semibold text-xs">
-                            {daysUntil < 0 ? "Overdue" : daysUntil <= 30 ? "Due soon" : daysUntil <= 90 ? "Upcoming" : "On Track"}
-                          </span>
-                          <span className="font-normal opacity-80 text-xs">
+                        <div className="flex items-center gap-1">
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-xs font-medium rounded-full px-2 py-0.5 border flex items-center gap-1 shrink-0",
+                              statusInfo.color
+                            )}
+                          >
+                            <div className={cn("w-1 h-1 rounded-full", statusInfo.dot)} />
+                            <span className="font-semibold whitespace-nowrap">{statusInfo.label}</span>
+                          </Badge>
+                          <span className="text-xs text-gray-500 shrink-0">
                             {daysUntil < 0 ? `${Math.abs(daysUntil)}d` : `${daysUntil}d`}
                           </span>
-                        </Badge>
+                        </div>
                       )
                     })()}
                   </div>

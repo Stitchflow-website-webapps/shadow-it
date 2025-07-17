@@ -38,6 +38,11 @@ interface UserInfo {
   avatar_url: string | null;
 }
 
+// Combined user info for upload functionality
+interface UserInfoWithOrg {
+  orgId: string;
+}
+
 
 
 // Simple add apps dialog that doesn't use useAuth
@@ -298,12 +303,13 @@ function SimpleAddAppsDialog({ open, onOpenChange, onAddApps, existingApps, orgS
 }
 
 // Simple app detail component that doesn't use useAuth
-function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = false, organization }: {
+function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = false, organization, userInfo }: {
   app: App
   onUpdateApp: (app: App) => void
   onRemoveApp: (appId: string) => void
   initialEditMode?: boolean
   organization: OrganizationSettings | null
+  userInfo?: UserInfoWithOrg | null
 }) {
   const [isEditMode, setIsEditMode] = useState(initialEditMode)
   const [editedFields, setEditedFields] = useState<Partial<App>>({})
@@ -449,6 +455,8 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
           icon={<KeyRound className="h-5 w-5 text-primary-text" />}
           isEditing={isEditMode}
           onUpdate={handleFieldChange}
+          appName={app.name}
+          userInfo={userInfo}
           fields={[
             {
               label: "SSO ENFORCED?",
@@ -480,6 +488,8 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
           icon={<Link className="h-5 w-5 text-primary-text" />}
           isEditing={isEditMode}
           onUpdate={(updates) => handleFieldChange(updates)}
+          appName={app.name}
+          userInfo={userInfo}
           fields={[
             {
               label: "STITCHFLOW CONNECTION STATUS",
@@ -528,6 +538,8 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
           icon={<Users className="h-5 w-5 text-primary-text" />}
           isEditing={isEditMode}
           onUpdate={(updates) => handleFieldChange(updates)}
+          appName={app.name}
+          userInfo={userInfo}
           fields={[
             {
               label: "DEPARTMENT",
@@ -550,6 +562,13 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
               type: "textarea",
               placeholder: "Add access policy and notes",
             },
+            {
+              label: "WHAT'S THE APP USED FOR",
+              value: editedFields.usageDescription ?? (app.usageDescription || ""),
+              field: "usageDescription",
+              type: "textarea",
+              placeholder: "Enter usage description",
+            },
           ]}
         />
 
@@ -559,13 +578,22 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
           icon={<CreditCard className="h-5 w-5 text-primary-text" />}
           isEditing={isEditMode}
           onUpdate={(updates) => handleFieldChange(updates)}
+          appName={app.name}
+          userInfo={userInfo}
           fields={[
             {
-              label: "APP PLAN",
+              label: "RENEWAL TYPE",
               value: editedFields.appPlan ?? (app.appPlan || ""),
               field: "appPlan",
-              type: "input",
-              placeholder: "Enter app plan",
+              type: "select",
+              placeholder: "Select renewal type",
+              options: [
+                { value: "Annual Plan", label: "Annual Plan" },
+                { value: "Monthly Plan", label: "Monthly Plan" },
+                { value: "Quarterly", label: "Quarterly" },
+                { value: "Usage Based", label: "Usage Based" },
+                { value: "Other", label: "Other" },
+              ],
             },
             {
               label: "PLAN LIMIT",
@@ -629,6 +657,7 @@ function SimpleAppDetailTray({
   hasPrevious = false,
   hasNext = false,
   organization,
+  shadowOrgId,
 }: {
   app: App | null
   isOpen: boolean
@@ -641,6 +670,7 @@ function SimpleAppDetailTray({
   hasPrevious?: boolean
   hasNext?: boolean
   organization: OrganizationSettings | null
+  shadowOrgId?: string | null
 }) {
   if (!app) return null
 
@@ -707,6 +737,7 @@ function SimpleAppDetailTray({
           }}
           initialEditMode={isEditMode}
           organization={organization}
+          userInfo={{ orgId: shadowOrgId || '' }}
         />
       </div>
     </div>
@@ -1250,6 +1281,7 @@ function AppInboxContent() {
             hasPrevious={currentAppIndex > 0}
             hasNext={currentAppIndex < filteredApps.length - 1}
             organization={orgSettings}
+            shadowOrgId={shadowOrgId}
           />
 
           <SimpleAddAppsDialog 

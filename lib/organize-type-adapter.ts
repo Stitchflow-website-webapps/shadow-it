@@ -23,7 +23,7 @@ export function organizeAppToApp(organizeApp: OrganizeApp): App {
     renewalDate: organizeApp.renewal_date || '',
     contractUrl: organizeApp.contract_url || '',
     licensesUsed: organizeApp.licenses_used,
-    usageDescription: organizeApp.usage_description || ''
+    usageDescription: organizeApp.usage_description || '',
   }
 }
 
@@ -48,6 +48,6 @@ export function appToOrganizeApp(app: App, orgId: string): Partial<OrganizeApp> 
     cost_per_user: app.costPerUser || null,
     renewal_date: app.renewalDate || null,
     contract_url: app.contractUrl || null,
-    usage_description: app.usageDescription || null
+    usage_description: app.usageDescription || null,
   }
 } 

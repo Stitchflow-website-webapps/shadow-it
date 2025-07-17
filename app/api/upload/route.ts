@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabase-server'
-import formidable from 'formidable'
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,9 +17,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Only PDF files are allowed' }, { status: 400 })
     }
 
-    // Validate file size (3MB limit)
-    if (file.size > 3 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File size must be less than 3MB' }, { status: 400 })
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File size must be less than 10MB' }, { status: 400 })
     }
 
     // Generate safe filename with timestamp

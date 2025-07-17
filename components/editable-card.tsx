@@ -418,7 +418,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
                     <Button
                       variant={"outline"}
                       className={cn(
-                        "w-full h-11 justify-start text-left font-normal bg-white border-gray-100 focus:border-bg-dark focus:ring-2 focus:ring-gray-200 transition-all",
+                        "w-full h-11 justify-start text-left font-normal bg-white border-gray-200 hover:border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 rounded-lg shadow-sm",
                         !currentValue && "text-muted-foreground"
                       )}
                     >
@@ -439,7 +439,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
                       })()}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
+                  <PopoverContent className="w-auto p-0 border-0 shadow-xl">
                     <Calendar
                       mode="single"
                       selected={(() => {
