@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
       row.total_permissions || '',
       row.created_at || '',
       row.updated_at || '',
-      `"${(row.all_scopes || '').replace(/"/g, '""')}"`, // Escape quotes in scopes
+      `"${(Array.isArray(row.all_scopes) ? row.all_scopes.join('; ') : (row.all_scopes || '')).replace(/"/g, '""')}"`, // Handle array and escape quotes
       row.microsoft_app_id || '',
       row.category_status || '',
       row.provider || '',
