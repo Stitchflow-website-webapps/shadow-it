@@ -413,7 +413,7 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
               
               <AlertDialog open={showRemoveDialog} onOpenChange={setShowRemoveDialog}>
                 <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300">
+                  <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 bg-white">
                     <Trash2 className="h-4 w-4 mr-2" />
                     Remove
                   </Button>
@@ -429,10 +429,7 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction 
                       onClick={handleRemove}
-                      className="text-white"
-                      style={{ backgroundColor: '#363338' }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2a282c'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#363338'}
+                      className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
                     >
                       Remove App
                     </AlertDialogAction>
@@ -730,20 +727,25 @@ function SimpleEmptyState({ onAddApp, orgSettings, onSettingsUpdate }: {
         <div className="space-y-3">
           <h1 className="text-3xl font-semibold text-gray-900">Welcome to App List</h1>
           <p className="text-lg text-gray-600">
-            Please configure your organization settings in the sidebar to start adding apps.
+            To get started, add your first app. You can configure your organization settings later for full functionality.
           </p>
         </div>
+
+        <Button onClick={onAddApp} size="lg" className="text-base px-6 py-3">
+            <Plus className="h-5 w-5 mr-2" />
+            Add your first app
+        </Button>
 
         <div className="w-full max-w-md">
           <div className="p-6 border-2 border-dashed border-gray-200 rounded-lg">
             <div className="space-y-4">
               <div className="flex items-center justify-center gap-2 mb-4">
                 <Settings className="h-5 w-5" />
-                <h3 className="text-lg font-medium">Organization Settings Required</h3>
+                <h3 className="text-lg font-medium">Organization Settings</h3>
               </div>
               
               <p className="text-sm text-gray-600">
-                Go to Settings → IdP in the sidebar to configure your organization settings.
+                For enhanced features, go to Settings → IdP in the sidebar to configure your Identity and Email providers.
               </p>
             </div>
           </div>
@@ -1250,15 +1252,13 @@ function AppInboxContent() {
             organization={orgSettings}
           />
 
-          {hasOrgSettings && (
-            <SimpleAddAppsDialog 
-              open={isAddDialogOpen} 
-              onOpenChange={setIsAddDialogOpen} 
-              onAddApps={handleAddApps} 
-              existingApps={transformedApps}
-              orgSettings={orgSettings}
-            />
-          )}
+          <SimpleAddAppsDialog 
+            open={isAddDialogOpen} 
+            onOpenChange={setIsAddDialogOpen} 
+            onAddApps={handleAddApps} 
+            existingApps={transformedApps}
+            orgSettings={orgSettings}
+          />
         </div>
       </div>
     </div>

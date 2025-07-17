@@ -394,7 +394,7 @@ export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp, newAppIds = 
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel className="border-gray-200 text-secondary-text hover:bg-gray-50 font-medium">Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => onRemoveApp(app.id)} className="bg-bg-dark hover:bg-bg-dark/90 text-white font-medium">
+                          <AlertDialogAction onClick={() => onRemoveApp(app.id)} className="bg-red-600 hover:bg-red-700 text-white font-medium border-red-600 hover:border-red-700">
                             Remove App
                           </AlertDialogAction>
                         </AlertDialogFooter>
