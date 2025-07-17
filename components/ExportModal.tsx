@@ -31,7 +31,7 @@ export default function ExportModal({ isOpen, onClose, organizations }: ExportMo
     setError(null);
 
     try {
-      const response = await fetch('/api/admin/export-org-apps', {
+      const response = await fetch('/tools/shadow-it-scan/api/admin/export-org-apps', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
