@@ -596,18 +596,18 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
               ],
             },
             {
+              label: "RENEWAL DATE",
+              value: editedFields.renewalDate ?? (app.renewalDate || ""),
+              field: "renewalDate",
+              type: "date",
+              placeholder: "Select renewal date",
+            },
+            {
               label: "PLAN LIMIT",
               value: editedFields.planLimit ?? (app.planLimit || ""),
               field: "planLimit",
               type: "input",
               placeholder: "Enter plan limit",
-            },
-            {
-              label: "PLAN REFERENCE",
-              value: editedFields.planReference ?? (app.planReference || ""),
-              field: "planReference",
-              type: "input",
-              placeholder: "Enter plan reference",
             },
             {
               label: "LICENSES USED",
@@ -617,11 +617,11 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
               placeholder: "Enter number of licenses used",
             },
             {
-              label: "RENEWAL DATE",
-              value: editedFields.renewalDate ?? (app.renewalDate || ""),
-              field: "renewalDate",
-              type: "date",
-              placeholder: "Select renewal date",
+              label: "PLAN REFERENCE",
+              value: editedFields.planReference ?? (app.planReference || ""),
+              field: "planReference",
+              type: "input",
+              placeholder: "Enter plan reference",
             },
             {
               label: "COST PER USER (PER MONTH)",

@@ -185,6 +185,7 @@ export default function ShadowITDashboard() {
   const [filterManaged, setFilterManaged] = useState<string | null>(null)
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null)
   const [isUserModalOpen, setIsUserModalOpen] = useState(false)
+  const [defaultTab, setDefaultTab] = useState<string>("users")
   const [isLoading, setIsLoading] = useState(true)
   const [userSearchTerm, setUserSearchTerm] = useState("")
   const [editedStatuses, setEditedStatuses] = useState<Record<string, string>>({})
@@ -826,6 +827,12 @@ export default function ShadowITDashboard() {
         if (app.category === 'Unknown') unknownIds.add(app.id);
       });
       setUncategorizedApps(unknownIds);
+
+      // Check if any app has an AI risk score and set default sort
+      if (processedData.some(app => app.aiRiskScore !== null && app.aiRiskScore !== undefined)) {
+        setSortColumn("aiRiskScore");
+        setSortDirection("desc");
+      }
       
     } catch (error) {
       console.error("Error fetching application data:", error);
@@ -1227,9 +1234,10 @@ export default function ShadowITDashboard() {
 
 
   // Modify your click handlers to use checkAuth
-  const handleSeeUsers = (appId: string) => {
+  const handleSeeUsers = (appId: string, tab: string = "users") => {
     checkAuth(() => {
       setSelectedAppId(appId);
+      setDefaultTab(tab);
       setIsUserModalOpen(true);
     });
   };
@@ -1239,6 +1247,7 @@ export default function ShadowITDashboard() {
     setIsUserModalOpen(false)
     setSelectedAppId(null)
     setUserSearchTerm("")
+    setDefaultTab("users")
   }
 
   // Handle status change
@@ -3008,7 +3017,7 @@ export default function ShadowITDashboard() {
                                             <TooltipTrigger asChild>
                                               <div 
                                                 className="text-center cursor-pointer flex items-center justify-center" 
-                                                onClick={() => handleSeeUsers(app.id)}
+                                                onClick={() => handleSeeUsers(app.id, "ai-risk-scoring")}
                                               >
                                                 {app.aiRiskScore !== null && app.aiRiskScore !== undefined ? 
                                                   <span className="font-medium text-blue-600">{app.aiRiskScore.toFixed(1)}</span> : 
@@ -3866,7 +3875,7 @@ export default function ShadowITDashboard() {
                       </dl>
                     </div>
 
-                    <Tabs defaultValue="users" className="mb-6">
+                    <Tabs defaultValue={defaultTab} className="mb-6">
                       <TabsList className="bg-gray-100 p-1">
                         <TabsTrigger value="users" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
                         All Users

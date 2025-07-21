@@ -22,10 +22,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File size must be less than 10MB' }, { status: 400 })
     }
 
-    // Generate safe filename with timestamp
+    // Generate safe filename with timestamp for storage
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const safeName = `${appName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${timestamp}.pdf`
     const filePath = `${orgId}/${appName}/${safeName}`
+    
+    // Preserve original filename for display
+    const originalFileName = file.name
 
     // Convert File to ArrayBuffer
     const arrayBuffer = await file.arrayBuffer()
@@ -52,7 +55,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       url: urlData.publicUrl,
       filePath: filePath,
-      fileName: safeName
+      fileName: originalFileName,
+      storagePath: safeName
     })
   } catch (error) {
     console.error('Upload error:', error)

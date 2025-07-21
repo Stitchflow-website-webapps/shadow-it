@@ -337,16 +337,16 @@ export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp, newAppIds = 
                           <Badge
                             variant="outline"
                             className={cn(
-                              "text-xs font-medium rounded-full px-2 py-0.5 border flex items-center gap-1 shrink-0",
+                              "text-xs font-medium rounded-full px-2.5 py-1 border flex items-center gap-1.5 shrink-0",
                               statusInfo.color
                             )}
                           >
-                            <div className={cn("w-1 h-1 rounded-full", statusInfo.dot)} />
+                            <div className={cn("w-1.5 h-1.5 rounded-full", statusInfo.dot)} />
                             <span className="font-semibold whitespace-nowrap">{statusInfo.label}</span>
+                            <span className="font-normal opacity-75">
+                              {daysUntil < 0 ? `${Math.abs(daysUntil)}d` : `${daysUntil}d`}
+                            </span>
                           </Badge>
-                          <span className="text-xs text-gray-500 shrink-0">
-                            {daysUntil < 0 ? `${Math.abs(daysUntil)}d` : `${daysUntil}d`}
-                          </span>
                         </div>
                       )
                     })()}

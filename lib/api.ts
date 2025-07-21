@@ -159,7 +159,7 @@ export const appsApi = {
 
 // File upload API
 export const uploadApi = {
-  uploadFile: async (file: File, orgId: string, appName: string): Promise<{ url: string; filePath: string; fileName: string }> => {
+  uploadFile: async (file: File, orgId: string, appName: string): Promise<{ url: string; filePath: string; fileName: string; storagePath?: string }> => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('orgId', orgId)
@@ -179,7 +179,8 @@ export const uploadApi = {
     return {
       url: data.url,
       filePath: data.filePath,
-      fileName: data.fileName
+      fileName: data.fileName,
+      storagePath: data.storagePath
     }
   },
 

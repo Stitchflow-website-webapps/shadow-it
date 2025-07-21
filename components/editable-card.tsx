@@ -402,6 +402,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
             </div>
           )
         case "date":
+          const isDatePickerEnabled = datePickerStates[field.field] || false;
           return (
             <div className="mt-3 space-y-3">
               <div className="flex items-center justify-between">
@@ -413,53 +414,17 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
               </div>
               
               {isDatePickerEnabled ? (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full h-11 justify-start text-left font-normal bg-white border-gray-200 hover:border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 rounded-lg shadow-sm",
-                        !currentValue && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {(() => {
-                        if (!currentValue || currentValue === "unset") {
-                          return <span>Pick a date</span>
-                        }
-                        try {
-                          const date = new Date(currentValue)
-                          if (isNaN(date.getTime())) {
-                            return <span>Pick a date</span>
-                          }
-                          return format(date, "PPP")
-                        } catch {
-                          return <span>Pick a date</span>
-                        }
-                      })()}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 border-0 shadow-xl">
-                    <Calendar
-                      mode="single"
-                      selected={(() => {
-                        if (!currentValue || currentValue === "unset") return undefined
-                        try {
-                          const date = new Date(currentValue)
-                          return isNaN(date.getTime()) ? undefined : date
-                        } catch {
-                          return undefined
-                        }
-                      })()}
-                      onSelect={(date) => {
-                        if (date) {
-                          handleFieldChange(field.field, format(date, "yyyy-MM-dd"))
-                        }
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <Calendar
+                  selected={currentValue && currentValue !== "unset" ? new Date(currentValue) : null}
+                  onChange={(date: Date | null) => {
+                    if (date) {
+                      handleFieldChange(field.field, format(date, 'yyyy-MM-dd'));
+                    } else {
+                      handleFieldChange(field.field, '');
+                    }
+                  }}
+                  placeholderText={field.placeholder}
+                />
               ) : (
                 <Input
                   value={currentValue === "unset" ? "" : currentValue}
@@ -469,7 +434,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
                 />
               )}
             </div>
-          )
+          );
         case "file-url":
           const isFileUploadEnabled = fileUploadStates[field.field] || false
           const uploadedFile = uploadedFiles[field.field]
@@ -567,12 +532,24 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
                     
                     // Handle legacy URLs or new URLs
                     if (currentValue.startsWith('http')) {
+                      // Try to extract filename from URL
+                      const getFilenameFromUrl = (url: string) => {
+                        try {
+                          const urlObj = new URL(url)
+                          const pathname = urlObj.pathname
+                          const filename = pathname.split('/').pop()
+                          return filename && filename.includes('.') ? filename : 'Contract document'
+                        } catch {
+                          return 'Contract document'
+                        }
+                      }
+
                       return (
                         <div className="p-3 border border-gray-100 rounded-lg bg-gray-50 space-y-3">
                           <div className="flex items-center gap-2">
                             <FileText className="h-4 w-4 text-gray-600" />
                             <span className="text-sm text-gray-700">
-                              {uploadedFile ? uploadedFile.name : 'Uploaded contract'}
+                              {uploadedFile ? uploadedFile.name : getFilenameFromUrl(currentValue)}
                             </span>
                           </div>
                           <div className="flex gap-2">
@@ -747,16 +724,6 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
                   >
                     <ExternalLink className="h-3 w-3 mr-1" />
                     View Details
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleRemoveFile(field.field)}
-                    className="h-8 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <X className="h-3 w-3 mr-1" />
-                    Remove
                   </Button>
                 </div>
               </div>
