@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     const response = NextResponse.json({ 
       success: true, 
       organization: organization,
-      redirectUrl: 'https://manage.stitchflow.io/'
+      redirectUrl: 'https://www.manage.stitchflow.io/'
     });
 
     // Set cookies for the selected organization

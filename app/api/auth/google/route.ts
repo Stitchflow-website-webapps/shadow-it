@@ -196,12 +196,12 @@ export async function GET(request: Request) {
       }
       
       console.error('OAuth error received:', error);
-      return NextResponse.redirect(`https://manage.stitchflow.io/?error=${error}`);
+      return NextResponse.redirect(`https://www.manage.stitchflow.io/?error=${error}`);
     }
 
     if (!code) {
       console.error('No authorization code received');
-      return NextResponse.redirect(`https://manage.stitchflow.io/?error=no_code`);
+      return NextResponse.redirect(`https://www.manage.stitchflow.io/?error=no_code`);
     }
 
     console.log('2. Initializing Google Workspace service...');
@@ -238,7 +238,7 @@ export async function GET(request: Request) {
       const orgDomain = searchParams.get('org');
       if (!orgDomain) {
         console.error('Re-authentication requires organization domain');
-        return NextResponse.redirect(`https://manage.stitchflow.io/?error=missing_org`);
+        return NextResponse.redirect(`https://www.manage.stitchflow.io/?error=missing_org`);
       }
 
       const { data: org, error: orgError } = await supabaseAdmin
@@ -249,7 +249,7 @@ export async function GET(request: Request) {
 
       if (orgError || !org) {
         console.error('Organization not found for re-authentication:', orgDomain);
-        return NextResponse.redirect(`https://manage.stitchflow.io/?error=org_not_found`);
+        return NextResponse.redirect(`https://www.manage.stitchflow.io/?error=org_not_found`);
       }
 
       // Update the sync_status with new tokens
@@ -268,13 +268,13 @@ export async function GET(request: Request) {
 
       if (updateError) {
         console.error('Error updating tokens during re-authentication:', updateError);
-        return NextResponse.redirect(`https://manage.stitchflow.io/?error=token_update_failed`);
+        return NextResponse.redirect(`https://www.manage.stitchflow.io/?error=token_update_failed`);
       }
 
       console.log('Successfully updated tokens for re-authentication');
       
       // Redirect back to dashboard with success message
-      const redirectUrl = new URL('https://manage.stitchflow.io/');
+      const redirectUrl = new URL('https://www.manage.stitchflow.io/');
       redirectUrl.searchParams.set('reauth_success', 'true');
       redirectUrl.searchParams.set('orgId', org.id);
       
@@ -332,7 +332,7 @@ export async function GET(request: Request) {
       }
 
       // Create redirect to org selector
-      const redirectUrl = new URL('https://manage.stitchflow.io/org-selector');
+      const redirectUrl = new URL('https://www.manage.stitchflow.io/org-selector');
       
       // Create HTML response with localStorage and redirect
       const htmlResponse = `
@@ -848,7 +848,7 @@ export async function GET(request: Request) {
     let redirectUrl;
     if (isNewSyncRequired) {
       // For new users or users without data, redirect to loading page with sync status
-      redirectUrl = new URL('https://manage.stitchflow.io/loading');
+      redirectUrl = new URL('https://www.manage.stitchflow.io/loading');
       if (syncStatus) {
         redirectUrl.searchParams.set('syncId', syncStatus.id);
       }
@@ -856,7 +856,7 @@ export async function GET(request: Request) {
       console.log('Redirecting new user to loading page');
     } else {
       // For returning users with existing data, go straight to dashboard
-      redirectUrl = new URL('https://manage.stitchflow.io/');
+      redirectUrl = new URL('https://www.manage.stitchflow.io/');
       redirectUrl.searchParams.set('orgId', org.id);
       console.log('Redirecting returning user directly to dashboard');
     }

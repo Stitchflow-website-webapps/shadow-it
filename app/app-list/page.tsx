@@ -1083,7 +1083,7 @@ function AppInboxContent() {
     document.cookie = 'shadow_session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
     localStorage.clear()
     // Redirect to main site
-    window.location.href = 'https://manage.stitchflow.io/'
+    window.location.href = 'https://www.manage.stitchflow.io/'
   }
 
   if (isLoading) {
