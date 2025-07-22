@@ -753,7 +753,7 @@ export async function GET(request: NextRequest) {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax' as const,
-        domain: process.env.NODE_ENV === 'production' ? '.stitchflow.com' : undefined,
+        domain: process.env.NODE_ENV === 'production' ? '.stitchflow.io' : undefined,
         path: '/',
         expires: expiresAt // Make sure cookies have expiration date
       };
@@ -869,7 +869,7 @@ export async function GET(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax' as const,
-      domain: process.env.NODE_ENV === 'production' ? '.stitchflow.com' : undefined,
+      domain: process.env.NODE_ENV === 'production' ? '.stitchflow.io' : undefined,
       path: '/',
       expires: expiresAt // Add expiration date
     };

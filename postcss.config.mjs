@@ -4,7 +4,7 @@ const config = {
     tailwindcss: {},
   },
   images: {
-    domains: ['localhost:3000','stitchflow.com', 'dev-web.stitchflow.com'],
+    domains: ['localhost:3000','stitchflow.io', 'dev-web.stitchflow.io'],
     unoptimized: true,
   },
   eslint: {

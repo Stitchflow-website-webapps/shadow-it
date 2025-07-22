@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       sameSite: 'lax', // Helps with CSRF protection
       path: '/', // Available across the whole site
       maxAge: 30 * 24 * 60 * 60, // 30 days in seconds
-      domain: isProduction ? '.stitchflow.com' : undefined // Domain for production
+      domain: isProduction ? '.stitchflow.io' : undefined // Domain for production
     });
     
     return response;

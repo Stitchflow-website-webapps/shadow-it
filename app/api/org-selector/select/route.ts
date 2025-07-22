@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax' as const,
       path: '/',
-      domain: process.env.NODE_ENV === 'production' ? '.stitchflow.com' : undefined,
+      domain: process.env.NODE_ENV === 'production' ? '.stitchflow.io' : undefined,
       maxAge: 60 * 60 * 24 * 30 // 30 days
     };
 

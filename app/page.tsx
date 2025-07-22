@@ -901,7 +901,7 @@ export default function ShadowITDashboard() {
       
       // Specifically clear the critical cookies with all path/domain combinations
       const cookiesToClear = ['orgId', 'userEmail', 'accessToken', 'refreshToken'];
-      const domains = [window.location.hostname, '', null, 'stitchflow.com', `.${window.location.hostname}`];
+      const domains = [window.location.hostname, '', null, 'stitchflow.io', `.${window.location.hostname}`];
       const paths = ['/', '', '/', '', null];
       
       // Try all combinations to ensure cookies are cleared
@@ -2104,7 +2104,7 @@ export default function ShadowITDashboard() {
         if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
           redirectUri = `${window.location.origin}/api/auth/google/callback`;
         } else {
-          redirectUri = 'https://stitchflow.com/api/auth/google';
+          redirectUri = 'https://stitchflow.io/api/auth/google';
         }
         
         console.log('Using redirectUri:', redirectUri);

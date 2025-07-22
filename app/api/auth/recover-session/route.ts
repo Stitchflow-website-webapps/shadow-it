@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax' as const,
       path: '/',
-      domain: process.env.NODE_ENV === 'production' ? '.stitchflow.com' : undefined,
+      domain: process.env.NODE_ENV === 'production' ? '.stitchflow.io' : undefined,
       expires: expiresAt
     };
     
