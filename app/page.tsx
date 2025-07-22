@@ -453,7 +453,7 @@ export default function ShadowITDashboard() {
       setLoginError(''); // Clear previous errors specifically for a new login attempt
 
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-      const redirectUri = 'https://www.managed.stitchflow.com/api/auth/google';
+      const redirectUri = 'https://www.manage.stitchflow.io/api/auth/google';
 
       if (!clientId) {
         setLoginError("Missing Google OAuth configuration");
@@ -513,7 +513,7 @@ export default function ShadowITDashboard() {
       setLoginError(''); // Clear previous errors specifically for a new login attempt
 
       const clientId = process.env.NEXT_PUBLIC_MICROSOFT_CLIENT_ID;
-      const redirectUri = 'https://www.managed.stitchflow.com/api/auth/microsoft';
+      const redirectUri = 'https://www.manage.stitchflow.io/api/auth/microsoft';
 
       if (!clientId) {
         setLoginError("Missing Microsoft OAuth configuration");
@@ -2176,7 +2176,7 @@ export default function ShadowITDashboard() {
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
           redirectUri = window.location.origin + '/api/auth/microsoft';
         } else {
-          redirectUri = 'https://www.managed.stitchflow.com/api/auth/microsoft';
+          redirectUri = 'https://www.manage.stitchflow.io/api/auth/microsoft';
         }
         
         console.log('Using redirectUri:', redirectUri);

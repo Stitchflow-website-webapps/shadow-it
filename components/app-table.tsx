@@ -234,7 +234,7 @@ export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp, newAppIds = 
   return (
     <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-gray-50">
             <tr>
               <SortableHeader field="name" className="w-[15%]">App Name</SortableHeader>
@@ -263,9 +263,9 @@ export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp, newAppIds = 
               >
                 <td className="px-4 py-4">
                   <div className="space-y-2">
-                    <div className="text-sm font-medium text-gray-900 truncate flex items-center">
-                      {app.name}
-                      {newAppIds.has(app.id) && <div className="ml-2 w-1.5 h-1.5 bg-orange-500 rounded-full"></div>}
+                    <div className="text-sm font-medium text-gray-900 flex items-center min-w-0">
+                      <span className="truncate">{app.name}</span>
+                      {newAppIds.has(app.id) && <div className="ml-2 w-1.5 h-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>}
                     </div>
                     <div className="flex items-center gap-2">
                       {getStitchflowBadge(app.stitchflowStatus || '')}

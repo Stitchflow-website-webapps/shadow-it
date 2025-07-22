@@ -128,7 +128,7 @@ function LoginContent() {
         console.log('Updated redirect URI for localhost:', redirectUri);
       } else {
         // For production, always ensure we use the production domain with correct path
-        redirectUri = 'https://www.managed.stitchflow.com/api/auth/microsoft';
+        redirectUri = 'https://www.manage.stitchflow.io/api/auth/microsoft';
         console.log('Using production redirect URI:', redirectUri);
       }
       

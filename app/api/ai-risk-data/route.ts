@@ -1,51 +1,112 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAIAdmin } from '@/lib/supabase-ai-schema';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-// GET - Fetches AI risk scoring data for a specific organization
+// GET - Fetches AI risk scoring data for a specific organization by matching app names
 export async function GET(request: NextRequest) {
   try {
-    // Get orgId from cookies, which are automatically passed in the request
     const orgId = request.cookies.get('orgId')?.value;
 
     if (!orgId) {
-      // If there's no orgId, there's no data to fetch.
       return NextResponse.json({ success: true, data: [] });
     }
 
-    // First, get the list of app_ids associated with this organization
-    const { data: orgApps, error: orgAppsError } = await supabaseAIAdmin
-      .from('org_apps')
-      .select('app_id')
-      .eq('org_id', orgId);
+    // Use the admin client configured for the 'shadow_it' schema
+    const { data: applications, error: appsError } = await supabaseAdmin
+      .from('applications')
+      .select('name')
+      .eq('organization_id', orgId);
 
-    if (orgAppsError) {
-      console.error('Error fetching organization apps link:', orgAppsError);
-      return NextResponse.json({ error: 'Failed to fetch organization app links' }, { status: 500 });
+    if (appsError) {
+      console.error('Error fetching applications for org:', appsError);
+      return NextResponse.json({ error: 'Failed to fetch applications' }, { status: 500 });
     }
 
-    if (!orgApps || orgApps.length === 0) {
-      // This organization has no apps in the AI risk database
+    if (!applications || applications.length === 0) {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    const appIds = orgApps.map(app => app.app_id);
+    const shadowAppNames = applications.map((app: { name: string }) => app.name);
 
-    // Now, fetch ALL the detailed data for those specific applications
-    const { data: aiRiskData, error: aiError } = await supabaseAIAdmin
-      .from('ai_risk_scores')
-      .select('*')
-      .in('app_id', appIds);
+    // Performance Optimization: Instead of fetching all risk scores, we build a
+    // dynamic query to fetch only likely candidates. We break down app names into
+    // unique words (e.g., "Zoom for Gov" -> "zoom", "gov") and search for tools
+    // containing any of those words.
+    const uniqueWords = new Set<string>();
+    shadowAppNames.forEach((name: string) => {
+      name.toLowerCase().trim().split(/[^a-z0-9]+/).forEach(word => {
+        if (word.length > 2) { // Ignore short/common words
+          uniqueWords.add(word);
+        }
+      });
+    });
 
-    if (aiError) {
-      console.error('Error fetching AI risk data:', aiError);
-      return NextResponse.json({ error: 'Failed to fetch AI risk data' }, { status: 500 });
+    if (uniqueWords.size === 0) {
+      return NextResponse.json({ success: true, data: [] });
     }
+
+    // Batching to avoid URL length limits with a large number of OR clauses.
+    const wordChunks: string[][] = [];
+    const words = Array.from(uniqueWords);
+    const chunkSize = 50; // Supabase/PostgREST can handle about this many OR clauses.
+
+    for (let i = 0; i < words.length; i += chunkSize) {
+      wordChunks.push(words.slice(i, i + chunkSize));
+    }
+
+    const promises = wordChunks.map(chunk => {
+      const orFilter = chunk.map(word => `"Tool Name".ilike.%${word}%`).join(',');
+      return supabaseAIAdmin.from('ai_risk_scores').select('*').or(orFilter);
+    });
+
+    const results = await Promise.all(promises);
+    
+    const candidateAiRiskScores: any[] = [];
+    const seenIds = new Set<number>();
+
+    for (const result of results) {
+      if (result.error) {
+        console.error('Error fetching a chunk of AI risk data:', result.error);
+        // If one chunk fails, we fail the whole request to avoid partial data.
+        return NextResponse.json({ error: 'Failed to fetch AI risk data chunk' }, { status: 500 });
+      }
+      if (result.data) {
+        result.data.forEach(score => {
+          if (!seenIds.has(score.app_id)) {
+            candidateAiRiskScores.push(score);
+            seenIds.add(score.app_id);
+          }
+        });
+      }
+    }
+
+    if (candidateAiRiskScores.length === 0) {
+      return NextResponse.json({ success: true, data: [] });
+    }
+
+    // Now, run the more precise matching logic on the smaller, pre-filtered dataset.
+    const matchedScores = new Map<number, any>();
+    candidateAiRiskScores.forEach(riskScore => {
+      const toolName = riskScore['Tool Name']?.toLowerCase().trim();
+      if (!toolName) return;
+
+      const isMatch = shadowAppNames.some((shadowName: string) => {
+        const lowerShadowName = shadowName.toLowerCase().trim();
+        return lowerShadowName.includes(toolName) || toolName.includes(lowerShadowName);
+      });
+
+      if (isMatch) {
+        matchedScores.set(riskScore.app_id, riskScore);
+      }
+    });
+    
+    const uniqueMatchedScores = Array.from(matchedScores.values());
 
     return NextResponse.json({
       success: true,
-      data: aiRiskData,
+      data: uniqueMatchedScores,
     });
 
   } catch (error) {

@@ -60,7 +60,7 @@ switch (platform) {
 
     try {
 
-      await navigator.clipboard.writeText("https://www.managed.stitchflow.com");
+      await navigator.clipboard.writeText("https://www.manage.stitchflow.io");
 
       setShowShareSuccess(true);
 
