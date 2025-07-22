@@ -286,55 +286,7 @@ export default function ShadowITDashboard() {
 
   // This function is now more robust, accepting all data it needs as arguments
   // to avoid relying on state that might not be updated yet.
-  const calculateAIRiskScore = (app: Application, currentAiRiskData: any[], currentOrgSettings: any): number | null => {
-    if (!currentAiRiskData || currentAiRiskData.length === 0) return null;
-    
-    // Fuzzy matching to find AI scoring data
-    const findAIScoringData = (appName: string) => {
-      const cleanAppName = appName.trim().toLowerCase();
-      
-      // First try exact match (case insensitive)
-      let exactMatch = currentAiRiskData.find(ai => 
-        ai["Tool Name"]?.toLowerCase().trim() === cleanAppName
-      );
-      if (exactMatch) return exactMatch;
-      
-      // Try fuzzy matching
-      for (const aiData of currentAiRiskData) {
-        const aiName = aiData["Tool Name"]?.toLowerCase().trim() || "";
-        
-        // Skip if either name is too short
-        if (cleanAppName.length <= 3 || aiName.length <= 3) continue;
-        
-        // Check if one name contains the other
-        if (cleanAppName.includes(aiName) || aiName.includes(cleanAppName)) {
-          return aiData;
-        }
-        
-        // Check similarity score using a simple string similarity function
-        const similarity = calculateStringSimilarity(cleanAppName, aiName);
-        if (similarity > 0.8) {
-          return aiData;
-        }
-      }
-      
-      return null; // No match found
-    };
-    
-    // Simple string similarity function (Jaccard similarity on words)
-    const calculateStringSimilarity = (str1: string, str2: string): number => {
-      const words1 = new Set(str1.split(/\s+/));
-      const words2 = new Set(str2.split(/\s+/));
-      
-      const intersection = new Set([...words1].filter(x => words2.has(x)));
-      const union = new Set([...words1, ...words2]);
-      
-      if (union.size === 0) return 0;
-      return intersection.size / union.size;
-    };
-
-    // Use fuzzy matching to find AI scoring data
-    const aiData = findAIScoringData(app.name);
+  const calculateAIRiskScore = (app: Application, aiData: any, currentOrgSettings: any): number | null => {
     if (!aiData) return null;
 
     // Define scoring criteria using the passed-in settings
@@ -798,6 +750,69 @@ export default function ShadowITDashboard() {
       }
       
       // Now that all data is fetched, process the applications
+      
+      // Create a map of app name to AI risk data using the same logic as the backend.
+      const appToAiDataMap = new Map<string, any>();
+      const matchedRiskAppIds = new Set<number>();
+      
+      const shadowAppNames = rawData.map(app => app.name);
+      const candidateAiRiskScores = fetchedAiRiskData;
+
+      // Prioritize exact matches
+      shadowAppNames.forEach((shadowName: string) => {
+        const lowerShadowName = shadowName.toLowerCase().trim();
+        candidateAiRiskScores.forEach(riskScore => {
+          const toolName = riskScore['Tool Name']?.toLowerCase().trim();
+          if (lowerShadowName === toolName) {
+            if (!appToAiDataMap.has(shadowName)) { // Use original shadowName as key
+              appToAiDataMap.set(shadowName, riskScore);
+              matchedRiskAppIds.add(riskScore.app_id);
+            }
+          }
+        });
+      });
+
+      // Fuzzy match for remaining apps
+      shadowAppNames.forEach((shadowName: string) => {
+        if (appToAiDataMap.has(shadowName)) {
+          return; // Already has an exact match
+        }
+
+        const lowerShadowName = shadowName.toLowerCase().trim();
+        let bestMatch: any = null;
+        let highestScore = 0;
+
+        candidateAiRiskScores.forEach(riskScore => {
+          if (matchedRiskAppIds.has(riskScore.app_id)) {
+            return; // This risk score is already taken by an exact match
+          }
+
+          const toolName = riskScore['Tool Name']?.toLowerCase().trim();
+          if (!toolName) return;
+
+          let score = 0;
+          const shadowWords = lowerShadowName.split(/[^a-z0-9]+/).filter((w: string) => w.length > 1);
+          const toolWords = toolName.split(/[^a-z0-9]+/).filter((w: string) => w.length > 1);
+          const intersection = shadowWords.filter((w: string) => toolWords.includes(w));
+          score = intersection.length;
+
+          if (score > highestScore) {
+            highestScore = score;
+            bestMatch = riskScore;
+          } else if (score === highestScore && bestMatch) {
+            // Tie-break with length, closer length is better
+            if (Math.abs(toolName.length - lowerShadowName.length) < Math.abs(bestMatch['Tool Name'].toLowerCase().trim().length - lowerShadowName.length)) {
+              bestMatch = riskScore;
+            }
+          }
+        });
+
+        if (bestMatch && highestScore > 0) {
+          appToAiDataMap.set(shadowName, bestMatch);
+          matchedRiskAppIds.add(bestMatch.app_id);
+        }
+      });
+      
       const processedData = rawData.map(app => {
         const appWithRiskLevels = {
           ...app,
@@ -807,8 +822,9 @@ export default function ShadowITDashboard() {
           }))
         };
         
-        // Calculate the score using the data we just fetched
-        const aiRiskScore = calculateAIRiskScore(appWithRiskLevels, fetchedAiRiskData, fetchedOrgSettings);
+        // Calculate the score using the pre-matched AI data
+        const aiDataForApp = appToAiDataMap.get(app.name);
+        const aiRiskScore = calculateAIRiskScore(appWithRiskLevels, aiDataForApp, fetchedOrgSettings);
         
         return {
           ...appWithRiskLevels,

@@ -87,21 +87,68 @@ export async function GET(request: NextRequest) {
     }
 
     // Now, run the more precise matching logic on the smaller, pre-filtered dataset.
-    const matchedScores = new Map<number, any>();
-    candidateAiRiskScores.forEach(riskScore => {
-      const toolName = riskScore['Tool Name']?.toLowerCase().trim();
-      if (!toolName) return;
+    const matchedScores = new Map<string, any>();
+    const matchedRiskAppIds = new Set<number>();
 
-      const isMatch = shadowAppNames.some((shadowName: string) => {
-        const lowerShadowName = shadowName.toLowerCase().trim();
-        return lowerShadowName.includes(toolName) || toolName.includes(lowerShadowName);
+    const escapeRegExp = (str: string) => {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    };
+
+    // Prioritize exact matches
+    shadowAppNames.forEach((shadowName: string) => {
+      const lowerShadowName = shadowName.toLowerCase().trim();
+      candidateAiRiskScores.forEach(riskScore => {
+        const toolName = riskScore['Tool Name']?.toLowerCase().trim();
+        if (lowerShadowName === toolName) {
+          if (!matchedScores.has(lowerShadowName)) {
+            matchedScores.set(lowerShadowName, riskScore);
+            matchedRiskAppIds.add(riskScore.app_id);
+          }
+        }
+      });
+    });
+
+    // Fuzzy match for remaining apps
+    shadowAppNames.forEach((shadowName: string) => {
+      const lowerShadowName = shadowName.toLowerCase().trim();
+      if (matchedScores.has(lowerShadowName)) {
+        return; // Already has an exact match
+      }
+
+      let bestMatch: any = null;
+      let highestScore = 0;
+
+      candidateAiRiskScores.forEach(riskScore => {
+        if (matchedRiskAppIds.has(riskScore.app_id)) {
+          return; // This risk score is already taken by an exact match
+        }
+
+        const toolName = riskScore['Tool Name']?.toLowerCase().trim();
+        if (!toolName) return;
+
+        let score = 0;
+        const shadowWords = lowerShadowName.split(/[^a-z0-9]+/).filter((w: string) => w.length > 1);
+        const toolWords = toolName.split(/[^a-z0-9]+/).filter((w: string) => w.length > 1);
+        const intersection = shadowWords.filter((w: string) => toolWords.includes(w));
+        score = intersection.length;
+
+        if (score > highestScore) {
+          highestScore = score;
+          bestMatch = riskScore;
+        } else if (score === highestScore && bestMatch) {
+          // Tie-break with length, closer length is better
+          if (Math.abs(toolName.length - lowerShadowName.length) < Math.abs(bestMatch['Tool Name'].toLowerCase().trim().length - lowerShadowName.length)) {
+            bestMatch = riskScore;
+          }
+        }
       });
 
-      if (isMatch) {
-        matchedScores.set(riskScore.app_id, riskScore);
+      if (bestMatch && highestScore > 0) {
+        matchedScores.set(lowerShadowName, bestMatch);
+        matchedRiskAppIds.add(bestMatch.app_id);
       }
     });
-    
+
     const uniqueMatchedScores = Array.from(matchedScores.values());
 
     return NextResponse.json({
