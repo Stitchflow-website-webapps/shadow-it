@@ -35,51 +35,17 @@ export function calculateFinalAIRiskScore(
   allAIScoringData: any[],
   orgSettings: OrgSettings
 ): number | null {
-  // Fuzzy matching function (same as in generateAIRiskAnalysisData)
+  // Exact matching function - no fuzzy logic
   const findAIScoringData = (appName: string) => {
     const cleanAppName = appName.trim().toLowerCase();
     
-    // First try exact match (case insensitive)
-    let exactMatch = allAIScoringData.find(ai => 
+    // Only exact match (case insensitive)
+    return allAIScoringData.find(ai => 
       ai["Tool Name"]?.toLowerCase().trim() === cleanAppName
-    );
-    if (exactMatch) return exactMatch;
-    
-    // Try fuzzy matching
-    for (const aiData of allAIScoringData) {
-      const aiName = aiData["Tool Name"]?.toLowerCase().trim() || "";
-      
-      // Skip if either name is too short
-      if (cleanAppName.length <= 3 || aiName.length <= 3) continue;
-      
-      // Check if one name contains the other
-      if (cleanAppName.includes(aiName) || aiName.includes(cleanAppName)) {
-        return aiData;
-      }
-      
-      // Check similarity score using a simple string similarity function
-      const similarity = calculateStringSimilarity(cleanAppName, aiName);
-      if (similarity > 0.8) {
-        return aiData;
-      }
-    }
-    
-    return null; // No match found
-  };
-  
-  // Simple string similarity function (Jaccard similarity on words)
-  const calculateStringSimilarity = (str1: string, str2: string): number => {
-    const words1 = new Set(str1.split(/\s+/));
-    const words2 = new Set(str2.split(/\s+/));
-    
-    const intersection = new Set([...words1].filter(x => words2.has(x)));
-    const union = new Set([...words1, ...words2]);
-    
-    if (union.size === 0) return 0;
-    return intersection.size / union.size;
+    ) || null;
   };
 
-  // Use fuzzy matching to find AI scoring data
+  // Use exact matching to find AI scoring data
   const aiData = findAIScoringData(app.name);
   if (!aiData) {
     return null;

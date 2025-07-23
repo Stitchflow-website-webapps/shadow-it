@@ -96,6 +96,7 @@ type Application = {
   isAuthAnonymously: boolean
   isCategorizing?: boolean // Added to track categorization status
   aiRiskScore?: number | null // Added AI Risk Score for real-time calculation
+  aiRiskData?: any | null // Added pre-matched AI risk data from backend
 }
 
 type AppUser = {
@@ -687,12 +688,11 @@ export default function ShadowITDashboard() {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      
+
       let fetchOrgIdValue = null;
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
         const urlOrgId = urlParams.get('orgId');
-        
         if (urlOrgId) {
           fetchOrgIdValue = urlOrgId;
         } else if (document.cookie.split(';').find(cookie => cookie.trim().startsWith('orgId='))) {
@@ -700,158 +700,65 @@ export default function ShadowITDashboard() {
           fetchOrgIdValue = orgIdCookie?.split('=')[1].trim();
         }
       }
-      
+
       if (!isAuthenticated()) {
-        console.log('Not authenticated, showing login modal');
-        // Show login modal directly instead of dummy data
         setShowLoginModal(true);
         setApplications([]);
         setIsLoading(false);
         return;
       }
 
-      // Fetch all data sources concurrently to avoid race conditions
-      const [appsResponse, aiRiskResponse, orgSettingsResponse] = await Promise.all([
-        fetch(`/api/applications?orgId=${fetchOrgIdValue}`),
-        fetch('/api/ai-risk-data'), // The browser automatically sends the orgId cookie
+      // Fetch all data sources concurrently
+      const [appsWithRiskResponse, orgSettingsResponse] = await Promise.all([
+        fetch('/api/applications-with-ai-risk'),
         fetch(`/api/organization-settings?org_id=${fetchOrgIdValue}`)
       ]);
 
-      if (!appsResponse.ok) {
-        throw new Error('Failed to fetch applications');
+      if (!appsWithRiskResponse.ok) {
+        throw new Error('Failed to fetch applications with AI risk');
       }
-      const rawData: Application[] = await appsResponse.json();
-
-      let fetchedAiRiskData: any[] = [];
-      if (aiRiskResponse.ok) {
-        const result = await aiRiskResponse.json();
-        if (result.success && result.data) {
-          fetchedAiRiskData = result.data;
-          console.log(`Loaded ${result.data.length} org-specific AI risk scores.`);
-        }
-      } else {
-        console.warn('Could not fetch AI risk data.');
-      }
+      const { data: rawData } = await appsWithRiskResponse.json();
 
       // Use default settings as a fallback
-      let fetchedOrgSettings = orgSettings; 
+      let fetchedOrgSettings = orgSettings;
       if (orgSettingsResponse.ok) {
         const result = await orgSettingsResponse.json();
         if (result.settings) {
-          // Transform snake_case from DB to camelCase for the frontend
           fetchedOrgSettings = {
             bucketWeights: result.settings.bucket_weights,
             aiMultipliers: result.settings.ai_multipliers,
             scopeMultipliers: result.settings.scope_multipliers
           };
         }
-      } else {
-        console.warn('Could not fetch org settings, using defaults.');
       }
-      
+
       // Now that all data is fetched, process the applications
-      
-      // Create a map of app name to AI risk data using the same logic as the backend.
-      const appToAiDataMap = new Map<string, any>();
-      const matchedRiskAppIds = new Set<number>();
-      
-      const shadowAppNames = rawData.map(app => app.name);
-      const candidateAiRiskScores = fetchedAiRiskData;
-
-      // Prioritize exact matches
-      shadowAppNames.forEach((shadowName: string) => {
-        const lowerShadowName = shadowName.toLowerCase().trim();
-        candidateAiRiskScores.forEach(riskScore => {
-          const toolName = riskScore['Tool Name']?.toLowerCase().trim();
-          if (lowerShadowName === toolName) {
-            if (!appToAiDataMap.has(shadowName)) { // Use original shadowName as key
-              appToAiDataMap.set(shadowName, riskScore);
-              matchedRiskAppIds.add(riskScore.app_id);
-            }
-          }
-        });
-      });
-
-      // Fuzzy match for remaining apps
-      shadowAppNames.forEach((shadowName: string) => {
-        if (appToAiDataMap.has(shadowName)) {
-          return; // Already has an exact match
-        }
-
-        const lowerShadowName = shadowName.toLowerCase().trim();
-        let bestMatch: any = null;
-        let highestScore = 0;
-
-        candidateAiRiskScores.forEach(riskScore => {
-          if (matchedRiskAppIds.has(riskScore.app_id)) {
-            return; // This risk score is already taken by an exact match
-          }
-
-          const toolName = riskScore['Tool Name']?.toLowerCase().trim();
-          if (!toolName) return;
-
-          let score = 0;
-          const shadowWords = lowerShadowName.split(/[^a-z0-9]+/).filter((w: string) => w.length > 1);
-          const toolWords = toolName.split(/[^a-z0-9]+/).filter((w: string) => w.length > 1);
-          const intersection = shadowWords.filter((w: string) => toolWords.includes(w));
-          score = intersection.length;
-
-          if (score > highestScore) {
-            highestScore = score;
-            bestMatch = riskScore;
-          } else if (score === highestScore && bestMatch) {
-            // Tie-break with length, closer length is better
-            if (Math.abs(toolName.length - lowerShadowName.length) < Math.abs(bestMatch['Tool Name'].toLowerCase().trim().length - lowerShadowName.length)) {
-              bestMatch = riskScore;
-            }
-          }
-        });
-
-        if (bestMatch && highestScore > 0) {
-          appToAiDataMap.set(shadowName, bestMatch);
-          matchedRiskAppIds.add(bestMatch.app_id);
-        }
-      });
-      
-      const processedData = rawData.map(app => {
-        const appWithRiskLevels = {
-          ...app,
-          users: app.users.map(user => ({
-            ...user,
-            riskLevel: determineRiskLevel(user.scopes)
-          }))
-        };
-        
-        // Calculate the score using the pre-matched AI data
-        const aiDataForApp = appToAiDataMap.get(app.name);
-        const aiRiskScore = calculateAIRiskScore(appWithRiskLevels, aiDataForApp, fetchedOrgSettings);
-        
+      const processedData = rawData.map((app: any) => {
+        // Calculate the score using the matched AI data
+        const aiRiskScore = calculateAIRiskScore(app, app.aiRiskData, fetchedOrgSettings);
         return {
-          ...appWithRiskLevels,
+          ...app,
           aiRiskScore
         };
       });
-      
-      // Update all state at once to trigger a single re-render with all data
+
       setApplications(processedData);
-      setAiRiskData(fetchedAiRiskData);
+      setAiRiskData([]); // Not used anymore for matching
       setOrgSettings(fetchedOrgSettings);
       setOrganizationId(fetchOrgIdValue || null);
-      
+
       const unknownIds = new Set<string>();
-      processedData.forEach((app: Application) => {
+      processedData.forEach((app: any) => {
         if (app.category === 'Unknown') unknownIds.add(app.id);
       });
       setUncategorizedApps(unknownIds);
 
-      // Check if any app has an AI risk score and set default sort
-      if (processedData.some(app => app.aiRiskScore !== null && app.aiRiskScore !== undefined)) {
-        setSortColumn("aiRiskScore");
-        setSortDirection("desc");
+      if (processedData.some((app: any) => app.aiRiskScore !== null && app.aiRiskScore !== undefined)) {
+        setSortColumn('aiRiskScore');
+        setSortDirection('desc');
       }
-      
     } catch (error) {
-      console.error("Error fetching application data:", error);
+      console.error('Error fetching application data:', error);
       setApplications([]);
     } finally {
       setIsLoading(false);
@@ -4385,67 +4292,8 @@ export default function ShadowITDashboard() {
                       <TabsContent value="ai-risk-scoring">
                         <div className="p-5 border border-gray-200 rounded-md bg-white">
                           <TabbedRiskScoringView 
-                            app={(() => {
-                              // Find the AI risk data for the selected app
-                              const findAIScoringData = (appName: string) => {
-                                const cleanAppName = appName.trim().toLowerCase();
-                                console.log('DEBUG - Fuzzy Matching for:', cleanAppName);
-                                console.log('DEBUG - Available AI data count:', aiRiskData.length);
-                                console.log('DEBUG - Sample AI tools:', aiRiskData.slice(0, 5).map(ai => ai["Tool Name"]));
-                                
-                                // First try exact match (case insensitive)
-                                let exactMatch = aiRiskData.find(ai => 
-                                  ai["Tool Name"]?.toLowerCase().trim() === cleanAppName
-                                );
-                                if (exactMatch) {
-                                  console.log('DEBUG - Found exact match:', exactMatch["Tool Name"]);
-                                  console.log('DEBUG - AI-Native value:', exactMatch["AI-Native"]);
-                                  return exactMatch;
-                                }
-                                
-                                // Try fuzzy matching
-                                for (const aiData of aiRiskData) {
-                                  const aiName = aiData["Tool Name"]?.toLowerCase().trim() || "";
-                                  
-                                  // Skip if either name is too short
-                                  if (cleanAppName.length <= 3 || aiName.length <= 3) continue;
-                                  
-                                  // Check if one name contains the other
-                                  if (cleanAppName.includes(aiName) || aiName.includes(cleanAppName)) {
-                                    console.log('DEBUG - Found fuzzy match:', aiData["Tool Name"]);
-                                    console.log('DEBUG - AI-Native value:', aiData["AI-Native"]);
-                                    return aiData;
-                                  }
-                                  
-                                  // Check similarity score using a simple string similarity function
-                                  const calculateStringSimilarity = (str1: string, str2: string): number => {
-                                    const words1 = new Set(str1.split(/\s+/));
-                                    const words2 = new Set(str2.split(/\s+/));
-                                    
-                                    const intersection = new Set([...words1].filter(x => words2.has(x)));
-                                    const union = new Set([...words1, ...words2]);
-                                    
-                                    if (union.size === 0) return 0;
-                                    return intersection.size / union.size;
-                                  };
-                                  
-                                  const similarity = calculateStringSimilarity(cleanAppName, aiName);
-                                  if (similarity > 0.8) {
-                                    console.log('DEBUG - Found similarity match:', aiData["Tool Name"], 'similarity:', similarity);
-                                    console.log('DEBUG - AI-Native value:', aiData["AI-Native"]);
-                                    return aiData;
-                                  }
-                                }
-                                
-                                console.log('DEBUG - No AI data match found for:', cleanAppName);
-                                return null; // No match found
-                              };
-                              
-                              const result = selectedApp ? findAIScoringData(selectedApp.name) : null;
-                              console.log('DEBUG - Final app data passed to RiskScoringTab:', result);
-                              return result;
-                            })()}
-                            allApps={aiRiskData}
+                            app={selectedApp?.aiRiskData || null}
+                            allApps={[]} // Not needed anymore since we have pre-matched data
                             orgSettings={orgSettings}
                             selectedAppData={selectedApp}
                           />

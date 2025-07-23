@@ -232,39 +232,14 @@ export default function RiskAnalysisPage() {
         applicationsData = await applicationsResponse.json();
       }
       
-      // Create a mapping function to find matching application data
+      // Create a mapping function to find matching application data - exact matches only
       const findMatchingApp = (aiAppName: string) => {
         const cleanAiAppName = aiAppName.trim().toLowerCase();
         
-        // First try exact match
-        let match = applicationsData.find(app => 
+        // Only exact match (case insensitive)
+        return applicationsData.find(app => 
           app.name?.toLowerCase().trim() === cleanAiAppName
-        );
-        if (match) return match;
-        
-        // Try fuzzy matching
-        for (const app of applicationsData) {
-          const appName = app.name?.toLowerCase().trim() || "";
-          if (appName.length <= 3 || cleanAiAppName.length <= 3) continue;
-          
-          // Check if one name contains the other
-          if (cleanAiAppName.includes(appName) || appName.includes(cleanAiAppName)) {
-            return app;
-          }
-          
-          // Check similarity score
-          const words1 = new Set(cleanAiAppName.split(/\s+/));
-          const words2 = new Set(appName.split(/\s+/));
-          const intersection = new Set([...words1].filter(x => words2.has(x)));
-          const union = new Set([...words1, ...words2]);
-          const similarity = union.size > 0 ? intersection.size / union.size : 0;
-          
-          if (similarity > 0.8) {
-            return app;
-          }
-        }
-        
-        return null;
+        ) || null;
       };
       
       // Transform the data to match the AIRiskAnalysisTable interface
