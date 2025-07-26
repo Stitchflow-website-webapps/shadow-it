@@ -73,6 +73,15 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { TabbedRiskScoringView } from "@/app/components/TabbedRiskScoringView";
 import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+// Import AI Risk Cache utilities
+import { 
+  cacheAIRiskScores, 
+  getCachedAIRiskScores, 
+  isCacheValid,
+  shouldRefreshCache,
+  getCacheTimeRemaining,
+  type CachedAIRiskScore 
+} from '@/lib/ai-risk-cache';
 
 // Type definitions
 type Application = {
@@ -96,7 +105,6 @@ type Application = {
   isAuthAnonymously: boolean
   isCategorizing?: boolean // Added to track categorization status
   aiRiskScore?: number | null // Added AI Risk Score for real-time calculation
-  aiRiskData?: any | null // Added pre-matched AI risk data from backend
 }
 
 type AppUser = {
@@ -281,9 +289,13 @@ export default function ShadowITDashboard() {
 
   // Add state for AI risk data
   const [aiRiskData, setAiRiskData] = useState<any[]>([])
+  // Pre-compute AI data mapping for faster deep dive performance
+  const [aiDataMap, setAiDataMap] = useState<Map<string, any>>(new Map())
   // AI Risk Scoring detailed data for tabbed view
   const [aiRiskScoringData, setAiRiskScoringData] = useState<any[]>([])
   const [organizationId, setOrganizationId] = useState<string | null>(null)
+  // Add state for background AI score updates
+  const [isUpdatingAIScores, setIsUpdatingAIScores] = useState(false)
 
   // This function is now more robust, accepting all data it needs as arguments
   // to avoid relying on state that might not be updated yet.
@@ -326,7 +338,7 @@ export default function ShadowITDashboard() {
     const getAIMultipliers = (status: string) => {
       const lowerStatus = status.toLowerCase().trim();
       if (lowerStatus.includes("partial")) return currentOrgSettings.aiMultipliers.partial;
-      if (lowerStatus.includes("no") || lowerStatus === "" || lowerStatus.includes("not applicable")) return currentOrgSettings.aiMultipliers.none;
+      if (lowerStatus.includes("no") || lowerStatus.includes("not applicable")) return currentOrgSettings.aiMultipliers.none;
       if (lowerStatus.includes("genai") || lowerStatus.includes("native") || lowerStatus.includes("yes")) return currentOrgSettings.aiMultipliers.native;
       return currentOrgSettings.aiMultipliers.none;
     };
@@ -684,15 +696,16 @@ export default function ShadowITDashboard() {
     };
   }, [uncategorizedApps]);
 
-  // Modify fetchData to only set initial data
+  // Modify fetchData to use AI risk cache
   const fetchData = async () => {
     try {
       setIsLoading(true);
-
+      
       let fetchOrgIdValue = null;
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
         const urlOrgId = urlParams.get('orgId');
+        
         if (urlOrgId) {
           fetchOrgIdValue = urlOrgId;
         } else if (document.cookie.split(';').find(cookie => cookie.trim().startsWith('orgId='))) {
@@ -700,27 +713,30 @@ export default function ShadowITDashboard() {
           fetchOrgIdValue = orgIdCookie?.split('=')[1].trim();
         }
       }
-
+      
       if (!isAuthenticated()) {
+        console.log('Not authenticated, showing login modal');
         setShowLoginModal(true);
         setApplications([]);
         setIsLoading(false);
         return;
       }
 
-      // Fetch all data sources concurrently
-      const [appsWithRiskResponse, orgSettingsResponse] = await Promise.all([
-        fetch('/api/applications-with-ai-risk'),
-        fetch(`/api/organization-settings?org_id=${fetchOrgIdValue}`)
-      ]);
-
-      if (!appsWithRiskResponse.ok) {
-        throw new Error('Failed to fetch applications with AI risk');
+      // Fetch applications first
+      const appsResponse = await fetch(`/api/applications?orgId=${fetchOrgIdValue}`);
+      if (!appsResponse.ok) {
+        throw new Error('Failed to fetch applications');
       }
-      const { data: rawData } = await appsWithRiskResponse.json();
+      const rawData: Application[] = await appsResponse.json();
 
-      // Use default settings as a fallback
-      let fetchedOrgSettings = orgSettings;
+      // Check for cached AI scores
+      const cachedAIScores = getCachedAIRiskScores(fetchOrgIdValue || '');
+      const hasValidCache = cachedAIScores !== null;
+      const needsRefresh = shouldRefreshCache(fetchOrgIdValue || '');
+
+      // Get organization settings
+      const orgSettingsResponse = await fetch(`/api/organization-settings?org_id=${fetchOrgIdValue}`);
+      let fetchedOrgSettings = orgSettings; 
       if (orgSettingsResponse.ok) {
         const result = await orgSettingsResponse.json();
         if (result.settings) {
@@ -732,35 +748,168 @@ export default function ShadowITDashboard() {
         }
       }
 
-      // Now that all data is fetched, process the applications
-      const processedData = rawData.map((app: any) => {
-        // Calculate the score using the matched AI data
-        const aiRiskScore = calculateAIRiskScore(app, app.aiRiskData, fetchedOrgSettings);
-        return {
-          ...app,
-          aiRiskScore
-        };
-      });
+      // Show apps immediately with cached AI scores if available
+      if (hasValidCache) {
+        console.log('Using cached AI risk scores');
+        const timeRemaining = getCacheTimeRemaining(fetchOrgIdValue || '');
+        console.log(`Cache expires in ${timeRemaining} minutes`);
+        
+        const appsWithCachedAI = rawData.map(app => {
+          const appWithRiskLevels = {
+            ...app,
+            users: app.users.map(user => ({
+              ...user,
+              riskLevel: determineRiskLevel(user.scopes)
+            }))
+          };
+          
+          // Get cached AI data for this app
+          const cachedAIData = cachedAIScores[app.name.toLowerCase().trim()];
+          const aiRiskScore = cachedAIData ? 
+            calculateAIRiskScore(appWithRiskLevels, cachedAIData, fetchedOrgSettings) : null;
+          
+          return {
+            ...appWithRiskLevels,
+            aiRiskScore
+          };
+        });
+        
+        // Update UI immediately with cached scores
+        setApplications(appsWithCachedAI);
+        setOrgSettings(fetchedOrgSettings);
+        setOrganizationId(fetchOrgIdValue || null);
+        setIsLoading(false); // UI shows immediately!
+        
+        // Set cached data for state consistency
+        if (cachedAIScores) {
+          const cachedArray = Object.values(cachedAIScores);
+          setAiRiskData(cachedArray);
+          
+          // Pre-compute AI data map for faster deep dive lookups
+          const newAiDataMap = new Map<string, any>();
+          cachedArray.forEach(aiData => {
+            const appName = aiData.matchedAppName || aiData['Tool Name'];
+            if (appName) {
+              newAiDataMap.set(appName.toLowerCase().trim(), aiData);
+            }
+          });
+          setAiDataMap(newAiDataMap);
+        }
+      }
 
-      setApplications(processedData);
-      setAiRiskData([]); // Not used anymore for matching
-      setOrgSettings(fetchedOrgSettings);
-      setOrganizationId(fetchOrgIdValue || null);
+      // Only fetch fresh AI data if cache needs refreshing
+      if (needsRefresh) {
+        console.log('Cache needs refresh, fetching fresh AI data...');
+        if (hasValidCache) {
+          setIsUpdatingAIScores(true); // Show subtle update indicator only when actually updating
+        }
 
+        try {
+          const aiRiskResponse = await fetch('/api/ai-risk-data');
+          
+          if (aiRiskResponse.ok) {
+            const result = await aiRiskResponse.json();
+            if (result.success && result.data) {
+              // Process fresh AI data
+              const appToAiDataMap = new Map<string, any>();
+              result.data.forEach((aiData: any) => {
+                const matchedAppName = aiData.matchedAppName || aiData['Tool Name'];
+                if (matchedAppName) {
+                  appToAiDataMap.set(matchedAppName, aiData);
+                }
+              });
+
+              // Cache the fresh data
+              if (fetchOrgIdValue) {
+                const cacheSuccess = cacheAIRiskScores(result.data, fetchOrgIdValue);
+                if (cacheSuccess) {
+                  console.log('Fresh AI risk scores cached successfully');
+                }
+              }
+
+              // Process applications with fresh AI data
+              const processedData = rawData.map(app => {
+                const appWithRiskLevels = {
+                  ...app,
+                  users: app.users.map(user => ({
+                    ...user,
+                    riskLevel: determineRiskLevel(user.scopes)
+                  }))
+                };
+                
+                const aiDataForApp = appToAiDataMap.get(app.name);
+                const aiRiskScore = calculateAIRiskScore(appWithRiskLevels, aiDataForApp, fetchedOrgSettings);
+                
+                return {
+                  ...appWithRiskLevels,
+                  aiRiskScore
+                };
+              });
+              
+              // Update state with fresh data
+              setApplications(processedData);
+              setAiRiskData(Array.from(appToAiDataMap.values()));
+              
+              // Pre-compute AI data map for faster deep dive lookups
+              const newAiDataMap = new Map<string, any>();
+              appToAiDataMap.forEach((aiData, appName) => {
+                newAiDataMap.set(appName.toLowerCase().trim(), aiData);
+              });
+              setAiDataMap(newAiDataMap);
+              
+              setOrgSettings(fetchedOrgSettings);
+              setOrganizationId(fetchOrgIdValue || null);
+              
+              // If we didn't have cache initially, set loading to false now
+              if (!hasValidCache) {
+                setIsLoading(false);
+              }
+            }
+          }
+        } catch (aiError) {
+          console.warn('Failed to fetch fresh AI risk data:', aiError);
+          // If we have cache, continue with cached data
+          // If no cache, show apps without AI scores
+          if (!hasValidCache) {
+            const processedDataWithoutAI = rawData.map(app => ({
+              ...app,
+              users: app.users.map(user => ({
+                ...user,
+                riskLevel: determineRiskLevel(user.scopes)
+              })),
+              aiRiskScore: null
+            }));
+            
+            setApplications(processedDataWithoutAI);
+            setOrgSettings(fetchedOrgSettings);
+            setOrganizationId(fetchOrgIdValue || null);
+            setIsLoading(false);
+          }
+        } finally {
+          setIsUpdatingAIScores(false);
+        }
+      } else {
+        console.log('Cache is still valid, skipping AI data refresh');
+      }
+
+      // Handle uncategorized apps
       const unknownIds = new Set<string>();
-      processedData.forEach((app: any) => {
+      const currentApps = applications.length > 0 ? applications : rawData;
+      currentApps.forEach((app: Application) => {
         if (app.category === 'Unknown') unknownIds.add(app.id);
       });
       setUncategorizedApps(unknownIds);
 
-      if (processedData.some((app: any) => app.aiRiskScore !== null && app.aiRiskScore !== undefined)) {
-        setSortColumn('aiRiskScore');
-        setSortDirection('desc');
+      // Set default sort based on AI scores availability
+      const hasAIScores = currentApps.some(app => app.aiRiskScore !== null && app.aiRiskScore !== undefined);
+      if (hasAIScores && sortColumn !== "aiRiskScore") { // Only set if not already set
+        setSortColumn("aiRiskScore");
+        setSortDirection("desc");
       }
+      
     } catch (error) {
-      console.error('Error fetching application data:', error);
+      console.error("Error fetching application data:", error);
       setApplications([]);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -957,9 +1106,18 @@ export default function ShadowITDashboard() {
         const highRiskB = b.users.filter(u => transformRiskLevel(u.riskLevel) === "High").length;
         return compareNumeric(highRiskA, highRiskB);
       case "aiRiskScore":
-        // Handle null/undefined AI risk scores by putting them at the end
-        const scoreA = a.aiRiskScore ?? -1;
-        const scoreB = b.aiRiskScore ?? -1;
+        // Handle null/undefined AI risk scores properly
+        const scoreA = a.aiRiskScore;
+        const scoreB = b.aiRiskScore;
+        
+        // If both are null/undefined, they're equal
+        if ((scoreA === null || scoreA === undefined) && (scoreB === null || scoreB === undefined)) return 0;
+        // If only A is null/undefined, put it at the end
+        if (scoreA === null || scoreA === undefined) return 1;
+        // If only B is null/undefined, put it at the end  
+        if (scoreB === null || scoreB === undefined) return -1;
+        
+        // Both have values, sort normally
         return compareNumeric(scoreA, scoreB);
       default:
         // Default to sorting by risk level and then user count
@@ -2522,6 +2680,13 @@ export default function ShadowITDashboard() {
                 {currentView === "app-inbox-settings" ? "Authentication" : 
                  "Shadow IT Overview"}
               </h2>
+              {/* AI Score Update Indicator */}
+              {isUpdatingAIScores && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-md">
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+                  <span className="text-xs text-blue-700 font-medium">Updating AI scores...</span>
+                </div>
+              )}
             </div>
 
             {isLoading ? (
@@ -4292,8 +4457,17 @@ export default function ShadowITDashboard() {
                       <TabsContent value="ai-risk-scoring">
                         <div className="p-5 border border-gray-200 rounded-md bg-white">
                           <TabbedRiskScoringView 
-                            app={selectedApp?.aiRiskData || null}
-                            allApps={[]} // Not needed anymore since we have pre-matched data
+                            app={(() => {
+                              // Fast lookup using pre-computed map instead of array search
+                              if (!selectedApp) return null;
+                              
+                              const cleanAppName = selectedApp.name.trim().toLowerCase();
+                              const result = aiDataMap.get(cleanAppName) || null;
+                              
+                              console.log('DEBUG - Fast lookup result for', cleanAppName, ':', result);
+                              return result;
+                            })()}
+                            allApps={aiRiskData}
                             orgSettings={orgSettings}
                             selectedAppData={selectedApp}
                           />
