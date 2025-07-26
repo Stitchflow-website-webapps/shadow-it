@@ -314,29 +314,22 @@ export async function GET(request: NextRequest) {
       tenantId: 'common' // Use 'common' to handle any tenant
     });
 
-    await microsoftService.setCredentials({
+    microsoftService.setCredentials({
       refresh_token: syncRecord.refresh_token
     });
 
     // Attempt to refresh tokens before making API calls
     console.log(`🔄 Refreshing Microsoft tokens...`);
-    let refreshedTokens;
-    try {
-      refreshedTokens = await microsoftService.refreshAccessToken(true); // Force refresh
-      if (!refreshedTokens?.id_token) {
-        throw new Error("Refresh token did not return an id_token.");
-      }
-      console.log(`✅ Successfully refreshed Microsoft tokens`);
-    } catch (refreshError: any) {
-      console.error(`❌ Microsoft token refresh failed:`, refreshError.message);
-      
-      const errorMessage = refreshError.message.includes('invalid_grant') || refreshError.message.includes('expired')
-        ? 'Microsoft authentication has expired. Please re-authenticate your Microsoft account.'
-        : `Microsoft token refresh failed: ${refreshError.message}`;
-        
+    const refreshedTokens = await microsoftService.refreshAccessToken(true); // Force refresh
+    
+    if (!refreshedTokens?.id_token) {
+      const errorMessage = 'Microsoft token refresh failed: Refresh token did not return an id_token.';
+      console.error(`❌ ${errorMessage}`);
       await updateSyncStatus(syncRecord.id, 0, errorMessage, 'FAILED');
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
+    console.log(`✅ Successfully refreshed Microsoft tokens`);
+
 
     // Extract tenant ID from the id_token
     let tenantId: string;
@@ -363,7 +356,7 @@ export async function GET(request: NextRequest) {
     });
     
     // Set the full credentials on the new, correctly-scoped service instance
-    await microsoftService.setCredentials(refreshedTokens);
+    microsoftService.setCredentials(refreshedTokens);
     
     // Update the sync_status record with new tokens for future use
     await supabaseAdmin

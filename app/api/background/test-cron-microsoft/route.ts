@@ -394,64 +394,78 @@ export async function POST(request: Request) {
 
       // Insert new user-application relationships
       if (newRelationships.length > 0) {
-        
-        const allInvolvedAppNames = Array.from(new Set(newRelationships.map(r => r.app.name)));
-        const { data: involvedApps, error: involvedAppsError } = await supabaseAdmin
-          .from('applications')
-          .select('id, name')
-          .in('name', allInvolvedAppNames)
-          .eq('organization_id', org.id);
-        
-        involvedApps?.forEach(a => appNameToDbIdMap.set(a.name, a.id));
+        console.log(`[TestCron:Microsoft:${orgDomain}] Processing ${newRelationships.length} new user-app relationships in batches...`);
 
-        const allInvolvedUserEmails = Array.from(new Set(newRelationships.map(r => r.user.email)));
-        const { data: involvedUsers, error: involvedUsersError } = await supabaseAdmin
-          .from('users')
-          .select('id, email')
-          .in('email', allInvolvedUserEmails)
-          .eq('organization_id', org.id);
+        // **NEW: Insert relationships in resource-aware batches to avoid Request-URI too large error**
+        await processInBatchesWithResourceControl(
+          newRelationships,
+          async (relBatch) => {
+            const appNameToDbIdMap = new Map<string, string>();
+            const userEmailToDbIdMap = new Map<string, string>();
 
-        if (involvedAppsError || involvedUsersError) {
-          console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error fetching DB IDs:`, { involvedAppsError, involvedUsersError });
-        } else {
-          const userEmailToDbIdMap = new Map(involvedUsers?.map(u => [u.email, u.id]) || []);
-          
-          const relsToInsert = newRelationships.flatMap(rel => {
-            const application_id = appNameToDbIdMap.get(rel.app.name);
-            const user_id = userEmailToDbIdMap.get(rel.user.email);
+            // 1. Get app and user info for this batch
+            const batchAppNames = Array.from(new Set(relBatch.map(r => r.app.name)));
+            const batchUserEmails = Array.from(new Set(relBatch.map(r => r.user.email)));
+
+            // 2. Fetch app IDs for this batch
+            const { data: involvedApps, error: involvedAppsError } = await supabaseAdmin
+              .from('applications')
+              .select('id, name')
+              .in('name', batchAppNames)
+              .eq('organization_id', org.id);
             
-            if (!application_id || !user_id) {
-              console.warn(`[TestCron:Microsoft:${orgDomain}] ⚠️ Skipping relationship for ${rel.user.email} and ${rel.app.name} (missing DB ID).`);
-              return [];
+            if (involvedAppsError) {
+              console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error fetching app IDs for batch:`, involvedAppsError);
+              return; // Skip this batch
             }
-            
-            // Get the user-specific scopes for this relationship
-            const scopesSet = userAppScopesMap.get(`${rel.userKey}:${rel.app.name}`) || new Set();
-            
-            return [{ application_id, user_id, scopes: Array.from(scopesSet) }];
-          });
+            involvedApps?.forEach(a => appNameToDbIdMap.set(a.name, a.id));
 
-          if (relsToInsert.length > 0) {
-            // **NEW: Insert relationships in resource-aware batches**
-            await processInBatchesWithResourceControl(
-              relsToInsert,
-              async (relBatch) => {
-                const { error: insertRelsError } = await supabaseAdmin
-                  .from('user_applications')
-                  .insert(relBatch as any);
-                
-                if (insertRelsError) {
-                  console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting relationship batch:`, insertRelsError);
-                }
-              },
-              `TestCron:Microsoft:${orgDomain} RELATIONS_INSERT`,
-              PROCESSING_CONFIG.BATCH_SIZE,
-              PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
-            );
-            console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully processed ${relsToInsert.length} new user-app relationships with resource monitoring.`);
-          }
-        }
-        
+            // 3. Fetch user IDs for this batch
+            const { data: involvedUsers, error: involvedUsersError } = await supabaseAdmin
+              .from('users')
+              .select('id, email')
+              .in('email', batchUserEmails)
+              .eq('organization_id', org.id);
+            
+            if (involvedUsersError) {
+              console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error fetching user IDs for batch:`, involvedUsersError);
+              // Do not return here, as the error might be the one we are trying to solve.
+              // Instead, we will proceed and let the insertion fail if IDs are missing.
+            } else {
+              involvedUsers?.forEach(u => userEmailToDbIdMap.set(u.email, u.id));
+            }
+
+            // 4. Prepare relationships to insert for this batch
+            const relsToInsert = relBatch.flatMap(rel => {
+              const application_id = appNameToDbIdMap.get(rel.app.name);
+              const user_id = userEmailToDbIdMap.get(rel.user.email);
+              
+              if (!application_id || !user_id) {
+                console.warn(`[TestCron:Microsoft:${orgDomain}] ⚠️ Skipping relationship for ${rel.user.email} and ${rel.app.name} in batch (missing DB ID).`);
+                return [];
+              }
+              
+              const scopesSet = userAppScopesMap.get(`${rel.userKey}:${rel.app.name}`) || new Set();
+              
+              return [{ application_id, user_id, scopes: Array.from(scopesSet) }];
+            });
+
+            // 5. Insert the batch
+            if (relsToInsert.length > 0) {
+              const { error: insertRelsError } = await supabaseAdmin
+                .from('user_applications')
+                .insert(relsToInsert as any);
+              
+              if (insertRelsError) {
+                console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting relationship batch:`, insertRelsError);
+              }
+            }
+          },
+          `TestCron:Microsoft:${orgDomain} RELATIONS_INSERT`,
+          PROCESSING_CONFIG.BATCH_SIZE, // Use the existing batch size
+          PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
+        );
+        console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully processed ${newRelationships.length} new user-app relationships with resource monitoring.`);
       }
     }
 
