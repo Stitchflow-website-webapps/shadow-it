@@ -5,8 +5,87 @@ import { AITechnologyTab } from './AITechnologyTab';
 import { SecurityComplianceTab } from './SecurityComplianceTab';
 import { BusinessImpactTab } from './BusinessImpactTab';
 import { PerformanceAdoptionTab } from './PerformanceAdoptionTab';
-import { fetchDetailedAppData } from '@/app/lib/data';
-import { DetailedApplicationData } from '@/types/ai_risk_application';
+import { DetailedApplicationData, AITechnologyData, SecurityComplianceData, BusinessImpactData, PerformanceAdoptionData } from '@/types/ai_risk_application';
+
+// Transform raw AI risk data to detailed app data format
+const transformToDetailedAppData = (rawData: any): DetailedApplicationData => {
+  // Helper function to safely get field value with trimming
+  const getField = (fieldName: string): string => {
+    const value = rawData[fieldName];
+    return (value && typeof value === 'string') ? value.trim() : "";
+  };
+
+  // Create base application data - preserve original field names for matching
+  const baseApp = {
+    id: rawData.app_id?.toString() || "",
+    name: getField("Tool Name"),
+    category: getField("Vendor") || "Uncategorized",
+    lastUsed: "",
+    userCount: 0,
+    riskScore: 0,
+    riskLevel: "Medium" as const,
+    // Preserve the original "Tool Name" field for matching logic
+    "Tool Name": getField("Tool Name")
+  };
+
+  // Structure detailed data into categories
+  const aiTechnology: AITechnologyData = {
+    "Key AI Features": getField("Key AI Features"),
+    "Proprietary Model or 3rd Party?": getField("Proprietary Model or 3rd Party?"),
+    "AI Model Hosting Location / Data Residency": getField("AI Model Hosting Location / Data Residency"),
+    "Data Sent to AI Model?": getField("Data Sent to AI Model?"),
+    "Type of Data Sent": getField("Type of Data Sent"),
+    "Customer/Org Data Used for Model Training?": getField("Customer/Org Data Used for Model Training?"),
+    "User Opt-Out of AI?": getField("User Opt-Out of AI?"),
+  };
+
+  const securityCompliance: SecurityComplianceData = {
+    "Data Retention Policy": getField("Data Retention Policy"),
+    "Data Backup/Retrieval/Deletion Details": getField("Data Backup/Retrieval/Deletion Details"),
+    "Human Review Involvement": getField("Human Review Involvement"),
+    "Security Certifications": getField("Security Certifications"),
+    "AI Specific Security Standards": getField("AI Specific Security Standards"),
+    "Vulnerability Disclosure": getField("Vulnerability Disclosure"),
+    "Recently Known Breaches/ Incidents / Public Issues": getField("Recently Known Breaches/ Incidents / Public Issues"),
+    "Supports SSO/SAML/SCIM": getField("Supports SSO/SAML/SCIM"),
+    "Authentication Methods": getField("Authentication Methods"),
+    "APIs Available?": getField("APIs Available?"),
+    "Supports RBAC (or some form of user permissions and roles)?": getField("Supports RBAC (or some form of user permissions and roles)?"),
+    "Bug Bounty System Available?": getField("Bug Bounty System Available?"),
+    "Trust Contact Info (email ID if available)": getField("Trust Contact Info (email ID if available)"),
+    "Other AI-Specific Terms / Disclosures": getField("Other AI-Specific Terms / Disclosures"),
+  };
+
+  const businessImpact: BusinessImpactData = {
+    "Org Level Criticality (company wide/ specific usage)": getField("Org Level Criticality (company wide/ specific usage)"),
+    "Departments/Teams Suitable for App Usage": getField("Departments/Teams Suitable for App Usage"),
+    "Impact to Business (when app data/functionality is compromised)": getField("Impact to Business (when app data/functionality is compromised)"),
+    "App Performance/Popularity Sentiment": getField("App Performance/Popularity Sentiment"),
+    "Ease of App Setup": getField("Ease of App Setup"),
+    "Need Employee Training Before Usage?": getField("Need Employee Training Before Usage?"),
+    "Overall Security Risk Factor & Tier": getField("Overall Security Risk Factor & Tier"),
+    "Renewals & Upgrade Terms": getField("Renewals & Upgrade Terms"),
+    "Notes / Observations": getField("Notes / Observations"),
+  };
+
+  const performanceAdoption: PerformanceAdoptionData = {
+    "Global Adoption Rank": getField("Global Adoption Rank"),
+    "No. of Active Customers (Reported)": getField("No. of Active Customers (Reported)"),
+    "Popularity percentage": getField("Popularity percentage"),
+    "Benchmark Usage by Peers": getField("Benchmark Usage by Peers"),
+    "Stack Inclusion Rate": getField("Stack Inclusion Rate"),
+    "Best paired with": getField("Best paired with"),
+    "Other popular apps in this space": getField("Other popular apps in this space"),
+  };
+
+  return {
+    ...baseApp,
+    aiTechnology,
+    securityCompliance,
+    businessImpact,
+    performanceAdoption,
+  };
+};
 
 interface App {
   [key: string]: string;
@@ -46,32 +125,63 @@ export const TabbedRiskScoringView: React.FC<TabbedRiskScoringViewProps> = ({
   selectedAppData 
 }) => {
   const [detailedData, setDetailedData] = useState<DetailedApplicationData[]>([]);
+  const [rawAIData, setRawAIData] = useState<any>(null); // Raw AI data for risk scoring
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("risk-scoring");
 
-  // Fetch detailed data on component mount
+  // Fetch detailed data for the specific app when component mounts or app changes
   useEffect(() => {
-    const loadDetailedData = async () => {
+    const loadDetailedDataForApp = async (appName: string) => {
       try {
-        const data = await fetchDetailedAppData();
-        console.log("Fetched detailed data:", data);
-        console.log("Number of records:", data.length);
-        if (data.length > 0) {
-          console.log("Sample record:", data[0]);
-          console.log("Available tool names:", data.map(d => d["Tool Name"]));
+        setLoading(true);
+        console.log(`[DEEP_DIVE] Fetching detailed AI data for app: "${appName}"`);
+        
+        const response = await fetch(`/api/ai-risk-details?appName=${encodeURIComponent(appName)}`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-        setDetailedData(data);
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to fetch app details');
+        }
+        
+        if (result.data) {
+          // Store both the raw data (for RiskScoringTab) and transformed data (for other tabs)
+          setRawAIData(result.data); // Store raw data for risk scoring
+          const transformedData = [transformToDetailedAppData(result.data)];
+          setDetailedData(transformedData);
+          console.log(`[DEEP_DIVE] ✅ Loaded detailed data for "${appName}" in ${result.responseTime}ms (cached: ${result.fromCache})`);
+          console.log(`[DEEP_DIVE] Raw data individual scores:`, {
+            'Data Sensitivity & Processing': result.data?.["Data Sensitivity & Processing"],
+            'Security Certification': result.data?.["Security Certification"],
+            'Authentication & Access Controls': result.data?.["Authentication & Access Controls"]
+          });
+        } else {
+          console.log(`[DEEP_DIVE] ℹ️ No AI risk data found for "${appName}"`);
+          setRawAIData(null);
+          setDetailedData([]);
+        }
       } catch (error) {
-        console.error("Error loading detailed data:", error);
+        console.error(`[DEEP_DIVE] ❌ Error loading detailed data for "${appName}":`, error);
+        setDetailedData([]);
       } finally {
         setLoading(false);
       }
     };
 
-    loadDetailedData();
-  }, []);
+    if (app && app["Tool Name"]) {
+      loadDetailedDataForApp(app["Tool Name"]);
+    } else {
+      setDetailedData([]);
+      setRawAIData(null);
+      setLoading(false);
+    }
+  }, [app]); // Re-fetch when app changes
 
-  // Find the current app's detailed data
+  // Find the current app's detailed data with improved matching
   const currentAppDetailedData = useMemo(() => {
     if (!app || !detailedData.length) return null;
     
@@ -79,8 +189,38 @@ export const TabbedRiskScoringView: React.FC<TabbedRiskScoringViewProps> = ({
     console.log("Looking for app:", appName);
     console.log("Available apps in detailed data:", detailedData.map(d => d["Tool Name"]));
     
-    const foundData = detailedData.find(data => data["Tool Name"] === appName);
+    // Try exact match first
+    let foundData = detailedData.find(data => data["Tool Name"] === appName);
+    
+    // If no exact match, try case-insensitive match
+    if (!foundData) {
+      const normalizedAppName = appName?.toLowerCase().trim();
+      foundData = detailedData.find(data => 
+        data["Tool Name"]?.toLowerCase().trim() === normalizedAppName
+      );
+      if (foundData) {
+        console.log("Found match using case-insensitive search");
+      }
+    }
+    
+    // If still no match, try partial matching (contains)
+    if (!foundData) {
+      const normalizedAppName = appName?.toLowerCase().trim();
+      foundData = detailedData.find(data => {
+        const dataName = data["Tool Name"]?.toLowerCase().trim();
+        return dataName && normalizedAppName && (
+          dataName.includes(normalizedAppName) || normalizedAppName.includes(dataName)
+        );
+      });
+      if (foundData) {
+        console.log("Found match using partial matching:", foundData["Tool Name"]);
+      }
+    }
+    
     console.log("Found detailed data:", foundData ? "Yes" : "No");
+    if (foundData) {
+      console.log("Matched app name:", foundData["Tool Name"]);
+    }
     
     return foundData || null;
   }, [app, detailedData]);
@@ -125,7 +265,7 @@ export const TabbedRiskScoringView: React.FC<TabbedRiskScoringViewProps> = ({
         
         <TabsContent value="risk-scoring" className="space-y-4">
           <RiskScoringTab 
-            app={app}
+            app={rawAIData || app}
             allApps={allApps}
             orgSettings={orgSettings}
             selectedAppData={selectedAppData}

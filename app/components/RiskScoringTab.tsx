@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { transformRiskLevel } from '@/lib/risk-assessment';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getScoreDefinition } from '@/app/lib/scoring-rubric';
+import { getScoreDefinition, riskScoringRubric } from '@/app/lib/scoring-rubric';
 
 // --- TYPE DEFINITIONS ---
 
@@ -50,7 +50,41 @@ export const RiskScoringTab: React.FC<RiskScoringTabProps> = ({ app, allApps, or
     scopeMultipliers: orgSettings.scopeMultipliers
   });
   
+  // Debug: Log the actual app data to see what fields are available
+  console.log('DEBUG - AI Risk App Data:', {
+    appToolName: app?.["Tool Name"],
+    allKeys: Object.keys(app || {}),
+    individualScores: {
+      'Data Sensitivity & Processing': app?.["Data Sensitivity & Processing"],
+      'Data Residency & Control': app?.["Data Residency & Control"], 
+      'Training Data Usage': app?.["Training Data Usage"],
+      'Policy Transparency': app?.["Policy Transparency"],
+      'Security Certification': app?.["Security Certification"],
+      'Vulnerability Management': app?.["Vulnerability Management"],
+      'Authentication & Access Controls': app?.["Authentication & Access Controls"],
+      'Breach History': app?.["Breach History"],
+    },
+    averageScores: {
+      'Average 1': app?.["Average 1"],
+      'Average 2': app?.["Average 2"],
+      'Average 3': app?.["Average 3"],
+      'Average 4': app?.["Average 4"],
+      'Average 5': app?.["Average 5"],
+    },
+    fullAppObject: app
+  });
+  
+  // Debug: Test getScoreDefinition function and available rubric keys
+  console.log('DEBUG - Scoring Rubric Test:', {
+    testDataPrivacy: getScoreDefinition('dataPrivacy', 'Data Sensitivity', 3),
+    testSecurityAccess: getScoreDefinition('securityAccess', 'Security Certifications', 3),
+    availableCategories: Object.keys(riskScoringRubric),
+    dataPrivacyCriteria: riskScoringRubric.dataPrivacy?.criteria?.map(c => c.name) || [],
+    securityAccessCriteria: riskScoringRubric.securityAccess?.criteria?.map(c => c.name) || []
+  });
+  
   // Memoize scoring criteria to ensure it only updates when orgSettings change
+  // FIXED: Updated field names and rubric keys to match exact database schema
   const scoringCriteria = useMemo(() => ({
     dataPrivacy: {
       name: "Data Privacy & Handling",
@@ -225,7 +259,12 @@ export const RiskScoringTab: React.FC<RiskScoringTabProps> = ({ app, allApps, or
             </svg>
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">AI Risk Analysis Not Available</h3>
-          <p className="text-gray-500 text-sm">AI risk analysis not available for this app</p>
+          <p className="text-gray-500 text-sm">
+            No AI risk data found for this application. The app may not be in our risk database yet.
+          </p>
+          <div className="mt-4 text-xs text-gray-400">
+            <p>Expected data fields: Tool Name, Average 1-5, AI-Native status, and detailed scoring criteria</p>
+          </div>
         </div>
       </div>
     );
@@ -433,16 +472,50 @@ export const RiskScoringTab: React.FC<RiskScoringTabProps> = ({ app, allApps, or
                   <div className="space-y-3">
                     {category.criteria.map((criterion: any) => {
                       const score = app?.[criterion.field];
-                      const numericScore = score ? Number.parseFloat(score) : 0;
-                      const rubricDefinition = getScoreDefinition(categoryKey, criterion.rubricKey, numericScore);
+                      // Improved score parsing: handle strings, numbers, empty values
+                      const numericScore = score ? 
+                        (typeof score === 'string' ? parseFloat(score.trim()) : Number(score)) : 0;
+                      
+                      // Only show valid scores (1-5 range)
+                      const validScore = (!isNaN(numericScore) && numericScore > 0 && numericScore <= 5) ? 
+                        Math.round(numericScore) : 0;
+                      
+                      const rubricDefinition = getScoreDefinition(categoryKey, criterion.rubricKey, validScore);
+                      
+                      // Debug log for this specific criterion
+                      console.log(`DEBUG - Criterion ${criterion.rubricKey}:`, {
+                        categoryKey,
+                        field: criterion.field,
+                        rubricKey: criterion.rubricKey,
+                        rawScore: score,
+                        numericScore,
+                        validScore,
+                        rubricDefinition: rubricDefinition?.description,
+                        rubricExists: !!rubricDefinition,
+                        // Additional debugging info
+                        availableRubricKeys: riskScoringRubric[categoryKey]?.criteria?.map(c => c.name) || [],
+                        categoryExists: !!riskScoringRubric[categoryKey],
+                        criteriaExists: !!riskScoringRubric[categoryKey]?.criteria?.find(c => c.name === criterion.rubricKey)
+                      });
+                      
                       return (
                         <div key={criterion.field} className="flex items-start gap-3">
                           <div className="flex flex-col items-center flex-shrink-0">
-                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-900 text-white text-xs font-medium">{numericScore || 'N/A'}</div>
+                            <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium ${
+                              validScore > 0 ? 'bg-gray-900 text-white' : 'bg-gray-300 text-gray-600'
+                            }`}>
+                              {validScore > 0 ? validScore : 'N/A'}
+                            </div>
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm mb-1 text-gray-900">{criterion.rubricKey}</div>
-                            <div className="text-xs text-gray-600 line-clamp-2">{rubricDefinition?.description || 'No scoring information available'}</div>
+                            <div className="text-xs text-gray-600 line-clamp-2">
+                              {rubricDefinition?.description || (
+                                validScore > 0 ? 
+                                  `Score: ${validScore}/5 - Rubric definition not found for "${criterion.rubricKey}" in category "${categoryKey}"` :
+                                  'No scoring data available - check field mapping'
+                              )}
+                            </div>
                           </div>
                         </div>
                       );

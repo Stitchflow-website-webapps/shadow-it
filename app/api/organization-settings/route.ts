@@ -67,23 +67,23 @@ export async function GET(request: NextRequest) {
           dataPrivacy: 20,
           securityAccess: 25,
           businessImpact: 20,
-          aiGovernance: 20,
-          vendorProfile: 15
+          aiGovernance: 15,
+          vendorProfile: 20
         },
         ai_multipliers: {
           native: {
             dataPrivacy: 1.5,
-            securityAccess: 1.4,
+            securityAccess: 1.8,
             businessImpact: 1.3,
-            aiGovernance: 1.6,
+            aiGovernance: 2.0,
             vendorProfile: 1.2
           },
           partial: {
             dataPrivacy: 1.2,
-            securityAccess: 1.1,
+            securityAccess: 1.4,
             businessImpact: 1.1,
-            aiGovernance: 1.3,
-            vendorProfile: 1.0
+            aiGovernance: 1.5,
+            vendorProfile: 1.1
           },
           none: {
             dataPrivacy: 1.0,
@@ -95,18 +95,18 @@ export async function GET(request: NextRequest) {
         },
         scope_multipliers: {
           high: {
-            dataPrivacy: 1.4,
-            securityAccess: 1.5,
-            businessImpact: 1.3,
-            aiGovernance: 1.2,
-            vendorProfile: 1.1
+            dataPrivacy: 1.8,
+            securityAccess: 2.0,
+            businessImpact: 1.4,
+            aiGovernance: 1.6,
+            vendorProfile: 1.3
           },
           medium: {
-            dataPrivacy: 1.2,
-            securityAccess: 1.2,
-            businessImpact: 1.1,
-            aiGovernance: 1.1,
-            vendorProfile: 1.0
+            dataPrivacy: 1.3,
+            securityAccess: 1.5,
+            businessImpact: 1.2,
+            aiGovernance: 1.2,
+            vendorProfile: 1.1
           },
           low: {
             dataPrivacy: 1.0,

@@ -51,7 +51,7 @@ export function AIRiskAnalysisTable({
   className = "",
   orgSettings
 }: AIRiskAnalysisTableProps) {
-  const [sortKey, setSortKey] = useState<keyof AIRiskData>("blastRadius")
+  const [sortKey, setSortKey] = useState<keyof AIRiskData>("finalAppRiskScore")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
 
   // Sort data

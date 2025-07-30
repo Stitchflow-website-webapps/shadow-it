@@ -204,9 +204,9 @@ export default function ShadowITDashboard() {
   const [scopeCurrentPage, setScopeCurrentPage] = useState(1)
   const itemsPerPage = 20
 
-  // Sorting state - default to showing apps with highest risk and most users at top
-  const [sortColumn, setSortColumn] = useState<SortColumn>("riskLevel")
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
+  // Sorting state - default to AI risk score if available, otherwise risk level
+  const [sortColumn, setSortColumn] = useState<SortColumn>("aiRiskScore")
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
 
   const [userSortColumn, setUserSortColumn] = useState<"name" | "email" | "created" | "riskLevel">("name")
   const [userSortDirection, setUserSortDirection] = useState<SortDirection>("desc")
@@ -696,10 +696,15 @@ export default function ShadowITDashboard() {
     };
   }, [uncategorizedApps]);
 
-  // Modify fetchData to use AI risk cache
+  // Modify fetchData to use AI risk cache with duplication prevention
   const fetchData = async () => {
     try {
       setIsLoading(true);
+      
+      // Set timestamp for cache validation
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('lastAppsFetch', Date.now().toString());
+      }
       
       let fetchOrgIdValue = null;
       if (typeof window !== 'undefined') {
@@ -722,17 +727,290 @@ export default function ShadowITDashboard() {
         return;
       }
 
-      // Fetch applications first
-      const appsResponse = await fetch(`/api/applications?orgId=${fetchOrgIdValue}`);
-      if (!appsResponse.ok) {
-        throw new Error('Failed to fetch applications');
+      // Fetch applications using optimized endpoint with fallback
+      // SMART PAGINATION: Load first 5 pages immediately, then background load remaining
+      let rawData: Application[] = [];
+      let fromCache = false;
+      let responseTime = 0;
+      let totalCount = 0;
+      
+      try {
+        console.log('[PERF] 🚀 Starting smart pagination load...');
+        const startTime = Date.now();
+        
+        // Add cache-busting timestamp to ensure fresh data on each full load
+        const cacheBuster = Date.now();
+        
+        // PHASE 1: Load first page to get total count (disable deduplication for full data)
+        const firstPageResponse = await fetch(`/api/applications-v2?orgId=${fetchOrgIdValue}&limit=200&includeUsers=true&page=1&deduplicate=false&cb=${cacheBuster}`);
+        
+        if (firstPageResponse.ok) {
+          const firstPageData = await firstPageResponse.json();
+          rawData = firstPageData.applications || [];
+          fromCache = firstPageData.fromCache || false;
+          responseTime = firstPageData.responseTime || (Date.now() - startTime);
+          
+          // Get exact total count and hasMore from the new metadata structure
+          const hasMore = firstPageData.metadata?.hasMore;
+          const totalRecords = firstPageData.metadata?.totalRecords;
+          console.log(`[PERF] ✅ First page loaded: ${rawData.length} apps, hasMore: ${hasMore}, totalRecords: ${totalRecords}`);
+          
+          // PHASE 2: Load first 4 more pages immediately (total 5 pages)
+          const IMMEDIATE_PAGES = 5;
+          const immediatePagePromises = [];
+          
+          for (let page = 2; page <= IMMEDIATE_PAGES && hasMore; page++) {
+            const pagePromise = fetch(`/api/applications-v2?orgId=${fetchOrgIdValue}&limit=200&page=${page}&includeUsers=true&deduplicate=false&cb=${cacheBuster}`)
+              .then(res => res.ok ? res.json() : null)
+              .then(data => ({ page, data }))
+              .catch(err => {
+                console.warn(`[PERF] Error loading immediate page ${page}:`, err);
+                return { page, data: null };
+              });
+            immediatePagePromises.push(pagePromise);
+          }
+          
+          // Wait for immediate pages
+          console.log(`[PERF] 📦 Loading pages 2-${IMMEDIATE_PAGES} immediately...`);
+          const immediateResults = await Promise.all(immediatePagePromises);
+          
+          let stillHasMore = hasMore;
+          let lastPage = 1;
+          
+          immediateResults.forEach(({ page, data }) => {
+            if (data && data.applications) {
+              rawData = [...rawData, ...data.applications];
+              console.log(`[PERF] Page ${page}: +${data.applications.length} apps (total: ${rawData.length})`);
+              stillHasMore = data.metadata?.hasMore || false;
+              lastPage = Math.max(lastPage, page);
+            }
+          });
+          
+          console.log(`[PERF] ⚡ Immediate load complete: ${rawData.length} apps from ${lastPage} pages`);
+          
+          // Add deduplication check and logging for consistency
+          const appIdCounts = new Map<string, number>();
+          const appNameCounts = new Map<string, number>();
+          
+          rawData.forEach(app => {
+            // Count by ID
+            appIdCounts.set(app.id, (appIdCounts.get(app.id) || 0) + 1);
+            
+            // Count by name
+            const name = app.name.toLowerCase().trim();
+            appNameCounts.set(name, (appNameCounts.get(name) || 0) + 1);
+          });
+          
+          // Check for duplicates
+          const duplicateIds = Array.from(appIdCounts.entries()).filter(([id, count]) => count > 1);
+          const duplicateNames = Array.from(appNameCounts.entries()).filter(([name, count]) => count > 1);
+          
+          if (duplicateIds.length > 0) {
+            console.warn(`[CONSISTENCY] ⚠️ Found ${duplicateIds.length} duplicate app IDs:`, duplicateIds.map(([id, count]) => `${id}(${count}x)`));
+          }
+          
+          if (duplicateNames.length > 0) {
+            console.warn(`[CONSISTENCY] ⚠️ Found ${duplicateNames.length} duplicate app names:`, duplicateNames.map(([name, count]) => `${name}(${count}x)`));
+          }
+          
+          console.log(`[CONSISTENCY] ✅ Immediate load: ${rawData.length} total apps, ${appIdCounts.size} unique IDs, ${appNameCounts.size} unique names`);
+          
+          // PHASE 3: Background load remaining pages (if any)
+          if (stillHasMore) {
+            console.log('[PERF] 🔄 Starting background load for remaining pages...');
+            
+            // Don't await this - let it run in background
+            const backgroundLoad = async () => {
+              let bgPage = lastPage + 1;
+              let bgHasMore = true;
+              let backgroundApps: Application[] = [];
+              
+              while (bgHasMore && bgPage <= 50) { // Safety limit of 50 pages max
+                try {
+                  const bgResponse = await fetch(`/api/applications-v2?orgId=${fetchOrgIdValue}&limit=200&page=${bgPage}&includeUsers=true&deduplicate=false&cb=${cacheBuster}`);
+                  if (bgResponse.ok) {
+                    const bgData = await bgResponse.json();
+                    const bgApps = bgData.applications || [];
+                    
+                    if (bgApps.length > 0) {
+                      backgroundApps = [...backgroundApps, ...bgApps];
+                      console.log(`[PERF] 📱 Background page ${bgPage}: +${bgApps.length} apps (bg total: ${backgroundApps.length})`);
+                      
+                      // Update the applications state with background data (prevent duplicates)
+                      setApplications(prev => {
+                        // Create a Set of existing app IDs to prevent duplicates
+                        const existingIds = new Set(prev.map(app => app.id));
+                        
+                        // Filter out any apps that already exist  
+                        const newApps = bgApps.filter((app: any) => !existingIds.has(app.id)).map((app: any) => ({
+                          ...app,
+                          users: (app.users || []).map((user: any) => ({
+                            ...user,
+                            riskLevel: determineRiskLevel(user.scopes)
+                          })),
+                          aiRiskScore: null // Background apps will get AI scores applied later
+                        }));
+                        
+                        const combined = [...prev, ...newApps];
+                        console.log(`[PERF] 🔥 UI updated with background data: ${combined.length} total apps (${newApps.length} new, ${bgApps.length - newApps.length} duplicates filtered)`);
+                        return combined;
+                      });
+                    }
+                    
+                    bgHasMore = bgData.metadata?.hasMore || false;
+                    bgPage++;
+                  } else {
+                    console.warn(`[PERF] Background page ${bgPage} failed: ${bgResponse.status}`);
+                    bgHasMore = false;
+                  }
+                } catch (bgError) {
+                  console.warn(`[PERF] Background page ${bgPage} error:`, bgError);
+                  bgHasMore = false;
+                }
+                
+                // Small delay to not overwhelm the server
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
+              
+              console.log(`[PERF] 🎯 Background load complete: ${backgroundApps.length} additional apps loaded`);
+              
+              // Apply AI risk scores to background-loaded apps
+              if (backgroundApps.length > 0) {
+                console.log('[AI_RISK] 🔄 Applying AI risk scores to background-loaded apps...');
+                try {
+                  const aiRiskResponse = await fetch('/api/ai-risk-analysis');
+                  if (aiRiskResponse.ok) {
+                    const result = await aiRiskResponse.json();
+                    if (result.success && result.data && result.data.length > 0) {
+                      // Create AI risk score map
+                      const aiRiskScoreMap = new Map<string, number>();
+                      result.data.forEach((aiRiskItem: any) => {
+                        const appName = aiRiskItem.appName;
+                        const finalScore = aiRiskItem.finalAppRiskScore;
+                        if (appName && finalScore !== null && finalScore !== undefined) {
+                          aiRiskScoreMap.set(appName, finalScore);
+                          aiRiskScoreMap.set(appName.toLowerCase().trim(), finalScore);
+                          const normalizedName = appName.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+                          if (normalizedName) {
+                            aiRiskScoreMap.set(normalizedName, finalScore);
+                          }
+                        }
+                      });
+                      
+                      // Update applications state with AI risk scores for background apps
+                      setApplications(prev => {
+                        let backgroundMatchedCount = 0;
+                        const updated = prev.map(app => {
+                          // Only update apps that don't have AI risk scores yet (background apps)
+                          if (app.aiRiskScore === null) {
+                            // Same matching logic as main load
+                            let aiRiskScore: number | undefined = undefined;
+                            
+                            // Exact match
+                            aiRiskScore = aiRiskScoreMap.get(app.name);
+                            if (aiRiskScore === undefined) {
+                              // Normalized match
+                              const normalizedAppName = app.name.toLowerCase().trim();
+                              aiRiskScore = aiRiskScoreMap.get(normalizedAppName);
+                              if (aiRiskScore === undefined) {
+                                // Super normalized match
+                                const superNormalizedName = normalizedAppName.replace(/[^a-z0-9]/g, '');
+                                if (superNormalizedName) {
+                                  aiRiskScore = aiRiskScoreMap.get(superNormalizedName);
+                                }
+                                // Flexible contains-based search
+                                if (aiRiskScore === undefined) {
+                                  for (const [key, value] of aiRiskScoreMap.entries()) {
+                                    const normalizedKey = key.toLowerCase().trim();
+                                    if (normalizedKey.length > 3 && (
+                                      normalizedAppName.includes(normalizedKey) || 
+                                      normalizedKey.includes(normalizedAppName)
+                                    )) {
+                                      aiRiskScore = value;
+                                      break;
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            
+                            if (aiRiskScore !== undefined) {
+                              backgroundMatchedCount++;
+                              console.log(`[AI_RISK] 🎯 Background match: "${app.name}" -> ${aiRiskScore}`);
+                              return { ...app, aiRiskScore };
+                            }
+                          }
+                          return app;
+                        });
+                        
+                        console.log(`[AI_RISK] ✅ Background AI matching complete: ${backgroundMatchedCount} apps matched`);
+                        return updated;
+                      });
+                    }
+                  }
+                } catch (error) {
+                  console.error('[AI_RISK] Failed to apply AI scores to background apps:', error);
+                }
+              }
+              
+              // Final consistency check after all loading is complete
+              setTimeout(() => {
+                setApplications(currentApps => {
+                  console.log(`[CONSISTENCY] 🔍 Final app count: ${currentApps.length} total apps`);
+                  
+                  // Check for duplicates in final dataset
+                  const finalIdCounts = new Map<string, number>();
+                  const finalNameCounts = new Map<string, number>();
+                  
+                  currentApps.forEach(app => {
+                    finalIdCounts.set(app.id, (finalIdCounts.get(app.id) || 0) + 1);
+                    const name = app.name.toLowerCase().trim();
+                    finalNameCounts.set(name, (finalNameCounts.get(name) || 0) + 1);
+                  });
+                  
+                  const finalDuplicateIds = Array.from(finalIdCounts.entries()).filter(([id, count]) => count > 1);
+                  const finalDuplicateNames = Array.from(finalNameCounts.entries()).filter(([name, count]) => count > 1);
+                  
+                  if (finalDuplicateIds.length > 0) {
+                    console.warn(`[CONSISTENCY] ⚠️ Final duplicates by ID: ${finalDuplicateIds.length}`, finalDuplicateIds.slice(0, 5));
+                  }
+                  
+                  if (finalDuplicateNames.length > 0) {
+                    console.warn(`[CONSISTENCY] ⚠️ Final duplicates by name: ${finalDuplicateNames.length}`, finalDuplicateNames.slice(0, 5));
+                  }
+                  
+                  console.log(`[CONSISTENCY] ✅ Final summary: ${currentApps.length} total, ${finalIdCounts.size} unique IDs, ${finalNameCounts.size} unique names`);
+                  
+                  return currentApps; // Return unchanged
+                });
+              }, 2000); // Wait 2 seconds after background load completes
+            };
+            
+            // Start background loading without waiting
+            backgroundLoad().catch(err => {
+              console.warn('[PERF] Background loading failed:', err);
+            });
+          }
+          
+        } else {
+          throw new Error(`First page load failed: ${firstPageResponse.status}`);
+        }
+      } catch (newEndpointError) {
+        console.warn('[PERF] ⚠️ New endpoint failed, falling back to old endpoint:', newEndpointError);
+        
+        try {
+          // Fallback to old endpoint
+          const oldAppsResponse = await fetch(`/api/applications?orgId=${fetchOrgIdValue}`);
+          if (!oldAppsResponse.ok) {
+            throw new Error('Failed to fetch applications from both endpoints');
+          }
+          rawData = await oldAppsResponse.json();
+          console.log(`[PERF] 🔄 Fallback successful: ${rawData.length} apps`);
+        } catch (fallbackError) {
+          console.error('[PERF] ❌ Both endpoints failed:', fallbackError);
+          throw new Error('Failed to fetch applications from both old and new endpoints');
+        }
       }
-      const rawData: Application[] = await appsResponse.json();
-
-      // Check for cached AI scores
-      const cachedAIScores = getCachedAIRiskScores(fetchOrgIdValue || '');
-      const hasValidCache = cachedAIScores !== null;
-      const needsRefresh = shouldRefreshCache(fetchOrgIdValue || '');
 
       // Get organization settings
       const orgSettingsResponse = await fetch(`/api/organization-settings?org_id=${fetchOrgIdValue}`);
@@ -748,132 +1026,177 @@ export default function ShadowITDashboard() {
         }
       }
 
-      // Show apps immediately with cached AI scores if available
-      if (hasValidCache) {
-        console.log('Using cached AI risk scores');
-        const timeRemaining = getCacheTimeRemaining(fetchOrgIdValue || '');
-        console.log(`Cache expires in ${timeRemaining} minutes`);
-        
-        const appsWithCachedAI = rawData.map(app => {
-          const appWithRiskLevels = {
-            ...app,
-            users: app.users.map(user => ({
-              ...user,
-              riskLevel: determineRiskLevel(user.scopes)
-            }))
-          };
-          
-          // Get cached AI data for this app
-          const cachedAIData = cachedAIScores[app.name.toLowerCase().trim()];
-          const aiRiskScore = cachedAIData ? 
-            calculateAIRiskScore(appWithRiskLevels, cachedAIData, fetchedOrgSettings) : null;
-          
-          return {
-            ...appWithRiskLevels,
-            aiRiskScore
-          };
-        });
-        
-        // Update UI immediately with cached scores
-        setApplications(appsWithCachedAI);
-        setOrgSettings(fetchedOrgSettings);
-        setOrganizationId(fetchOrgIdValue || null);
-        setIsLoading(false); // UI shows immediately!
-        
-        // Set cached data for state consistency
-        if (cachedAIScores) {
-          const cachedArray = Object.values(cachedAIScores);
-          setAiRiskData(cachedArray);
-          
-          // Pre-compute AI data map for faster deep dive lookups
-          const newAiDataMap = new Map<string, any>();
-          cachedArray.forEach(aiData => {
-            const appName = aiData.matchedAppName || aiData['Tool Name'];
-            if (appName) {
-              newAiDataMap.set(appName.toLowerCase().trim(), aiData);
-            }
-          });
-          setAiDataMap(newAiDataMap);
-        }
-      }
-
-      // Only fetch fresh AI data if cache needs refreshing
-      if (needsRefresh) {
-        console.log('Cache needs refresh, fetching fresh AI data...');
-        if (hasValidCache) {
-          setIsUpdatingAIScores(true); // Show subtle update indicator only when actually updating
-        }
-
-        try {
-          const aiRiskResponse = await fetch('/api/ai-risk-data');
+      // Fetch fresh AI data using the same endpoint as AI Risk Analysis page
+      console.log('[DEBUG] Fetching fresh AI data from ai-risk-analysis endpoint...');
+      
+      try {
+          console.log('[AI_RISK] 🎯 Fetching AI risk scores from optimized endpoint...');
+          const aiRiskResponse = await fetch('/api/ai-risk-analysis');
           
           if (aiRiskResponse.ok) {
             const result = await aiRiskResponse.json();
-            if (result.success && result.data) {
-              // Process fresh AI data
-              const appToAiDataMap = new Map<string, any>();
-              result.data.forEach((aiData: any) => {
-                const matchedAppName = aiData.matchedAppName || aiData['Tool Name'];
-                if (matchedAppName) {
-                  appToAiDataMap.set(matchedAppName, aiData);
+            console.log(`[AI_RISK] Response status: success=${result.success}, dataCount=${result.data ? result.data.length : 0}`);
+            console.log(`[AI_RISK] Response time: ${result.responseTime}ms, fromCache: ${result.fromCache}`);
+            
+            if (result.success && result.data && result.data.length > 0) {
+              // Process AI data from ai-risk-analysis endpoint with enhanced matching
+              const aiRiskScoreMap = new Map<string, number>();
+              
+              // Log sample data for debugging
+              if (result.data.length > 0) {
+                console.log(`[AI_RISK] Sample AI data:`, result.data.slice(0, 3).map((item: any) => ({
+                  appName: item.appName,
+                  finalScore: item.finalAppRiskScore
+                })));
+              }
+              
+              result.data.forEach((aiRiskItem: any) => {
+                const appName = aiRiskItem.appName;
+                const finalScore = aiRiskItem.finalAppRiskScore;
+                if (appName && finalScore !== null && finalScore !== undefined) {
+                  // Store with multiple key variations for maximum compatibility
+                  aiRiskScoreMap.set(appName, finalScore);
+                  aiRiskScoreMap.set(appName.toLowerCase().trim(), finalScore);
+                  
+                  // Also store with normalized variations for better matching
+                  const normalizedName = appName.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+                  if (normalizedName) {
+                    aiRiskScoreMap.set(normalizedName, finalScore);
+                  }
                 }
               });
 
-              // Cache the fresh data
-              if (fetchOrgIdValue) {
-                const cacheSuccess = cacheAIRiskScores(result.data, fetchOrgIdValue);
-                if (cacheSuccess) {
-                  console.log('Fresh AI risk scores cached successfully');
-                }
-              }
-
-              // Process applications with fresh AI data
+              console.log(`[AI_RISK] Created AI risk score map with ${aiRiskScoreMap.size} total entries`);
+              console.log(`[AI_RISK] Available AI apps: ${Array.from(aiRiskScoreMap.keys()).slice(0, 10).join(', ')}...`);
+              
+              // Process applications with AI risk score matching
+              let matchedCount = 0;
+              let unmatchedApps: string[] = [];
+              
               const processedData = rawData.map(app => {
                 const appWithRiskLevels = {
                   ...app,
-                  users: app.users.map(user => ({
+                  users: (app.users || []).map(user => ({
                     ...user,
                     riskLevel: determineRiskLevel(user.scopes)
                   }))
                 };
                 
-                const aiDataForApp = appToAiDataMap.get(app.name);
-                const aiRiskScore = calculateAIRiskScore(appWithRiskLevels, aiDataForApp, fetchedOrgSettings);
+                // AI score matching with multiple fallback methods
+                let aiRiskScore: number | undefined = undefined;
                 
-                return {
-                  ...appWithRiskLevels,
-                  aiRiskScore
-                };
+                // Method 1: Exact match
+                aiRiskScore = aiRiskScoreMap.get(app.name);
+                if (aiRiskScore !== undefined) {
+                  matchedCount++;
+                  return { ...appWithRiskLevels, aiRiskScore };
+                }
+                
+                // Method 2: Normalized match
+                const normalizedAppName = app.name.toLowerCase().trim();
+                aiRiskScore = aiRiskScoreMap.get(normalizedAppName);
+                if (aiRiskScore !== undefined) {
+                  matchedCount++;
+                  return { ...appWithRiskLevels, aiRiskScore };
+                }
+                
+                // Method 3: Super normalized match (alphanumeric only)
+                const superNormalizedName = normalizedAppName.replace(/[^a-z0-9]/g, '');
+                if (superNormalizedName) {
+                  aiRiskScore = aiRiskScoreMap.get(superNormalizedName);
+                  if (aiRiskScore !== undefined) {
+                    matchedCount++;
+                    return { ...appWithRiskLevels, aiRiskScore };
+                  }
+                }
+                
+                // Method 4: Flexible contains-based search
+                for (const [key, value] of aiRiskScoreMap.entries()) {
+                  const normalizedKey = key.toLowerCase().trim();
+                  if (normalizedKey.length > 3 && (
+                    normalizedAppName.includes(normalizedKey) || 
+                    normalizedKey.includes(normalizedAppName)
+                  )) {
+                    matchedCount++;
+                    return { ...appWithRiskLevels, aiRiskScore: value };
+                  }
+                }
+                
+                // No match found
+                unmatchedApps.push(app.name);
+                return { ...appWithRiskLevels, aiRiskScore: null };
               });
+              
+              console.log(`[AI_RISK] 📊 Matching results: ${matchedCount}/${rawData.length} apps matched with AI scores`);
+              
+
+              
+              if (unmatchedApps.length > 0 && unmatchedApps.length <= 10) {
+                console.log(`[AI_RISK] ❌ Unmatched apps: ${unmatchedApps.join(', ')}`);
+              } else if (unmatchedApps.length > 10) {
+                console.log(`[AI_RISK] ❌ ${unmatchedApps.length} unmatched apps (showing first 10): ${unmatchedApps.slice(0, 10).join(', ')}`);
+              }
               
               // Update state with fresh data
               setApplications(processedData);
-              setAiRiskData(Array.from(appToAiDataMap.values()));
+              setAiRiskData(result.data); // Use the processed data directly
               
-              // Pre-compute AI data map for faster deep dive lookups
+              // Pre-compute AI data map for faster deep dive lookups using original data format
               const newAiDataMap = new Map<string, any>();
-              appToAiDataMap.forEach((aiData, appName) => {
-                newAiDataMap.set(appName.toLowerCase().trim(), aiData);
+              result.data.forEach((aiRiskItem: any) => {
+                const appName = aiRiskItem.appName;
+                if (appName) {
+                  // Convert back to the expected format for deep dive compatibility
+                  const convertedData = {
+                    'Tool Name': appName,
+                    'AI-Native': aiRiskItem.category?.includes('native') ? 'GenAI native' : 
+                                 aiRiskItem.category?.includes('partial') ? 'GenAI partial' : 'No GenAI',
+                    'Average 1': aiRiskItem.rawAppRiskScore,
+                    'Average 2': aiRiskItem.rawAppRiskScore, 
+                    'Average 3': aiRiskItem.rawAppRiskScore,
+                    'Average 4': aiRiskItem.rawAppRiskScore,
+                    'Average 5': aiRiskItem.rawAppRiskScore
+                  };
+                  newAiDataMap.set(appName.toLowerCase().trim(), convertedData);
+                }
               });
               setAiDataMap(newAiDataMap);
               
               setOrgSettings(fetchedOrgSettings);
               setOrganizationId(fetchOrgIdValue || null);
               
-              // If we didn't have cache initially, set loading to false now
-              if (!hasValidCache) {
-                setIsLoading(false);
-              }
+              // Performance logging for fresh data
+              console.log(`[PERF] ✅ Complete load with AI risk scores: Apps ${responseTime}ms (cached: ${fromCache}), AI scores: ${result.responseTime}ms (cached: ${result.fromCache}), Total apps: ${processedData.length}, AI matched: ${matchedCount}`);
+              
+              setIsLoading(false);
+            } else {
+              // Handle case where AI data response was successful but empty
+              console.warn('[AI_RISK] ⚠️ AI data response was successful but empty - processing apps without AI scores');
+              console.warn('[AI_RISK] Response details:', { success: result.success, dataLength: result.data?.length, responseTime: result.responseTime });
+              
+              const processedDataWithoutAI = rawData.map(app => ({
+                ...app,
+                users: (app.users || []).map(user => ({
+                  ...user,
+                  riskLevel: determineRiskLevel(user.scopes)
+                })),
+                aiRiskScore: null
+              }));
+              
+              setApplications(processedDataWithoutAI);
+              setOrgSettings(fetchedOrgSettings);
+              setOrganizationId(fetchOrgIdValue || null);
+              setIsLoading(false);
             }
-          }
-        } catch (aiError) {
-          console.warn('Failed to fetch fresh AI risk data:', aiError);
-          // If we have cache, continue with cached data
-          // If no cache, show apps without AI scores
-          if (!hasValidCache) {
+          } else {
+            // Handle case where AI data response was not ok
+            console.error('[AI_RISK] ❌ AI Risk Analysis endpoint error:', aiRiskResponse.status, aiRiskResponse.statusText);
+            const errorText = await aiRiskResponse.text();
+            console.error('[AI_RISK] Error details:', errorText);
+            
             const processedDataWithoutAI = rawData.map(app => ({
               ...app,
-              users: app.users.map(user => ({
+              users: (app.users || []).map(user => ({
                 ...user,
                 riskLevel: determineRiskLevel(user.scopes)
               })),
@@ -885,11 +1208,22 @@ export default function ShadowITDashboard() {
             setOrganizationId(fetchOrgIdValue || null);
             setIsLoading(false);
           }
-        } finally {
-          setIsUpdatingAIScores(false);
-        }
-      } else {
-        console.log('Cache is still valid, skipping AI data refresh');
+        } catch (aiError) {
+          console.error('[AI_RISK] ❌ Failed to fetch AI risk data:', aiError);
+          
+          const processedDataWithoutAI = rawData.map(app => ({
+            ...app,
+            users: (app.users || []).map(user => ({
+              ...user,
+              riskLevel: determineRiskLevel(user.scopes)
+            })),
+            aiRiskScore: null
+          }));
+            
+            setApplications(processedDataWithoutAI);
+            setOrgSettings(fetchedOrgSettings);
+            setOrganizationId(fetchOrgIdValue || null);
+            setIsLoading(false);
       }
 
       // Handle uncategorized apps
@@ -902,10 +1236,22 @@ export default function ShadowITDashboard() {
 
       // Set default sort based on AI scores availability
       const hasAIScores = currentApps.some(app => app.aiRiskScore !== null && app.aiRiskScore !== undefined);
-      if (hasAIScores && sortColumn !== "aiRiskScore") { // Only set if not already set
-        setSortColumn("aiRiskScore");
-        setSortDirection("desc");
+      
+      if (hasAIScores) {
+        // If we have AI scores and not already sorting by AI risk score, switch to it
+        if (sortColumn !== "aiRiskScore") {
+          setSortColumn("aiRiskScore");
+          setSortDirection("desc");
+        }
+      } else {
+        // If no AI scores but currently sorting by AI risk score, switch to risk level
+        if (sortColumn === "aiRiskScore") {
+          setSortColumn("riskLevel");
+          setSortDirection("desc");
+        }
       }
+      
+      // Background loading will be handled by the existing pagination logic
       
     } catch (error) {
       console.error("Error fetching application data:", error);
@@ -914,8 +1260,14 @@ export default function ShadowITDashboard() {
     }
   };
 
-  // Add useEffect to trigger fetchData
+  // Add useEffect to trigger fetchData with navigation state reset
   useEffect(() => {
+    // Reset state to prevent duplication from navigation
+    setApplications([]); // Clear existing applications to prevent duplication
+    setAiRiskData([]);   // Clear AI risk data
+    setAiDataMap(new Map()); // Clear AI data map
+    setIsLoading(true);  // Set loading state
+    
     fetchData();
     
     // Cleanup function
@@ -926,6 +1278,31 @@ export default function ShadowITDashboard() {
       }
     };
   }, []); // Empty dependency array means this runs once on mount
+  
+  // Add effect to handle page visibility changes (when coming back from other pages)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Only refresh if we have applications but they seem stale
+        if (applications.length > 0) {
+          const now = Date.now();
+          const lastFetch = localStorage.getItem('lastAppsFetch');
+          const staleThreshold = 5 * 60 * 1000; // 5 minutes
+          
+          if (!lastFetch || (now - parseInt(lastFetch)) > staleThreshold) {
+            fetchData();
+          }
+        }
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }
+  }, [applications.length]);
 
   // Add error state if needed
   const [error, setError] = useState<string | null>(null);

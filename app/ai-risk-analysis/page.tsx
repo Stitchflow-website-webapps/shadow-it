@@ -7,7 +7,6 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AIRiskAnalysisTable } from '@/components/ui/ai-risk-analysis-table';
 import Sidebar from '@/app/components/Sidebar';
-import { transformRiskLevel } from '@/lib/risk-assessment';
 
 interface AIRiskData {
   appName: string
@@ -25,118 +24,7 @@ interface UserInfo {
   avatar_url: string | null;
 }
 
-// Helper function to determine category based on AI-Native field
-function determineCategory(aiNative: string): string {
-  if (!aiNative) return 'No GenAI';
-  
-  const normalized = aiNative.toLowerCase().trim();
-  if (normalized.includes('native') || normalized.includes('yes')) return 'GenAI native';
-  if (normalized.includes('partial')) return 'GenAI partial';
-  return 'No GenAI';
-}
-
-// Helper function to determine scope risk based on score
-function determineScopeRisk(score: number): string {
-  if (score >= 4.0) return 'High';
-  if (score >= 2.5) return 'Medium';
-  return 'Low';
-}
-
-// Helper function to calculate final risk score using the same logic as main page
-function calculateFinalRiskScore(app: any, orgSettings: any): number {
-  if (!app) return 0;
-  
-  // Fuzzy matching to find AI scoring data (app is already the AI data)
-  const aiData = app;
-  
-  // Define scoring criteria using organization settings
-  const scoringCriteria = {
-    dataPrivacy: { weight: orgSettings.bucketWeights.dataPrivacy, averageField: "Average 1" },
-    securityAccess: { weight: orgSettings.bucketWeights.securityAccess, averageField: "Average 2" },
-    businessImpact: { weight: orgSettings.bucketWeights.businessImpact, averageField: "Average 3" },
-    aiGovernance: { weight: orgSettings.bucketWeights.aiGovernance, averageField: "Average 4" },
-    vendorProfile: { weight: orgSettings.bucketWeights.vendorProfile, averageField: "Average 5" }
-  };
-
-  // Get AI status
-  const aiStatus = aiData?.["AI-Native"]?.toLowerCase() || "";
-  
-  // Get scope risk from the actual app data (like main page does)
-  const getCurrentScopeRisk = () => {
-    if (app && app.riskLevel) {
-      const riskLevel = transformRiskLevel(app.riskLevel);
-      return riskLevel.toUpperCase();
-    }
-    return 'MEDIUM';
-  };
-  
-  const currentScopeRisk = getCurrentScopeRisk();
-  
-  // Get scope multipliers from organization settings
-  const getScopeMultipliers = (scopeRisk: string) => {
-    if (scopeRisk === 'HIGH') return orgSettings.scopeMultipliers.high;
-    if (scopeRisk === 'MEDIUM') return orgSettings.scopeMultipliers.medium;
-    return orgSettings.scopeMultipliers.low;
-  };
-
-  const scopeMultipliers = getScopeMultipliers(currentScopeRisk);
-  
-  // Get AI multipliers from organization settings
-  const getAIMultipliers = (status: string) => {
-    const lowerStatus = status.toLowerCase().trim();
-    if (lowerStatus.includes("partial")) return orgSettings.aiMultipliers.partial;
-    if (lowerStatus.includes("no") || lowerStatus === "" || lowerStatus.includes("not applicable")) return orgSettings.aiMultipliers.none;
-    if (lowerStatus.includes("genai") || lowerStatus.includes("native") || lowerStatus.includes("yes")) return orgSettings.aiMultipliers.native;
-    return orgSettings.aiMultipliers.none;
-  };
-
-  const multipliers = getAIMultipliers(aiStatus);
-  
-  // Calculate base score
-  const calculateBaseScore = () => {
-    return Object.values(scoringCriteria).reduce((total, category) => {
-      const numScore = aiData?.[category.averageField] ? Number.parseFloat(aiData[category.averageField]) : 0;
-      return total + (numScore * (category.weight / 100) * 2);
-    }, 0);
-  };
-
-  // Calculate AI score
-  const calculateAIScore = () => {
-    return Object.entries(scoringCriteria).reduce((total, [key, category]) => {
-      const numScore = aiData?.[category.averageField] ? Number.parseFloat(aiData[category.averageField]) : 0;
-      const weightedScore = numScore * (category.weight / 100) * 2;
-      const aiMultiplier = multipliers[key as keyof typeof multipliers] as number;
-      return total + (weightedScore * aiMultiplier);
-    }, 0);
-  };
-  
-  // Calculate scope score
-  const calculateScopeScore = () => {
-    return Object.entries(scoringCriteria).reduce((total, [key, category]) => {
-      const numScore = aiData?.[category.averageField] ? Number.parseFloat(aiData[category.averageField]) : 0;
-      const weightedScore = numScore * (category.weight / 100) * 2;
-      const aiMultiplier = multipliers[key as keyof typeof multipliers] as number;
-      const scopeMultiplier = scopeMultipliers[key as keyof typeof scopeMultipliers] as number;
-      return total + (weightedScore * aiMultiplier * scopeMultiplier);
-    }, 0);
-  };
-  
-  const baseScore = calculateBaseScore();
-  const aiScore = calculateAIScore();
-  const scopeScore = calculateScopeScore();
-  const genAIAmplification = baseScore > 0 ? aiScore / baseScore : 1.0;
-  const scopeAmplification = aiScore > 0 ? scopeScore / aiScore : 1.0;
-  const totalAppRiskScore = baseScore * genAIAmplification * scopeAmplification;
-  
-  return Math.round(totalAppRiskScore * 100) / 100; // Round to 2 decimal places
-}
-
-// Helper function to calculate user count (placeholder)
-function calculateUserCount(app: any): number {
-  return Math.floor(Math.random() * 20) + 1;
-}
-
-// Default organization settings - matching main page structure
+// Default organization settings for display purposes
 function getDefaultOrgSettings() {
   return {
     bucketWeights: {
@@ -169,115 +57,47 @@ export default function RiskAnalysisPage() {
   const [currentView, setCurrentView] = useState('ai-risk-analysis');
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [orgSettings, setOrgSettings] = useState(getDefaultOrgSettings());
+  const [responseTime, setResponseTime] = useState<number>(0);
+  const [fromCache, setFromCache] = useState(false);
 
-    // Fetch AI risk data from API
+  // Optimized data fetching using the new combined API endpoint
   const fetchAIRiskData = async () => {
     try {
       setLoading(true);
+      setError(null);
       
-      // Get organization ID from URL or cookies
-      let fetchOrgIdValue = null;
-      if (typeof window !== 'undefined') {
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlOrgId = urlParams.get('orgId');
-        
-        if (urlOrgId) {
-          fetchOrgIdValue = urlOrgId;
-        } else if (document.cookie.split(';').find(cookie => cookie.trim().startsWith('orgId='))) {
-          const orgIdCookie = document.cookie.split(';').find(cookie => cookie.trim().startsWith('orgId='));
-          fetchOrgIdValue = orgIdCookie?.split('=')[1].trim();
-        }
+      console.log('[PERF] 🚀 Starting optimized AI Risk Analysis data fetch...');
+      const startTime = Date.now();
+      
+      // Single API call to the optimized endpoint
+      const response = await fetch('/api/ai-risk-analysis');
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch AI risk analysis data: ${response.status}`);
       }
       
-      // Fetch AI risk data, organization settings, and application data concurrently
-      const [aiRiskResponse, orgSettingsResponse, applicationsResponse] = await Promise.all([
-        fetch('/api/ai-risk-data'),
-        fetch(`/api/organization-settings?org_id=${fetchOrgIdValue}`),
-        fetch(`/api/applications?orgId=${fetchOrgIdValue}`)
-      ]);
+      const result = await response.json();
       
-      if (!aiRiskResponse.ok) {
-        throw new Error('Failed to fetch AI risk data');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch AI risk analysis data');
       }
       
-      const aiRiskResult = await aiRiskResponse.json();
+      // Set the processed data directly from the server response
+      setAiRiskData(result.data || []);
+      setResponseTime(result.responseTime || (Date.now() - startTime));
+      setFromCache(result.fromCache || false);
       
-      if (!aiRiskResult.success || !aiRiskResult.data) {
-        setAiRiskData([]);
-        return;
+      console.log(`[PERF] ✅ AI Risk Analysis data loaded in ${result.responseTime || (Date.now() - startTime)}ms`);
+      console.log(`[PERF] Cache status: ${result.fromCache ? 'HIT' : 'MISS'}`);
+      console.log(`[PERF] Processed ${result.data?.length || 0} applications`);
+      
+      if (result.metadata) {
+        console.log(`[PERF] Metadata: ${result.metadata.totalApps} total apps, ${result.metadata.aiRiskMatches} AI risk matches, ${result.metadata.processedApps} processed apps`);
       }
-      
-      // Fetch organization settings (similar to main page)
-      let fetchedOrgSettings = getDefaultOrgSettings(); 
-      if (orgSettingsResponse.ok) {
-        const orgResult = await orgSettingsResponse.json();
-        if (orgResult.settings) {
-          // Transform snake_case from DB to camelCase for the frontend
-          fetchedOrgSettings = {
-            bucketWeights: orgResult.settings.bucket_weights,
-            aiMultipliers: orgResult.settings.ai_multipliers,
-            scopeMultipliers: orgResult.settings.scope_multipliers
-          };
-        }
-      } else {
-        console.warn('Could not fetch org settings, using defaults.');
-      }
-      
-      // Update the organization settings state
-      setOrgSettings(fetchedOrgSettings);
-      
-      // Get applications data for scope risk matching
-      let applicationsData: any[] = [];
-      if (applicationsResponse.ok) {
-        applicationsData = await applicationsResponse.json();
-      }
-      
-      // Create a mapping function to find matching application data - exact matches only
-      const findMatchingApp = (aiAppName: string) => {
-        const cleanAiAppName = aiAppName.trim().toLowerCase();
-        
-        // Only exact match (case insensitive)
-        return applicationsData.find(app => 
-          app.name?.toLowerCase().trim() === cleanAiAppName
-        ) || null;
-      };
-      
-      // Transform the data to match the AIRiskAnalysisTable interface
-      const transformedData: AIRiskData[] = aiRiskResult.data.map((app: any) => {
-        const rawAppRiskScore = parseFloat(app["Average 1"] || "0");
-        
-        // Find matching application data to get the correct scope risk
-        const matchingApp = findMatchingApp(app["Tool Name"] || "");
-        
-        // Create app object with proper riskLevel for calculation
-        const appWithRiskLevel = {
-          ...app,
-          riskLevel: matchingApp?.riskLevel || 'Medium', // Use actual app risk level or default to Medium
-          name: app["Tool Name"] || 'Unknown'
-        };
-        
-        const finalAppRiskScore = calculateFinalRiskScore(appWithRiskLevel, fetchedOrgSettings);
-        const users = matchingApp?.userCount || calculateUserCount(app);
-        const blastRadius = users * finalAppRiskScore;
-
-        return {
-          appName: app["Tool Name"] || 'Unknown',
-          category: determineCategory(app["AI-Native"]),
-          scopeRisk: matchingApp?.riskLevel || determineScopeRisk(rawAppRiskScore),
-          users: users,
-          rawAppRiskScore: rawAppRiskScore,
-          finalAppRiskScore: finalAppRiskScore,
-          blastRadius: Math.round(blastRadius * 100) / 100,
-        };
-      });
-
-      // Sort by blast radius (descending)
-      const sortedData = transformedData.sort((a, b) => b.blastRadius - a.blastRadius);
-      setAiRiskData(sortedData);
 
     } catch (error) {
       console.error('Error fetching AI risk data:', error);
-      setError('Failed to load AI risk data');
+      setError(error instanceof Error ? error.message : 'Failed to load AI risk data');
       setAiRiskData([]);
     } finally {
       setLoading(false);
@@ -359,14 +179,22 @@ export default function RiskAnalysisPage() {
         ) : (
           // Main content when loaded
           <div className="container mx-auto px-4 py-8 max-w-7xl">
-            {/* Header with back button */}
+            {/* Header */}
             <div className="mb-8">
-              
               <div className="border-b border-gray-200 pb-4">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Risk Analysis</h1>
                 <p className="text-gray-600">
                   Comprehensive analysis of AI-enabled applications and their associated risks across your organization
                 </p>
+                {/* Performance indicators */}
+                {(responseTime > 0 || fromCache) && (
+                  <div className="mt-2 text-sm text-gray-500">
+                    <span>
+                      Loaded in {responseTime}ms {fromCache && '(cached)'}
+                      {aiRiskData.length > 0 && ` • ${aiRiskData.length} applications analyzed`}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             
