@@ -204,9 +204,9 @@ export default function ShadowITDashboard() {
   const [scopeCurrentPage, setScopeCurrentPage] = useState(1)
   const itemsPerPage = 20
 
-  // Sorting state - default to AI risk score if available, otherwise risk level
-  const [sortColumn, setSortColumn] = useState<SortColumn>("aiRiskScore")
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
+  // Sorting state - will be set based on AI risk score data availability
+  const [sortColumn, setSortColumn] = useState<SortColumn>("riskLevel")
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
 
   const [userSortColumn, setUserSortColumn] = useState<"name" | "email" | "created" | "riskLevel">("name")
   const [userSortDirection, setUserSortDirection] = useState<SortDirection>("desc")
@@ -1165,6 +1165,21 @@ export default function ShadowITDashboard() {
               setOrgSettings(fetchedOrgSettings);
               setOrganizationId(fetchOrgIdValue || null);
               
+              // Set default sort based on AI scores availability
+              const hasAIScores = processedData.some(app => app.aiRiskScore !== null && app.aiRiskScore !== undefined);
+              
+              if (hasAIScores) {
+                // If we have AI scores, set sort to AI risk score high to low
+                setSortColumn("aiRiskScore");
+                setSortDirection("desc");
+                console.log(`[SORT] ✅ AI scores available: ${matchedCount} apps with scores, setting default sort to AI Risk Score (high to low)`);
+              } else {
+                // If no AI scores, fall back to risk level high to low
+                setSortColumn("riskLevel");
+                setSortDirection("desc");
+                console.log(`[SORT] ⚠️ No AI scores available, setting default sort to Risk Level (high to low)`);
+              }
+              
               // Performance logging for fresh data
               console.log(`[PERF] ✅ Complete load with AI risk scores: Apps ${responseTime}ms (cached: ${fromCache}), AI scores: ${result.responseTime}ms (cached: ${result.fromCache}), Total apps: ${processedData.length}, AI matched: ${matchedCount}`);
               
@@ -1186,6 +1201,12 @@ export default function ShadowITDashboard() {
               setApplications(processedDataWithoutAI);
               setOrgSettings(fetchedOrgSettings);
               setOrganizationId(fetchOrgIdValue || null);
+              
+              // Set default sort - no AI scores available, use risk level
+              setSortColumn("riskLevel");
+              setSortDirection("desc");
+              console.log(`[SORT] ⚠️ No AI scores available, setting default sort to Risk Level (high to low)`);
+              
               setIsLoading(false);
             }
           } else {
@@ -1206,6 +1227,12 @@ export default function ShadowITDashboard() {
             setApplications(processedDataWithoutAI);
             setOrgSettings(fetchedOrgSettings);
             setOrganizationId(fetchOrgIdValue || null);
+            
+            // Set default sort - no AI scores available, use risk level
+            setSortColumn("riskLevel");
+            setSortDirection("desc");
+            console.log(`[SORT] ⚠️ No AI scores available (API error), setting default sort to Risk Level (high to low)`);
+            
             setIsLoading(false);
           }
         } catch (aiError) {
@@ -1223,6 +1250,12 @@ export default function ShadowITDashboard() {
             setApplications(processedDataWithoutAI);
             setOrgSettings(fetchedOrgSettings);
             setOrganizationId(fetchOrgIdValue || null);
+            
+            // Set default sort - no AI scores available, use risk level
+            setSortColumn("riskLevel");
+            setSortDirection("desc");
+            console.log(`[SORT] ⚠️ No AI scores available (fetch error), setting default sort to Risk Level (high to low)`);
+            
             setIsLoading(false);
       }
 
@@ -1233,23 +1266,6 @@ export default function ShadowITDashboard() {
         if (app.category === 'Unknown') unknownIds.add(app.id);
       });
       setUncategorizedApps(unknownIds);
-
-      // Set default sort based on AI scores availability
-      const hasAIScores = currentApps.some(app => app.aiRiskScore !== null && app.aiRiskScore !== undefined);
-      
-      if (hasAIScores) {
-        // If we have AI scores and not already sorting by AI risk score, switch to it
-        if (sortColumn !== "aiRiskScore") {
-          setSortColumn("aiRiskScore");
-          setSortDirection("desc");
-        }
-      } else {
-        // If no AI scores but currently sorting by AI risk score, switch to risk level
-        if (sortColumn === "aiRiskScore") {
-          setSortColumn("riskLevel");
-          setSortDirection("desc");
-        }
-      }
       
       // Background loading will be handled by the existing pagination logic
       
