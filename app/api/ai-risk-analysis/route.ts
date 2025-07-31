@@ -7,6 +7,12 @@ import { transformRiskLevel } from '@/lib/risk-assessment';
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// Clear cache function for debugging
+function clearCache() {
+  cache.clear();
+  console.log('[PERF] Cache cleared');
+}
+
 function getCachedData(key: string) {
   const cached = cache.get(key);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -161,6 +167,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
+
+
     console.log(`[PERF] AI Risk Analysis API called for org: ${orgId}`);
 
     // Check cache first - early return for maximum performance
@@ -181,44 +189,48 @@ export async function GET(request: NextRequest) {
     const orgSettingsCacheKey = `org_settings_${orgId}`;
     let cachedOrgSettings = getCachedData(orgSettingsCacheKey);
 
-    // PHASE 1: Fetch applications with optimized query (no joins for better performance)
+    // PHASE 1: Fetch applications with user data (same approach as main applications API)
     const appsQueryStart = Date.now();
     
-    // Parallel queries for better performance
-    const [applicationsResult, userCountsResult] = await Promise.all([
-      // Get basic app data with IDs for user count mapping
-      supabaseAdmin
-        .from('applications')
-        .select('id, name, risk_level')
-        .eq('organization_id', orgId),
-      
-      // Get user counts separately using optimized aggregation
-      supabaseAdmin
-        .from('user_applications')
-        .select('application_id')
-        .eq('organization_id', orgId)
-        .neq('application_id', null)
-    ]);
+    // Get applications with user data in a single query (same as main applications API)
+    const { data: applications, error: applicationsError } = await supabaseAdmin
+      .from('applications')
+      .select(`
+        id,
+        name,
+        risk_level,
+        user_applications:user_applications!inner (
+          user:users!inner (
+            id
+          )
+        )
+      `)
+      .eq('organization_id', orgId);
 
-    if (applicationsResult.error) {
-      console.error('Error fetching applications for org:', applicationsResult.error);
+    if (applicationsError) {
+      console.error('Error fetching applications for org:', applicationsError);
       return NextResponse.json({ error: 'Failed to fetch applications' }, { status: 500 });
     }
 
-    const applications = applicationsResult.data;
+    const apps = applications || [];
     
     // Create user count map for efficient lookup
     const userCountMap = new Map<number, number>();
-    if (userCountsResult.data && !userCountsResult.error) {
-      userCountsResult.data.forEach(item => {
-        const currentCount = userCountMap.get(item.application_id) || 0;
-        userCountMap.set(item.application_id, currentCount + 1);
-      });
-    }
+    apps.forEach((app: any) => {
+      const uniqueUsers = new Set<string>();
+      if (app.user_applications) {
+        app.user_applications.forEach((ua: any) => {
+          if (ua.user && ua.user.id) {
+            uniqueUsers.add(ua.user.id);
+          }
+        });
+      }
+      userCountMap.set(app.id, uniqueUsers.size);
+    });
 
-    console.log(`[PERF] Applications query completed in ${Date.now() - appsQueryStart}ms (${applications?.length || 0} apps)`);
+    console.log(`[PERF] Applications query completed in ${Date.now() - appsQueryStart}ms (${apps?.length || 0} apps)`);
 
-    if (!applications || applications.length === 0) {
+    if (!apps || apps.length === 0) {
       setCachedData(cacheKey, []);
       return NextResponse.json({ 
         success: true, 
@@ -260,7 +272,7 @@ export async function GET(request: NextRequest) {
 
     // PHASE 3: Fetch AI risk data with optimized parallel batching
     const aiRiskQueryStart = Date.now();
-    const shadowAppNames = applications.map((app: { name: string }) => app.name);
+    const shadowAppNames = apps.map((app: { name: string }) => app.name);
     console.log(`[PERF] Fetching AI risk averages for ${shadowAppNames.length} applications...`);
 
     const BATCH_SIZE = 300; // Increased batch size for better performance
@@ -322,10 +334,10 @@ export async function GET(request: NextRequest) {
     
     // Create lookup maps for efficient matching
     const applicationsMap = new Map();
-    applications.forEach(app => {
+    apps.forEach((app: any) => {
       const normalizedName = app.name.toLowerCase().trim();
-      // Use the user count from our optimized query, or fallback to estimated count
-      const userCount = userCountMap.get(app.id) || Math.floor(Math.random() * 20) + 1;
+      // Use the actual user count from our optimized query
+      const userCount = userCountMap.get(app.id) || 0;
       
       applicationsMap.set(normalizedName, {
         riskLevel: app.risk_level || 'Medium',
@@ -348,7 +360,7 @@ export async function GET(request: NextRequest) {
       
       // Calculate final risk score on server
       const finalAppRiskScore = calculateFinalRiskScore(aiData, appData, orgSettings);
-      const users = appData?.userCount || Math.floor(Math.random() * 20) + 1;
+      const users = appData?.userCount || 0;
       const blastRadius = users * finalAppRiskScore;
 
       return {
@@ -375,7 +387,7 @@ export async function GET(request: NextRequest) {
     // Enhanced performance logging
     console.log(`[PERF] ✅ AI Risk Analysis completed in ${totalTime}ms`);
     console.log(`[PERF] 📊 Processing summary:`);
-    console.log(`[PERF]   - Total applications: ${applications.length}`);
+    console.log(`[PERF]   - Total applications: ${apps.length}`);
     console.log(`[PERF]   - AI risk data matches: ${allAIResults.length}`);
     console.log(`[PERF]   - Final processed apps: ${sortedData.length}`);
     console.log(`[PERF]   - Cache status: MISS (data cached for next request)`);
@@ -386,7 +398,7 @@ export async function GET(request: NextRequest) {
       fromCache: false,
       responseTime: totalTime,
       metadata: {
-        totalApps: applications.length,
+        totalApps: apps.length,
         aiRiskMatches: allAIResults.length,
         processedApps: sortedData.length,
         optimizations: [

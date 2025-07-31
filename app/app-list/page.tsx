@@ -525,8 +525,6 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
                 { value: "Managed", label: "Managed" },
                 { value: "Unmanaged", label: "Unmanaged" },
                 { value: "Newly discovered", label: "Newly discovered" },
-                { value: "Unknown", label: "Unknown" },
-                { value: "Ignore", label: "Ignore" },
               ],
             }
           ]}
@@ -831,6 +829,7 @@ function AppInboxContent() {
 
   // New apps tracking
   const [newAppIds, setNewAppIds] = useState<Set<string>>(new Set())
+  const [selectedAppIds, setSelectedAppIds] = useState<Set<string>>(new Set())
 
   // Get shadow org ID from cookies/localStorage on component mount
   useEffect(() => {
@@ -1156,6 +1155,37 @@ function AppInboxContent() {
     }
   }
 
+  const handleBulkRemove = async (appIds: string[]) => {
+    if (!shadowOrgId || appIds.length === 0) return
+
+    try {
+      // Remove apps one by one
+      for (const appId of appIds) {
+        await organizeApi.deleteApp(appId, shadowOrgId)
+      }
+      
+      // Update the apps list
+      const updatedApps = apps.filter((app) => !appIds.includes(app.id))
+      setApps(updatedApps)
+      
+      // Update allAppIds localStorage to reflect removal
+      const allAppIds = updatedApps.map(app => app.id)
+      localStorage.setItem(`allAppIds_${shadowOrgId}`, JSON.stringify(allAppIds))
+      
+      // Clear selection
+      setSelectedAppIds(new Set())
+      
+      // If any of the removed apps were selected in tray, close tray
+      if (selectedApp && appIds.includes(selectedApp.id)) {
+        setSelectedApp(null)
+        setIsDetailTrayOpen(false)
+      }
+    } catch (error) {
+      console.error('Error removing apps:', error)
+      // TODO: Show error message to user
+    }
+  }
+
   const currentAppIndex = selectedApp ? filteredApps.findIndex(app => app.id === selectedApp.id) : -1
 
   // Check if organization settings are configured
@@ -1221,6 +1251,33 @@ function AppInboxContent() {
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-bold text-gray-900">App List</h1>
               <div className="flex items-center gap-3">
+                {selectedAppIds.size > 0 && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm">
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Remove {selectedAppIds.size} app{selectedAppIds.size !== 1 ? 's' : ''}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-h4 text-primary-text font-semibold">Remove Apps</AlertDialogTitle>
+                        <AlertDialogDescription className="text-body text-secondary-text">
+                          Are you sure you want to remove {selectedAppIds.size} selected app{selectedAppIds.size !== 1 ? 's' : ''} from your App List? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="border-gray-200 text-secondary-text hover:bg-gray-50 font-medium">Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={() => handleBulkRemove(Array.from(selectedAppIds))}
+                          className="bg-red-600 hover:bg-red-700 text-white font-medium border-red-600 hover:border-red-700"
+                        >
+                          Remove Apps
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
                 <Button onClick={() => setIsAddDialogOpen(true)} size="sm">
                   <Plus className="h-4 w-4 mr-2" />
                   Add app
@@ -1250,7 +1307,10 @@ function AppInboxContent() {
               onViewApp={handleViewApp}
               onEditApp={handleEditApp}
               onRemoveApp={handleRemoveApp}
+              onBulkRemove={handleBulkRemove}
               newAppIds={newAppIds}
+              selectedAppIds={selectedAppIds}
+              onSelectionChange={setSelectedAppIds}
             />
           </div>
         )}

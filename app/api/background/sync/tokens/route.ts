@@ -462,7 +462,7 @@ async function processTokens(
           name: appName,
           category: 'Unknown',
           risk_level: highestRiskLevel,
-          management_status: existingApp?.management_status || 'Not specified',
+          management_status: existingApp?.management_status || 'Newly discovered',
           total_permissions: allScopesForRiskEvaluation.size,
           all_scopes: Array.from(allScopesForRiskEvaluation),
           organization_id: organization_id,

@@ -4,7 +4,9 @@ import { useState } from "react"
 import { ChevronUp, ChevronDown, Eye, Edit, ArrowUpDown, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import type { App } from "@/types/app"
@@ -16,7 +18,10 @@ interface AppTableProps {
   onViewApp: (app: App) => void
   onEditApp: (app: App) => void
   onRemoveApp: (appId: string) => void
+  onBulkRemove?: (appIds: string[]) => void
   newAppIds?: Set<string>
+  selectedAppIds?: Set<string>
+  onSelectionChange?: (selectedIds: Set<string>) => void
 }
 
 type SortField = 'name' | 'renewalDate' | 'deprovisioning' | 'managedStatus' | 'stitchflowStatus' | 'appTier' | 'appPlan' | 'planLimit' | 'licensesUsed' | 'costPerUser'
@@ -72,9 +77,19 @@ const getDaysUntilRenewal = (renewalDate: string): number => {
   }
 }
 
-export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp, newAppIds = new Set() }: AppTableProps) {
+export function AppTable({ 
+  apps, 
+  onViewApp, 
+  onEditApp, 
+  onRemoveApp, 
+  onBulkRemove,
+  newAppIds = new Set(),
+  selectedAppIds = new Set(),
+  onSelectionChange
+}: AppTableProps) {
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null)
 
   // Debug logging
   console.log('AppTable - newAppIds:', Array.from(newAppIds))
@@ -86,6 +101,44 @@ export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp, newAppIds = 
     } else {
       setSortField(field)
       setSortDirection('asc')
+    }
+  }
+
+  const handleSelection = (index: number, appId: string, isShiftClick: boolean) => {
+    if (!onSelectionChange) return
+
+    const newSelectedIds = new Set(selectedAppIds)
+
+    if (isShiftClick && lastSelectedIndex !== null) {
+      // For shift-click, we select the range from the last-clicked to the current-clicked item.
+      const start = Math.min(lastSelectedIndex, index)
+      const end = Math.max(lastSelectedIndex, index)
+      for (let i = start; i <= end; i++) {
+        newSelectedIds.add(sortedApps[i].id)
+      }
+    } else {
+      // For a regular click, we toggle the item's selection state.
+      if (newSelectedIds.has(appId)) {
+        newSelectedIds.delete(appId)
+      } else {
+        newSelectedIds.add(appId)
+      }
+      // And we set the last-clicked index for future shift-clicks.
+      setLastSelectedIndex(index)
+    }
+    
+    onSelectionChange(newSelectedIds)
+  }
+
+  const handleSelectAll = (isSelected: boolean) => {
+    if (!onSelectionChange) return
+    
+    if (isSelected) {
+      // Select all apps currently visible
+      onSelectionChange(new Set(sortedApps.map(app => app.id)))
+    } else {
+      // Deselect all
+      onSelectionChange(new Set())
     }
   }
 
@@ -233,41 +286,71 @@ export function AppTable({ apps, onViewApp, onEditApp, onRemoveApp, newAppIds = 
 
   return (
     <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 table-fixed">
+      <div className="overflow-x-auto max-w-full">
+        <table className="w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-gray-50">
             <tr>
-              <SortableHeader field="name" className="w-[15%]">App Name</SortableHeader>
-              <SortableHeader field="deprovisioning" className="w-[9%]">Deprovisioning</SortableHeader>
-              <SortableHeader field="appTier" className="w-[7%]">Tier</SortableHeader>
-              <SortableHeader field="appPlan" className="w-[9%]">Plan</SortableHeader>
+              {onSelectionChange && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[5%]">
+                  <Checkbox
+                    checked={selectedAppIds.size > 0 && selectedAppIds.size === sortedApps.length}
+                    onCheckedChange={handleSelectAll}
+                    className="ml-1"
+                  />
+                </th>
+              )}
+              <SortableHeader field="name" className="w-[20%]">App Name</SortableHeader>
+              <SortableHeader field="deprovisioning" className="w-[12%]">Deprovisioning</SortableHeader>
+              <SortableHeader field="appTier" className="w-[8%]">Tier</SortableHeader>
+              <SortableHeader field="appPlan" className="w-[10%]">Plan</SortableHeader>
               <SortableHeader field="planLimit" className="w-[8%]">Limit</SortableHeader>
               <SortableHeader field="licensesUsed" className="w-[10%]">Licenses Used</SortableHeader>
               <SortableHeader field="costPerUser" className="w-[8%]">Cost/User</SortableHeader>
-              <SortableHeader field="renewalDate" className="w-[18%]">Renewal</SortableHeader>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[16%]">
+              <SortableHeader field="renewalDate" className="w-[12%]">Renewal</SortableHeader>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[12%]">
                 Actions
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {sortedApps.map((app) => (
+            {sortedApps.map((app, index) => (
               <tr 
                 key={app.id} 
                 className={cn(
                   "hover:bg-gray-50 cursor-pointer transition-colors",
-                  newAppIds.has(app.id) && "border-2 border-orange-300"
+                  newAppIds.has(app.id) && "border-2 border-orange-300",
+                  selectedAppIds.has(app.id) && "bg-blue-50 border-blue-200"
                 )}
                 style={newAppIds.has(app.id) ? { backgroundColor: "#FFF8EB" } : {}}
                 onClick={() => onViewApp(app)}
               >
+                {onSelectionChange && (
+                  <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selectedAppIds.has(app.id)}
+                      onCheckedChange={(checked) => {
+                        handleSelection(index, app.id, false)
+                      }}
+                      className="ml-1"
+                    />
+                  </td>
+                )}
                 <td className="px-4 py-4">
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-900 flex items-center min-w-0">
-                      <span className="truncate">{app.name}</span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="truncate flex-1 cursor-help">{app.name}</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{app.name}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       {newAppIds.has(app.id) && <div className="ml-2 w-1.5 h-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       {getStitchflowBadge(app.stitchflowStatus || '')}
                       {app.department && (
                         <div className={cn(

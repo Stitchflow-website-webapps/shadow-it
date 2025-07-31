@@ -572,7 +572,7 @@ export async function GET(request: NextRequest) {
                 microsoft_app_id: appId,
                 category: existingApp?.category || 'Unknown',
                 risk_level: riskLevel,
-                management_status: existingApp?.management_status || 'Not specified',
+                management_status: existingApp?.management_status || 'Newly discovered',
                 total_permissions: allAppScopes.length,
                 all_scopes: allAppScopes,
                 user_count: Array.from(userAppScopes.values()).filter(ua => ua.appId === appId).length,

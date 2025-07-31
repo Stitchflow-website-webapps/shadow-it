@@ -39,7 +39,7 @@ const FILTER_FIELDS = [
   { value: 'owner', label: 'Owner', type: 'text' },
   { value: 'ssoEnforced', label: 'SSO Enforced', type: 'select', options: ['Yes', 'No'] },
   { value: 'deprovisioning', label: 'Deprovisioning', type: 'select', options: ['Okta SCIM', 'Azure AD federation', 'OneLogin SCIM', 'JumpCloud federation', 'Google federation', 'Workflow', 'Manual', 'Unknown'] },
-  { value: 'managedStatus', label: 'Managed Status', type: 'select', options: ['Managed', 'Unmanaged', 'Newly discovered', 'Unknown', 'Ignore'] },
+  { value: 'managedStatus', label: 'Managed Status', type: 'select', options: ['Managed', 'Unmanaged', 'Newly discovered'] },
   { value: 'stitchflowStatus', label: 'Stitchflow Status', type: 'select', options: ['Yes - API', 'Yes - CSV Sync', 'Not connected'] },
   { value: 'appTier', label: 'App Tier', type: 'select', options: ['Tier 1', 'Tier 2', 'Tier 3'] },
   { value: 'appPlan', label: 'App Plan', type: 'select', options: ['Annual Plan', 'Monthly Plan', 'N/A', 'Other'] },

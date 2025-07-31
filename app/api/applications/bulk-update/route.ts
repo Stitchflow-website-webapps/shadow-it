@@ -64,10 +64,14 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'No applications found to update' }, { status: 404 });
     }
 
-    // 2. Sync changes to the App Inbox 'apps' table
+    // 2. Sync changes to the App Inbox 'apps' table ONLY when status is "Managed"
     const integrations = await getIntegrations();
     
     for (const app of updatedApps) {
+      // Only sync to inbox if the status is "Managed"
+      if (managementStatus !== "Managed") {
+        continue;
+      }
       if (!app.organization_id) {
         console.warn(`Skipping app sync for ${app.name} because organization_id is missing.`);
         continue;

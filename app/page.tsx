@@ -97,7 +97,7 @@ type Application = {
   logoUrl?: string      // Primary logo URL
   logoUrlFallback?: string // Fallback logo URL
   created_at?: string   // Added created_at field
-  managementStatus: "Managed" | "Unmanaged" | "Newly discovered" | "Unknown" | "Ignore" | "Not specified"
+  managementStatus: "Managed" | "Unmanaged" | "Newly discovered"
   ownerEmail: string
   notes: string
   scopes: string[]
@@ -190,6 +190,7 @@ export default function ShadowITDashboard() {
   const [applications, setApplications] = useState<Application[]>([])
   const [searchInput, setSearchInput] = useState("")
   const [filterCategory, setFilterCategory] = useState<string | null>(null)
+  const [filterTime, setFilterTime] = useState<string | null>(null)
   const [filterRisk, setFilterRisk] = useState<string | null>(null)
   const [filterManaged, setFilterManaged] = useState<string | null>(null)
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null)
@@ -1439,9 +1440,34 @@ export default function ShadowITDashboard() {
     const effectiveCategory = appCategories[app.id] || app.category;
     const matchesCategory = filterCategory ? effectiveCategory === filterCategory : true
 
-    return matchesSearch && matchesRisk && matchesManaged && matchesCategory
+    // Time filtering logic
+    const matchesTime = filterTime ? (() => {
+      if (!app.created_at) return false;
+      
+      const appDate = new Date(app.created_at);
+      const now = new Date();
+      
+      switch (filterTime) {
+        case "This Week":
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          return appDate >= weekAgo;
+        case "This Month":
+          return appDate.getMonth() === now.getMonth() && appDate.getFullYear() === now.getFullYear();
+        case "Last Month":
+          const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          return appDate >= lastMonth && appDate < thisMonth;
+        case "Older":
+          const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          return appDate < currentMonth;
+        default:
+          return true; // "All Time"
+      }
+    })() : true;
+
+    return matchesSearch && matchesRisk && matchesManaged && matchesCategory && matchesTime
   })
-  }, [applications, searchTerm, filterRisk, filterManaged, filterCategory, appCategories]) // Added appCategories to dependency array
+  }, [applications, searchTerm, filterRisk, filterManaged, filterCategory, filterTime, appCategories]) // Added appCategories to dependency array
 
   // Get unique categories for the filter dropdown
   const uniqueCategories = [...new Set(applications.map(app => appCategories[app.id] || app.category).filter((category): category is string => category !== null))].sort()
@@ -1752,9 +1778,9 @@ export default function ShadowITDashboard() {
         throw new Error(errorData.error || 'Failed to update status in main table');
       }
 
-      // Then, sync this change to the 'organize_apps' table
+      // Then, sync this change to the 'organize_apps' table ONLY when status is "Managed"
       const shadowOrgId = getOrgIdFromCookieOrUrl();
-      if (shadowOrgId) {
+      if (shadowOrgId && newStatus === "Managed") {
         const syncResponse = await fetch('/api/organize/apps/by-name', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -2499,7 +2525,7 @@ export default function ShadowITDashboard() {
         riskReason: "Based on scope permissions and usage patterns",
         totalPermissions: item["Total Scopes"],
         scopeVariance: { userGroups: Math.floor(Math.random() * 5) + 1, scopeGroups: Math.floor(Math.random() * 3) + 1 },
-        managementStatus: item.Status as "Managed" | "Unmanaged" | "Newly discovered" | "Unknown" | "Ignore" | "Not specified",
+        managementStatus: item.Status as "Managed" | "Unmanaged" | "Newly discovered",
         ownerEmail: "",
         logoUrl: logoUrls.primary,
         logoUrlFallback: logoUrls.fallback, // Assign fallback logo URL
@@ -3098,7 +3124,7 @@ export default function ShadowITDashboard() {
                     <p className="text-lg font-medium text-gray-800">
                       {(() => {
                         // Count how many filters are active
-                        const activeFilters = [filterCategory, filterRisk, filterManaged].filter(Boolean).length;
+                        const activeFilters = [filterCategory, filterTime, filterRisk, filterManaged].filter(Boolean).length;
                         
                         if (activeFilters === 0) {
                           return `We found ${sortedApps.length} applications.`;
@@ -3108,6 +3134,9 @@ export default function ShadowITDashboard() {
                         if (activeFilters === 1) {
                           if (filterCategory) {
                             return `We found ${sortedApps.length} applications in ${filterCategory}.`;
+                          }
+                          if (filterTime) {
+                            return `We found ${sortedApps.length} applications added ${filterTime.toLowerCase()}.`;
                           }
                           if (filterRisk) {
                             return `We found ${sortedApps.length} ${filterRisk.toLowerCase()} risk applications.`;
@@ -3217,9 +3246,34 @@ export default function ShadowITDashboard() {
                             </select>
                           </div>
                           
-                            <div className="min-w-[150px]">
-                              <div className="flex justify-between items-center mb-1">
-                                <Label className="text-sm font-medium text-gray-700">Scope Risk</Label>
+                          <div className="min-w-[150px]">
+                            <div className="flex justify-between items-center mb-1">
+                              <Label className="text-sm font-medium text-gray-700">Added time</Label>
+                              {filterTime && (
+                                <button
+                                  onClick={() => setFilterTime(null)}
+                                  className="text-xs text-primary hover:text-primary/80 transition-colors"
+                                >
+                                  Clear filter
+                                </button>
+                              )}
+                            </div>
+                            <select
+                              className="w-full h-10 px-3 rounded-lg border border-gray-200 bg-white mt-1 text-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                              value={filterTime || ""}
+                              onChange={(e) => setFilterTime(e.target.value || null)}
+                            >
+                              <option value="">All Time</option>
+                              <option value="This Week">This Week</option>
+                              <option value="This Month">This Month</option>
+                              <option value="Last Month">Last Month</option>
+                              <option value="Older">Older</option>
+                            </select>
+                          </div>
+                          
+                          <div className="min-w-[150px]">
+                            <div className="flex justify-between items-center mb-1">
+                              <Label className="text-sm font-medium text-gray-700">Scope Risk</Label>
                                 {filterRisk && (
                                   <button
                                     onClick={() => setFilterRisk(null)}
@@ -3262,9 +3316,6 @@ export default function ShadowITDashboard() {
                               <option value="Managed">Managed</option>
                               <option value="Unmanaged">Unmanaged</option>
                               <option value="Newly discovered">Newly discovered</option>
-                              <option value="Unknown">Unknown</option>
-                              <option value="Ignore">Ignore</option>
-                              <option value="Not specified">Not specified</option>
                             </select>
                           </div>
                         </div>
@@ -3289,8 +3340,6 @@ export default function ShadowITDashboard() {
                                   <SelectItem value="Managed">Managed</SelectItem>
                                   <SelectItem value="Unmanaged">Unmanaged</SelectItem>
                                   <SelectItem value="Newly discovered">Newly discovered</SelectItem>
-                                  <SelectItem value="Unknown">Unknown</SelectItem>
-                                  <SelectItem value="Ignore">Ignore</SelectItem>
                                 </SelectContent>
                               </Select>
                               <Button variant="ghost" size="sm" onClick={() => setSelectedAppIds(new Set())} disabled={isBulkUpdateInProgress}>
@@ -3537,9 +3586,6 @@ export default function ShadowITDashboard() {
                                       <option value="Managed">Managed</option>
                                       <option value="Unmanaged">Unmanaged</option>
                                       <option value="Newly discovered">Newly discovered</option>
-                                      <option value="Unknown">Unknown</option>
-                                      <option value="Ignore">Ignore</option>
-                                      <option value="Not specified">Not specified</option>
                                     </select>
                                   </TableCell>
                                   <TableCell>
@@ -3732,9 +3778,6 @@ export default function ShadowITDashboard() {
                             <option value="Managed">Managed</option>
                             <option value="Unmanaged">Unmanaged</option>
                             <option value="Newly discovered">Newly discovered</option>
-                            <option value="Unknown">Unknown</option>
-                            <option value="Ignore">Ignore</option>
-                            <option value="Not specified">Not specified</option>
                           </select>
                         </div>
                       </div>
@@ -3929,9 +3972,6 @@ export default function ShadowITDashboard() {
                               <option value="Managed">Managed</option>
                               <option value="Unmanaged">Unmanaged</option>
                               <option value="Newly discovered">Newly discovered</option>
-                              <option value="Unknown">Unknown</option>
-                              <option value="Ignore">Ignore</option>
-                              <option value="Not specified">Not specified</option>
                             </select>
                           </div>
                         </div>
@@ -4028,9 +4068,6 @@ export default function ShadowITDashboard() {
                               <option value="Managed">Managed</option>
                               <option value="Unmanaged">Unmanaged</option>
                               <option value="Newly discovered">Newly discovered</option>
-                              <option value="Unknown">Unknown</option>
-                              <option value="Ignore">Ignore</option>
-                              <option value="Not specified">Not specified</option>
                             </select>
                           </div>
                         </div>
@@ -4237,7 +4274,7 @@ export default function ShadowITDashboard() {
                   <h2 className="text-lg font-medium text-gray-800">
                     {(() => {
                       // Count how many filters are active
-                      const activeFilters = [filterCategory, filterRisk, filterManaged].filter(Boolean).length;
+                                              const activeFilters = [filterCategory, filterTime, filterRisk, filterManaged].filter(Boolean).length;
                       
                       if (activeFilters === 0) {
                         return `We found ${sortedApps.length} applications.`;
@@ -4327,9 +4364,6 @@ export default function ShadowITDashboard() {
                             <option value="Managed">Managed</option>
                             <option value="Unmanaged">Unmanaged</option>
                             <option value="Newly discovered">Newly discovered</option>
-                            <option value="Unknown">Unknown</option>
-                            <option value="Ignore">Ignore</option>
-                            <option value="Not specified">Not specified</option>
                           </select>
                         </div>
                       </div>
