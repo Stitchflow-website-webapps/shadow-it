@@ -150,6 +150,11 @@ export default function RiskAnalysisPage() {
     router.push('/api/auth/session/logout');
   };
 
+  const handleAppClick = (appName: string) => {
+    // Navigate to main dashboard with the app selected and AI risk scoring tab active
+    router.push(`/?selectedApp=${encodeURIComponent(appName)}&defaultTab=ai-risk-scoring`);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
@@ -217,9 +222,10 @@ export default function RiskAnalysisPage() {
             {!error && (
               <AIRiskAnalysisTable 
                 data={aiRiskData}
-                highlightTopRows={5}
+                highlightTopRows={0}
                 orgSettings={orgSettings}
                 className="w-full"
+                onAppClick={handleAppClick}
               />
             )}
           </div>

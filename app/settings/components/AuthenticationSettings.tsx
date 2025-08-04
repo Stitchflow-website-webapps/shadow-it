@@ -22,6 +22,7 @@ export default function AuthenticationSettings() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{type: "success" | "error", text: string} | null>(null);
 
   // Get shadow org ID and user email from cookies/localStorage on component mount
@@ -116,6 +117,7 @@ export default function AuthenticationSettings() {
         // Also save to localStorage for consistency
         localStorage.setItem(`orgSettings_${shadowOrgId}`, JSON.stringify(tempSettings));
         setOrgSettings(tempSettings);
+        setIsEditMode(false);
         setSaveMessage({type: "success", text: "Settings saved successfully!"});
       } else {
         throw new Error('Organization ID not found');
@@ -128,8 +130,15 @@ export default function AuthenticationSettings() {
     }
   };
 
+  const handleEdit = () => {
+    setIsEditMode(true);
+    setTempSettings(orgSettings || {identityProvider: '', emailProvider: ''});
+    setSaveMessage(null);
+  };
+
   const handleReset = () => {
     setTempSettings(orgSettings || {identityProvider: '', emailProvider: ''});
+    setIsEditMode(false);
     setSaveMessage(null);
   };
 
@@ -176,6 +185,7 @@ export default function AuthenticationSettings() {
                   <Select 
                     value={tempSettings.identityProvider} 
                     onValueChange={(value) => setTempSettings(prev => ({ ...prev, identityProvider: value }))}
+                    disabled={!isEditMode}
                   >
                     <SelectTrigger id="identity-provider" className="w-full">
                       <SelectValue placeholder="Select identity provider" />
@@ -196,6 +206,7 @@ export default function AuthenticationSettings() {
                   <Select 
                     value={tempSettings.emailProvider} 
                     onValueChange={(value) => setTempSettings(prev => ({ ...prev, emailProvider: value }))}
+                    disabled={!isEditMode}
                   >
                     <SelectTrigger id="email-provider" className="w-full">
                       <SelectValue placeholder="Select email provider" />
@@ -220,16 +231,26 @@ export default function AuthenticationSettings() {
 
                 {/* Action Buttons */}
                 <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                  <Button 
-                    variant="outline" 
-                    onClick={handleReset}
-                    disabled={isSaving}
-                  >
-                    Reset
-                  </Button>
+                  {!isEditMode ? (
+                    <Button 
+                      variant="outline" 
+                      onClick={handleEdit}
+                      disabled={isSaving}
+                    >
+                      Edit
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      onClick={handleReset}
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </Button>
+                  )}
                   <Button 
                     onClick={handleSave}
-                    disabled={isSaving || (!tempSettings.identityProvider || !tempSettings.emailProvider)}
+                    disabled={isSaving || !isEditMode || (!tempSettings.identityProvider || !tempSettings.emailProvider)}
                     className="bg-[#363338] hover:bg-[#2A262B] text-white"
                   >
                     {isSaving ? 'Saving...' : 'Save Settings'}

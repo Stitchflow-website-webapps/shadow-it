@@ -1296,6 +1296,33 @@ export default function ShadowITDashboard() {
     };
   }, []); // Empty dependency array means this runs once on mount
   
+  // Handle query parameters for app selection and default tab
+  useEffect(() => {
+    if (typeof window !== 'undefined' && applications.length > 0) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const selectedAppName = urlParams.get('selectedApp');
+      const defaultTabParam = urlParams.get('defaultTab');
+      
+      if (selectedAppName) {
+        // Find the app by name
+        const app = applications.find(app => app.name === selectedAppName);
+        if (app) {
+          setSelectedAppId(app.id);
+          setIsUserModalOpen(true);
+          
+          // Set default tab if provided
+          if (defaultTabParam) {
+            setDefaultTab(defaultTabParam);
+          }
+          
+          // Clean up URL parameters after handling them
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+        }
+      }
+    }
+  }, [applications]); // Dependency on applications so it runs when apps are loaded
+  
   // Add effect to handle page visibility changes (when coming back from other pages)
   useEffect(() => {
     const handleVisibilityChange = () => {

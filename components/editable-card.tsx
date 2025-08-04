@@ -360,7 +360,16 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
               </Select>
               {field.disabled && field.disabledText && (
                 <div className="mt-2">
-                  <Badge variant="outline" className="bg-amber-50 border-amber-200 text-amber-800 font-normal">
+                  <Badge 
+                    variant="outline" 
+                    className="bg-amber-50 border-amber-200 text-amber-800 font-normal cursor-pointer hover:bg-amber-100 transition-colors"
+                    onClick={() => {
+                      // Navigate to IdP settings page
+                      if (typeof window !== 'undefined') {
+                        window.location.href = '/settings?view=authentication';
+                      }
+                    }}
+                  >
                     {field.disabledText}
                   </Badge>
                 </div>

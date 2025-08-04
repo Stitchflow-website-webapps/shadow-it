@@ -43,13 +43,15 @@ interface AIRiskAnalysisTableProps {
   highlightColor?: string
   className?: string
   orgSettings: OrgSettings
+  onAppClick?: (appName: string) => void
 }
 
 export function AIRiskAnalysisTable({
   data,
   highlightTopRows = 5,
   className = "",
-  orgSettings
+  orgSettings,
+  onAppClick
 }: AIRiskAnalysisTableProps) {
   const [sortKey, setSortKey] = useState<keyof AIRiskData>("finalAppRiskScore")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
@@ -237,7 +239,10 @@ export function AIRiskAnalysisTable({
                           <TooltipProvider>
                             <Tooltip delayDuration={300}>
                               <TooltipTrigger asChild>
-                                <div className="font-medium cursor-pointer hover:text-primary transition-colors truncate max-w-[120px]">
+                                <div 
+                                  className="font-medium cursor-pointer hover:text-primary transition-colors truncate max-w-[120px]"
+                                  onClick={() => onAppClick?.(row.appName)}
+                                >
                                   {row.appName.length > 15 ? row.appName.substring(0, 15) + "..." : row.appName}
                                 </div>
                               </TooltipTrigger>
@@ -314,7 +319,7 @@ export function AIRiskAnalysisTable({
                             <Tooltip delayDuration={300}>
                               <TooltipTrigger asChild>
                                 <div className="font-normal text-gray-900 cursor-pointer">
-                                  {formatCellValue(row.blastRadius, 'number')}
+                                  {Math.round(row.blastRadius)}
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent side="right" className="p-2">

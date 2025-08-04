@@ -5,8 +5,8 @@ import { Suspense } from 'react';
 import Script from 'next/script';
 
 export const metadata: Metadata = {
-  title: 'Free Shadow IT Scanner for SaaS & AI Apps | Stitchflow',
-  description: 'With Shadow IT discovery tool, detect all apps tied to your Google Workspace/Microsoft 365, see risky apps ranked by OAuth scopes & get alerts for risky usage',
+  title: 'Discover and organize managed apps | Stitchflow',
+  description: 'A space to discover, organize and track your managed apps\' details',
   generator: 'Stitchflow',
 }
 
