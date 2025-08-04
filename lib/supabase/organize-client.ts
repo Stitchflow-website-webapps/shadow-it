@@ -7,6 +7,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 export interface OrganizeOrganization {
   id: string
   name: string
+  domain: string | null
   created_at: string
   updated_at: string
   identity_provider: string

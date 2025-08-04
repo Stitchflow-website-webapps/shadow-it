@@ -63,6 +63,122 @@ interface ProcessedApp {
   allScopes: Set<string>;
 }
 
+// Helper function to clean app names for webhook
+function cleanAppNameForWebhook(appName: string): string {
+  if (!appName) return appName;
+  
+  // Remove all commas from the app name
+  let cleanedName = appName.replace(/,/g, '');
+  
+  // Remove "Inc" or "Inc." at the end of the app name (case insensitive)
+  cleanedName = cleanedName.replace(/\s+inc\.?$/i, '');
+  
+  return cleanedName.trim();
+}
+
+// Helper function to send webhook notification after sync completion
+async function sendSyncWebhookNotification(organizationId: string, syncId: string, skipWebhook: boolean = false) {
+  // Skip webhook if in test mode
+  if (skipWebhook) {
+    console.log(`[Microsoft Sync ${syncId}] 🧪 TEST MODE: Skipping webhook notification`);
+    return;
+  }
+
+  // Check if this is a first-time sync (only send webhook for new organizations)
+  try {
+    const { data: syncRecord } = await supabaseAdmin
+      .from('sync_status')
+      .select('created_at')
+      .eq('id', syncId)
+      .single();
+
+    if (!syncRecord) {
+      console.log(`[Microsoft Sync ${syncId}] No sync record found, skipping webhook`);
+      return;
+    }
+
+    // Check if there are any previous completed syncs for this organization
+    const { data: previousSyncs } = await supabaseAdmin
+      .from('sync_status')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('status', 'COMPLETED')
+      .neq('id', syncId)
+      .limit(1);
+
+    if (previousSyncs && previousSyncs.length > 0) {
+      console.log(`[Microsoft Sync ${syncId}] Previous syncs exist, skipping webhook (not first-time signup)`);
+      return;
+    }
+
+    console.log(`[Microsoft Sync ${syncId}] First-time sync detected, proceeding with webhook notification`);
+  } catch (error) {
+    console.error(`[Microsoft Sync ${syncId}] Error checking sync history:`, error);
+    return;
+  }
+
+  const webhookUrl = 'https://primary-production-d8d8.up.railway.app/webhook-test/66c5e72a-c46f-4aeb-8c3a-4e4bc7c9caf4';
+  const webhookUsername = process.env.WEBHOOK_USERNAME || 'SF-AI-DB';
+  const webhookPassword = process.env.WEBHOOK_PASSWORD || 'SF-AI-DB';
+
+  try {
+    console.log(`[Microsoft Sync ${syncId}] Preparing webhook notification for organization: ${organizationId}`);
+
+    // Fetch applications for this organization
+    const { data: applications, error: appsError } = await supabaseAdmin
+      .from('applications')
+      .select('name')
+      .eq('organization_id', organizationId);
+
+    if (appsError) {
+      console.error(`[Microsoft Sync ${syncId}] Error fetching applications for webhook:`, appsError);
+      return;
+    }
+
+    if (!applications || applications.length === 0) {
+      console.log(`[Microsoft Sync ${syncId}] No applications found for webhook notification`);
+      return;
+    }
+
+    // Clean app names and create comma-separated string
+    const cleanedAppNames = applications
+      .map(app => cleanAppNameForWebhook(app.name))
+      .filter(name => name && name.trim()) // Remove empty names
+      .join(', ');
+
+    // Prepare webhook payload in the correct format
+    const webhookPayload = {
+      org_id: organizationId,
+      tool_name: cleanedAppNames
+    };
+
+    // Create basic auth header
+    const basicAuth = Buffer.from(`${webhookUsername}:${webhookPassword}`).toString('base64');
+
+    console.log(`[Microsoft Sync ${syncId}] Sending webhook notification with ${applications.length} applications`);
+
+    // Send webhook request
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${basicAuth}`,
+      },
+      body: JSON.stringify(webhookPayload),
+    });
+
+    if (response.ok) {
+      const responseData = await response.text();
+      console.log(`[Microsoft Sync ${syncId}] Webhook notification sent successfully:`, responseData);
+    } else {
+      const errorData = await response.text();
+      console.error(`[Microsoft Sync ${syncId}] Failed to send webhook notification. Status: ${response.status}, Response: ${errorData}`);
+    }
+  } catch (error) {
+    console.error(`[Microsoft Sync ${syncId}] Error sending webhook notification:`, error);
+  }
+}
+
 async function sendSyncCompletedEmail(userEmail: string, syncId?: string) {
   const transactionalId = process.env.LOOPS_TRANSACTIONAL_ID_SYNC_COMPLETED;
   const loopsApiKey = process.env.LOOPS_API_KEY;
@@ -673,6 +789,14 @@ export async function GET(request: NextRequest) {
       })();
     }
 
+    // Send webhook notification after sync completion
+    try {
+      await sendSyncWebhookNotification(syncRecord.organization_id, syncRecord.id);
+    } catch (webhookError) {
+      console.error(`❌ Error sending webhook notification:`, webhookError);
+      // Don't throw - webhook failure shouldn't break the sync
+    }
+
     console.log('🎉 Microsoft sync completed successfully');
     return NextResponse.json({ 
       success: true, 
@@ -1053,6 +1177,14 @@ async function processMicrosoftData(
 
     if (syncInfo?.user_email) {
       await sendSyncCompletedEmail(syncInfo.user_email, sync_id);
+    }
+
+    // Send webhook notification after sync completion
+    try {
+      await sendSyncWebhookNotification(organization_id, sync_id);
+    } catch (webhookError) {
+      console.error(`❌ Error sending webhook notification:`, webhookError);
+      // Don't throw - webhook failure shouldn't break the sync
     }
 
     console.log(`[Microsoft ${sync_id}] Microsoft sync processing completed successfully`);

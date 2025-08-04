@@ -2731,7 +2731,7 @@ export default function ShadowITDashboard() {
             {/* Left side - Sign in */}
             <div className="space-y-8 p-8">
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold">Sign in to continue</h2>
+                <h2 className="text-2xl font-bold">Sign in to CContinue</h2>
                 <p className="text-sm text-muted-foreground">
                 Connect with your org admin account to begin using the app
                 </p>
@@ -2922,7 +2922,7 @@ export default function ShadowITDashboard() {
   // If not authenticated, only show login modal
   if (!isAuthenticated()) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#fafafa] flex items-center justify-center">
         <Dialog open={showLoginModal} onOpenChange={() => {}}>
           <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden font-inter">
             <div className="space-y-8 p-8">

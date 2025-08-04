@@ -525,6 +525,7 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
                 { value: "Managed", label: "Managed" },
                 { value: "Unmanaged", label: "Unmanaged" },
                 { value: "Newly discovered", label: "Newly discovered" },
+                { value: "Unknown", label: "Unknown" },
               ],
             }
           ]}

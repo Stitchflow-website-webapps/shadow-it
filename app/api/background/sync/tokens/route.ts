@@ -152,6 +152,122 @@ function extractScopesFromToken(token: any): string[] {
   return Array.from(scopes);
 }
 
+// Helper function to clean app names for webhook
+function cleanAppNameForWebhook(appName: string): string {
+  if (!appName) return appName;
+  
+  // Remove all commas from the app name
+  let cleanedName = appName.replace(/,/g, '');
+  
+  // Remove "Inc" or "Inc." at the end of the app name (case insensitive)
+  cleanedName = cleanedName.replace(/\s+inc\.?$/i, '');
+  
+  return cleanedName.trim();
+}
+
+// Helper function to send webhook notification after sync completion
+async function sendSyncWebhookNotification(organizationId: string, syncId: string, skipWebhook: boolean = false) {
+  // Skip webhook if in test mode
+  if (skipWebhook) {
+    console.log(`[Tokens Sync ${syncId}] 🧪 TEST MODE: Skipping webhook notification`);
+    return;
+  }
+
+  // Check if this is a first-time sync (only send webhook for new organizations)
+  try {
+    const { data: syncRecord } = await supabaseAdmin
+      .from('sync_status')
+      .select('created_at')
+      .eq('id', syncId)
+      .single();
+
+    if (!syncRecord) {
+      console.log(`[Tokens Sync ${syncId}] No sync record found, skipping webhook`);
+      return;
+    }
+
+    // Check if there are any previous completed syncs for this organization
+    const { data: previousSyncs } = await supabaseAdmin
+      .from('sync_status')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('status', 'COMPLETED')
+      .neq('id', syncId)
+      .limit(1);
+
+    if (previousSyncs && previousSyncs.length > 0) {
+      console.log(`[Tokens Sync ${syncId}] Previous syncs exist, skipping webhook (not first-time signup)`);
+      return;
+    }
+
+    console.log(`[Tokens Sync ${syncId}] First-time sync detected, proceeding with webhook notification`);
+  } catch (error) {
+    console.error(`[Tokens Sync ${syncId}] Error checking sync history:`, error);
+    return;
+  }
+
+  const webhookUrl = process.env.WEBHOOK_URL || 'https://primary-production-d8d8.up.railway.app/webhook-test/66c5e72a-c46f-4aeb-8c3a-4e4bc7c9caf4';
+  const webhookUsername = process.env.WEBHOOK_USERNAME || 'SF-AI-DB';
+  const webhookPassword = process.env.WEBHOOK_PASSWORD || 'SF-AI-DB';
+
+  try {
+    console.log(`[Tokens Sync ${syncId}] Preparing webhook notification for organization: ${organizationId}`);
+
+    // Fetch applications for this organization
+    const { data: applications, error: appsError } = await supabaseAdmin
+      .from('applications')
+      .select('name')
+      .eq('organization_id', organizationId);
+
+    if (appsError) {
+      console.error(`[Tokens Sync ${syncId}] Error fetching applications for webhook:`, appsError);
+      return;
+    }
+
+    if (!applications || applications.length === 0) {
+      console.log(`[Tokens Sync ${syncId}] No applications found for webhook notification`);
+      return;
+    }
+
+    // Clean app names and create comma-separated string
+    const cleanedAppNames = applications
+      .map(app => cleanAppNameForWebhook(app.name))
+      .filter(name => name && name.trim()) // Remove empty names
+      .join(', ');
+
+    // Prepare webhook payload in the correct format
+    const webhookPayload = {
+      org_id: organizationId,
+      tool_name: cleanedAppNames
+    };
+
+    // Create basic auth header
+    const basicAuth = Buffer.from(`${webhookUsername}:${webhookPassword}`).toString('base64');
+
+    console.log(`[Tokens Sync ${syncId}] Sending webhook notification with ${applications.length} applications`);
+
+    // Send webhook request
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${basicAuth}`,
+      },
+      body: JSON.stringify(webhookPayload),
+    });
+
+    if (response.ok) {
+      const responseData = await response.text();
+      console.log(`[Tokens Sync ${syncId}] Webhook notification sent successfully:`, responseData);
+    } else {
+      const errorData = await response.text();
+      console.error(`[Tokens Sync ${syncId}] Failed to send webhook notification. Status: ${response.status}, Response: ${errorData}`);
+    }
+  } catch (error) {
+    console.error(`[Tokens Sync ${syncId}] Error sending webhook notification:`, error);
+  }
+}
+
 async function sendSyncCompletedEmail(userEmail: string, syncId?: string, skipEmail: boolean = false) {
   // Skip email if in test mode
   if (skipEmail) {
@@ -643,6 +759,15 @@ async function processTokens(
       }).catch(error => {
         console.warn(`[Tokens ${sync_id}] Error triggering categorization:`, error);
       });
+
+      // Send webhook notification even when no relations are processed
+      try {
+        await sendSyncWebhookNotification(organization_id, sync_id, skipEmail);
+      } catch (webhookError) {
+        console.error(`[Tokens ${sync_id}] Error sending webhook notification:`, webhookError);
+        // Don't throw - webhook failure shouldn't break the sync
+      }
+
       return;
     }
 
@@ -703,6 +828,14 @@ async function processTokens(
         console.warn(`[Tokens ${sync_id}] Error triggering categorization:`, error);
       });
 
+      // Send webhook notification after all processing is complete
+      try {
+        await sendSyncWebhookNotification(organization_id, sync_id, skipEmail);
+      } catch (webhookError) {
+        console.error(`[Tokens ${sync_id}] Error sending webhook notification:`, webhookError);
+        // Don't throw - webhook failure shouldn't break the sync
+      }
+
       // Log final resource usage
       monitor.logResourceUsage(`Tokens ${sync_id} COMPLETE`);
 
@@ -723,6 +856,14 @@ async function processTokens(
       }).catch(error => {
         console.warn(`[Tokens ${sync_id}] Error triggering categorization:`, error);
       });
+
+      // Send webhook notification even when there are issues
+      try {
+        await sendSyncWebhookNotification(organization_id, sync_id, skipEmail);
+      } catch (webhookError) {
+        console.error(`[Tokens ${sync_id}] Error sending webhook notification:`, webhookError);
+        // Don't throw - webhook failure shouldn't break the sync
+      }
     }
   } catch (error: any) {
     console.error(`[Tokens ${sync_id}] Error in token processing:`, error);
