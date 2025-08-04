@@ -208,7 +208,7 @@ export async function GET(request: Request) {
         }
         
         // Preserve management status (prefer non-default values)
-        if (app.management_status && app.management_status !== 'Not specified') {
+        if (app.management_status && app.management_status !== 'Newly discovered') {
           managementStatus = app.management_status;
         }
         
@@ -291,26 +291,27 @@ export async function GET(request: Request) {
   }
 }
 
-function transformManagementStatus(status: string): 'Managed' | 'Unmanaged' | 'Newly discovered' | 'Unknown' | 'Ignore' | 'Not specified' {
-  const validStatuses: ('Managed' | 'Unmanaged' | 'Newly discovered' | 'Unknown' | 'Ignore' | 'Not specified')[] = [
+function transformManagementStatus(status: string): 'Managed' | 'Unmanaged' | 'Newly discovered' {
+  const validStatuses: ('Managed' | 'Unmanaged' | 'Newly discovered')[] = [
     'Managed',
     'Unmanaged',
-    'Newly discovered',
-    'Unknown',
-    'Ignore',
-    'Not specified'
+    'Newly discovered'
   ];
 
   if (validStatuses.includes(status as any)) {
-    return status as 'Managed' | 'Unmanaged' | 'Newly discovered' | 'Unknown' | 'Ignore' | 'Not specified';
+    return status as 'Managed' | 'Unmanaged' | 'Newly discovered';
   }
   
-  // Handle backward compatibility
-  if (status === 'Needs Review') {
-    return 'Not specified';
+  // Handle backward compatibility - map old statuses to new ones
+  if (status === 'Needs Review' || status === 'Not specified' || status === 'Unknown') {
+    return 'Newly discovered';
   }
   
-  return 'Not specified';
+  if (status === 'Ignore') {
+    return 'Unmanaged';
+  }
+  
+  return 'Newly discovered';
 }
 
 function calculateScopeVariance(userApplications: any[] | null): { userGroups: number; scopeGroups: number } {
@@ -341,7 +342,7 @@ export async function PATCH(request: Request) {
     
     if (managementStatus) {
       // Validate management status
-      if (!['Managed', 'Unmanaged', 'Newly discovered', 'Unknown', 'Ignore', 'Not specified'].includes(managementStatus)) {
+      if (!['Managed', 'Unmanaged', 'Newly discovered'].includes(managementStatus)) {
         return NextResponse.json({ error: 'Invalid management status' }, { status: 400 });
       }
       updateData.management_status = managementStatus;

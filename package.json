@@ -51,7 +51,7 @@
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
     "crypto-browserify": "^3.12.1",
-    "csv-parse": "^6.0.0",
+    "csv-parse": "^6.1.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.5.0",
     "embla-carousel-react": "8.5.1",

@@ -5,7 +5,7 @@ import { determineRiskLevel, transformRiskLevel } from '@/lib/risk-assessment';
 import { categorizeApplication } from '@/app/api/background/sync/categorize/route';
 import { EmailService } from '@/app/lib/services/email-service';
 import { ResourceMonitor, processInBatchesWithResourceControl } from '@/lib/resource-monitor';
-import { syncNewAppsToOrganizeInbox } from '@/lib/organize-app-sync';
+
 
 /**
  * A test cron job for a specific organization.
@@ -522,14 +522,10 @@ export async function POST(request: Request) {
       await processNewUserDigestReport(org, newRelationships, googleUserMap);
     }
 
-    // **NEW: Sync newly discovered apps to the organize-app-inbox schema**
+    // **NEW: Send webhook notification for newly discovered apps**
     if (newApps.length > 0) {
-      // We need to transform the newApps data to match the expected interface for the sync function.
-      const appsToSync = newApps.map(app => ({
-        name: app.name,
-        management_status: 'Newly discovered' // This is the default status for new apps.
-      }));
-      await syncNewAppsToOrganizeInbox(appsToSync, org);
+      const newAppNames = newApps.map(app => app.name);
+      await sendNewAppsWebhookNotification(org.id, newAppNames, orgDomain);
     }
 
     return NextResponse.json({
@@ -974,5 +970,65 @@ async function processRelationshipsOnly(orgDomain: string | null) {
       error: 'Failed to process relationships',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
+  }
+} 
+
+// **NEW: Helper function to clean app names for webhook**
+function cleanAppNameForWebhook(appName: string): string {
+  // Remove all commas and "Inc" or "Inc." suffixes (case insensitive)
+  let cleanedName = appName.replace(/,/g, '');
+  cleanedName = cleanedName.replace(/\s*Inc\.?$/i, '');
+  
+  return cleanedName.trim();
+}
+
+// **NEW: Helper function to send webhook notification for newly discovered apps**
+async function sendNewAppsWebhookNotification(organizationId: string, newAppNames: string[], orgDomain: string) {
+  if (!newAppNames || newAppNames.length === 0) {
+    console.log(`[TestCron:${orgDomain}] No new apps to send via webhook`);
+    return;
+  }
+
+  const webhookUrl = process.env.WEBHOOK_URL || 'https://primary-production-d8d8.up.railway.app/webhook-test/66c5e72a-c46f-4aeb-8c3a-4e4bc7c9caf4';
+  const webhookUsername = process.env.WEBHOOK_USERNAME || 'SF-AI-DB';
+  const webhookPassword = process.env.WEBHOOK_PASSWORD || 'SF-AI-DB';
+
+  try {
+    // Clean app names and create comma-separated string
+    const cleanedAppNames = newAppNames
+      .map(appName => cleanAppNameForWebhook(appName))
+      .filter(name => name && name.trim()) // Remove empty names
+      .join(', ');
+
+    // Prepare webhook payload in the correct format
+    const webhookPayload = {
+      org_id: organizationId,
+      tool_name: cleanedAppNames
+    };
+
+    // Create basic auth header
+    const basicAuth = Buffer.from(`${webhookUsername}:${webhookPassword}`).toString('base64');
+
+    console.log(`[TestCron:${orgDomain}] Sending webhook notification for ${newAppNames.length} newly discovered apps`);
+
+    // Send webhook request
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${basicAuth}`,
+      },
+      body: JSON.stringify(webhookPayload),
+    });
+
+    if (response.ok) {
+      const responseData = await response.text();
+      console.log(`[TestCron:${orgDomain}] Webhook notification sent successfully:`, responseData);
+    } else {
+      const errorData = await response.text();
+      console.error(`[TestCron:${orgDomain}] Failed to send webhook notification. Status: ${response.status}, Response: ${errorData}`);
+    }
+  } catch (error) {
+    console.error(`[TestCron:${orgDomain}] Error sending webhook notification:`, error);
   }
 } 

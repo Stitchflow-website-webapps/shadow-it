@@ -87,10 +87,7 @@ ALTER TABLE shadow_it.applications
         array[
           'Managed'::text,
           'Unmanaged'::text,
-          'Newly discovered'::text,
-          'Unknown'::text,
-          'Ignore'::text,
-          'Not specified'::text
+          'Newly discovered'::text
         ]
       )
     )

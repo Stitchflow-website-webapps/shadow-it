@@ -83,7 +83,7 @@ type Application = {
   logoUrl?: string      // Primary logo URL
   logoUrlFallback?: string // Fallback logo URL
   created_at?: string   // Added created_at field
-  managementStatus: "Managed" | "Unmanaged" | "Newly discovered" | "Unknown" | "Ignore" | "Not specified"
+  managementStatus: "Managed" | "Unmanaged" | "Newly discovered"
   ownerEmail: string
   notes: string
   scopes: string[]
@@ -681,7 +681,7 @@ export default function ShadowITDashboard() {
             ],
             "Total Scopes": 3,
             "Risk": "Low",
-            "Status": "Not specified"
+            "Status": "Newly discovered"
           },
           {
             "Apps": "Strapi Cloud",
@@ -754,7 +754,7 @@ export default function ShadowITDashboard() {
             ],
             "Total Scopes": 4,
             "Risk": "High",
-            "Status": "Not specified"
+            "Status": "Newly discovered"
           },
           {
             "Apps": "Canva",
@@ -791,7 +791,7 @@ export default function ShadowITDashboard() {
             ],
             "Total Scopes": 4,
             "Risk": "Medium",
-            "Status": "Not specified"
+            "Status": "Newly discovered"
           }
         ]
         
@@ -1272,7 +1272,7 @@ export default function ShadowITDashboard() {
       // Update local state immediately after successful API call
       setApplications((prevApps) =>
         prevApps.map((app) =>
-          app.id === appId ? { ...app, managementStatus: newStatus as "Managed" | "Unmanaged" | "Newly discovered" | "Unknown" | "Ignore" | "Not specified" } : app,
+          app.id === appId ? { ...app, managementStatus: newStatus as "Managed" | "Unmanaged" | "Newly discovered" } : app,
         ),
       );
 
@@ -2014,7 +2014,7 @@ export default function ShadowITDashboard() {
         riskReason: "Based on scope permissions and usage patterns",
         totalPermissions: item["Total Scopes"],
         scopeVariance: { userGroups: Math.floor(Math.random() * 5) + 1, scopeGroups: Math.floor(Math.random() * 3) + 1 },
-        managementStatus: item.Status as "Managed" | "Unmanaged" | "Newly discovered" | "Unknown" | "Ignore" | "Not specified",
+        managementStatus: item.Status as "Managed" | "Unmanaged" | "Newly discovered",
         ownerEmail: "",
         logoUrl: logoUrls.primary,
         logoUrlFallback: logoUrls.fallback, // Assign fallback logo URL
@@ -2771,9 +2771,6 @@ export default function ShadowITDashboard() {
                               <option value="Managed">Managed</option>
                               <option value="Unmanaged">Unmanaged</option>
                               <option value="Newly discovered">Newly discovered</option>
-                              <option value="Unknown">Unknown</option>
-                              <option value="Ignore">Ignore</option>
-                              <option value="Not specified">Not specified</option>
                             </select>
                           </div>
                         </div>
@@ -2976,9 +2973,6 @@ export default function ShadowITDashboard() {
                                       <option value="Managed">Managed</option>
                                       <option value="Unmanaged">Unmanaged</option>
                                       <option value="Newly discovered">Newly discovered</option>
-                                      <option value="Unknown">Unknown</option>
-                                      <option value="Ignore">Ignore</option>
-                                      <option value="Not specified">Not specified</option>
                                     </select>
                                   </TableCell>
                                   <TableCell>
@@ -3171,9 +3165,6 @@ export default function ShadowITDashboard() {
                             <option value="Managed">Managed</option>
                             <option value="Unmanaged">Unmanaged</option>
                             <option value="Newly discovered">Newly discovered</option>
-                            <option value="Unknown">Unknown</option>
-                            <option value="Ignore">Ignore</option>
-                            <option value="Not specified">Not specified</option>
                           </select>
                         </div>
                       </div>
@@ -3368,9 +3359,6 @@ export default function ShadowITDashboard() {
                               <option value="Managed">Managed</option>
                               <option value="Unmanaged">Unmanaged</option>
                               <option value="Newly discovered">Newly discovered</option>
-                              <option value="Unknown">Unknown</option>
-                              <option value="Ignore">Ignore</option>
-                              <option value="Not specified">Not specified</option>
                             </select>
                           </div>
                         </div>
@@ -3467,9 +3455,6 @@ export default function ShadowITDashboard() {
                               <option value="Managed">Managed</option>
                               <option value="Unmanaged">Unmanaged</option>
                               <option value="Newly discovered">Newly discovered</option>
-                              <option value="Unknown">Unknown</option>
-                              <option value="Ignore">Ignore</option>
-                              <option value="Not specified">Not specified</option>
                             </select>
                           </div>
                         </div>
@@ -3841,9 +3826,6 @@ export default function ShadowITDashboard() {
                             <option value="Managed">Managed</option>
                             <option value="Unmanaged">Unmanaged</option>
                             <option value="Newly discovered">Newly discovered</option>
-                            <option value="Unknown">Unknown</option>
-                            <option value="Ignore">Ignore</option>
-                            <option value="Not specified">Not specified</option>
                           </select>
                         </div>
                       </div>
