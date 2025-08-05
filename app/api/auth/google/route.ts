@@ -655,41 +655,14 @@ export async function GET(request: Request) {
       throw orgError;
     }
 
-    // Create corresponding organization in organize-app-inbox schema
-    try {
-      const { error: organizeOrgError } = await organizeSupabaseAdmin
-        .from('organizations')
-        .upsert({
-          name: `${userInfo.hd}'s Organization`,
-          identity_provider: '',
-          email_provider: '',
-          shadow_org_id: org.id,
-          updated_at: new Date().toISOString()
-        }, { 
-          onConflict: 'shadow_org_id',
-          ignoreDuplicates: false 
-        });
-      
-      if (organizeOrgError) {
-        console.error('Error creating organize-app-inbox organization:', organizeOrgError);
-        // Don't throw - this shouldn't block the main auth flow
-      } else {
-        console.log('Created organize-app-inbox organization for:', userInfo.hd);
-      }
-    } catch (organizeError) {
-      console.error('Error in organize-app-inbox org creation:', organizeError);
-      // Don't throw - this shouldn't block the main auth flow
-    }
-
-    // DOMAIN MAPPING LOGIC: Check if domain already exists in organize-app-inbox schema
-    // This happens AFTER shadow IT org creation to ensure shadow IT functionality doesn't break
+    // DOMAIN MAPPING LOGIC: Check if domain already exists in organize-app-inbox schema first
+    // This prevents creating duplicate organizations for the same domain
     try {
       // Check if there's an existing organize-app-inbox organization with the same domain
       const { data: existingOrganizeOrgByDomain } = await organizeSupabaseAdmin
         .from('organizations')
         .select('id, name, domain, shadow_org_id')
         .eq('domain', userInfo.hd)
-        .neq('shadow_org_id', org.id) // Exclude the one we just created
         .single();
       
       if (existingOrganizeOrgByDomain) {
@@ -714,11 +687,31 @@ export async function GET(request: Request) {
           console.log('Successfully mapped existing organize-app-inbox organization to shadow IT org for domain:', userInfo.hd);
         }
       } else {
-        console.log('No additional domain mapping needed for:', userInfo.hd);
+        // No existing organization found, create a new one
+        console.log('No existing organize-app-inbox organization found for domain:', userInfo.hd, '- creating new one');
+        
+        const { error: organizeOrgError } = await organizeSupabaseAdmin
+          .from('organizations')
+          .insert({
+            name: `${userInfo.hd}'s Organization`,
+            domain: userInfo.hd,
+            identity_provider: '',
+            email_provider: '',
+            shadow_org_id: org.id,
+            updated_at: new Date().toISOString(),
+            created_at: new Date().toISOString()
+          });
+        
+        if (organizeOrgError) {
+          console.error('Error creating organize-app-inbox organization:', organizeOrgError);
+          // Don't throw - this shouldn't block the main auth flow
+        } else {
+          console.log('Created new organize-app-inbox organization for:', userInfo.hd);
+        }
       }
     } catch (error) {
-      // No existing organization found by domain, which is expected
-      console.log('No existing organize-app-inbox organization found for domain mapping:', userInfo.hd);
+      console.error('Error in organize-app-inbox org domain mapping:', error);
+      // Don't throw - this shouldn't block the main auth flow
     }
 
     // Check if we already have data for this organization 
