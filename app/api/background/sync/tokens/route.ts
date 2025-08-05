@@ -229,11 +229,10 @@ async function sendSyncWebhookNotification(organizationId: string, syncId: strin
       return;
     }
 
-    // Clean app names and create comma-separated string
+    // Clean app names and create array of strings
     const cleanedAppNames = applications
       .map(app => cleanAppNameForWebhook(app.name))
-      .filter(name => name && name.trim()) // Remove empty names
-      .join(', ');
+      .filter(name => name && name.trim()); // Remove empty names
 
     // Prepare webhook payload in the correct format
     const webhookPayload = {
