@@ -206,7 +206,7 @@ async function sendSyncWebhookNotification(organizationId: string, syncId: strin
     return;
   }
 
-  const webhookUrl = process.env.WEBHOOK_URL || 'https://primary-production-d8d8.up.railway.app/webhook-test/66c5e72a-c46f-4aeb-8c3a-4e4bc7c9caf4';
+  const webhookUrl = process.env.WEBHOOK_URL || 'https://primary-production-d8d8.up.railway.app/webhook/66c5e72a-c46f-4aeb-8c3a-4e4bc7c9caf4';
   const webhookUsername = process.env.WEBHOOK_USERNAME || 'SF-AI-DB';
   const webhookPassword = process.env.WEBHOOK_PASSWORD || 'SF-AI-DB';
 
