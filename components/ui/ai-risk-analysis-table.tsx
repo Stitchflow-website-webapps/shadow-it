@@ -255,7 +255,12 @@ export function AIRiskAnalysisTable({
                         
                         {/* Category */}
                         <TableCell>
-                          <CategoryBadge category={row.category} />
+                          <div 
+                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => onAppClick?.(row.appName)}
+                          >
+                            <CategoryBadge category={row.category} />
+                          </div>
                         </TableCell>
                         
                         {/* Scope Risk */}
@@ -263,12 +268,16 @@ export function AIRiskAnalysisTable({
                           <TooltipProvider>
                             <Tooltip delayDuration={300}>
                               <TooltipTrigger asChild>
-                                <div className="flex items-center justify-center">
+                                <div 
+                                  className="flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={() => onAppClick?.(row.appName)}
+                                >
                                   <RiskBadge level={row.scopeRisk} />
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent side="right" className="p-2">
                                 <p className="text-sm">Scope Risk Level: {row.scopeRisk}</p>
+                                <p className="text-xs text-gray-500 mt-1">Click to view app details</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -276,7 +285,10 @@ export function AIRiskAnalysisTable({
                         
                         {/* Users */}
                         <TableCell className="text-center">
-                          <div className="font-medium text-gray-900">
+                          <div 
+                            className="font-medium text-gray-900 cursor-pointer hover:text-primary transition-colors"
+                            onClick={() => onAppClick?.(row.appName)}
+                          >
                             {formatCellValue(row.users, 'number')}
                           </div>
                         </TableCell>
@@ -286,12 +298,16 @@ export function AIRiskAnalysisTable({
                           <TooltipProvider>
                             <Tooltip delayDuration={300}>
                               <TooltipTrigger asChild>
-                                <div className="font-medium text-gray-900 cursor-pointer">
+                                <div 
+                                  className="font-medium text-gray-900 cursor-pointer hover:text-primary transition-colors"
+                                  onClick={() => onAppClick?.(row.appName)}
+                                >
                                   {formatCellValue(row.rawAppRiskScore, 'number')}
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent side="right" className="p-2">
                                 <p className="text-sm">Base risk score before amplification factors</p>
+                                <p className="text-xs text-gray-500 mt-1">Click to view app details</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -302,12 +318,16 @@ export function AIRiskAnalysisTable({
                           <TooltipProvider>
                             <Tooltip delayDuration={300}>
                               <TooltipTrigger asChild>
-                                <div className="font-medium text-gray-900 cursor-pointer">
+                                <div 
+                                  className="font-medium text-gray-900 cursor-pointer hover:text-primary transition-colors"
+                                  onClick={() => onAppClick?.(row.appName)}
+                                >
                                   {formatCellValue(row.finalAppRiskScore, 'number')}
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent side="right" className="p-2">
                                 <p className="text-sm">Final score after AI and scope multipliers</p>
+                                <p className="text-xs text-gray-500 mt-1">Click to view app details</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -318,7 +338,10 @@ export function AIRiskAnalysisTable({
                           <TooltipProvider>
                             <Tooltip delayDuration={300}>
                               <TooltipTrigger asChild>
-                                <div className="font-normal text-gray-900 cursor-pointer">
+                                <div 
+                                  className="font-normal text-gray-900 cursor-pointer hover:text-primary transition-colors"
+                                  onClick={() => onAppClick?.(row.appName)}
+                                >
                                   {Math.round(row.blastRadius)}
                                 </div>
                               </TooltipTrigger>
@@ -326,6 +349,7 @@ export function AIRiskAnalysisTable({
                                 <p className="text-sm">
                                   Organizational impact: {row.users} users × {row.finalAppRiskScore.toFixed(1)} final score
                                 </p>
+                                <p className="text-xs text-gray-500 mt-1">Click to view app details</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>

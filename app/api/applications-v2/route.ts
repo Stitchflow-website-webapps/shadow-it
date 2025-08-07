@@ -159,6 +159,7 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const includeUsers = searchParams.get('includeUsers') === 'true';
+    const cacheBuster = searchParams.get('cb');
 
     if (!orgId) {
       return NextResponse.json({ error: 'Organization ID is required' }, { status: 400 });
@@ -170,7 +171,7 @@ export async function GET(request: Request) {
     const cacheKey = `apps_${orgId}_${page}_${limit}_${includeUsers}`;
     const cachedData = getCachedData(cacheKey);
     
-    if (cachedData && !includeUsers) {
+    if (cachedData && !includeUsers && !cacheBuster) {
       console.log(`[PERF] Cache hit for ${cacheKey}, returning cached data in ${Date.now() - startTime}ms`);
       return NextResponse.json({
         applications: cachedData,

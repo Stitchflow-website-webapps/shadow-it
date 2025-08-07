@@ -493,30 +493,155 @@ async function mergeDuplicateApplications(orgId: string) {
         continue;
       }
 
-      // Move all user_applications from duplicates to the primary app
-      for (const duplicateApp of duplicatesToMerge) {
-        // Update user_applications to point to the primary app
-        const { error: relationError } = await supabaseAdmin
-          .from('user_applications')
-          .update({ application_id: primaryApp.id })
-          .eq('application_id', duplicateApp.id);
+      // **OPTIMIZED: Bulk process all user_applications for this app group**
+      const duplicateAppIds = duplicatesToMerge.map(app => app.id);
+      
+      // Get all user_applications for all duplicate apps in one query
+      const { data: allDuplicateUserApps, error: fetchAllError } = await supabaseAdmin
+        .from('user_applications')
+        .select('user_id, application_id, scopes, created_at')
+        .in('application_id', duplicateAppIds);
 
-        if (relationError) {
-          console.error(`Error updating user_applications for app ${duplicateApp.id}:`, relationError);
-          continue;
+      if (fetchAllError) {
+        console.error(`Error fetching user_applications for duplicate apps:`, fetchAllError);
+        continue;
+      }
+
+      // Get existing relationships for primary app in one query
+      const { data: existingPrimaryRelations, error: fetchPrimaryError } = await supabaseAdmin
+        .from('user_applications')
+        .select('user_id, id, scopes')
+        .eq('application_id', primaryApp.id);
+
+      if (fetchPrimaryError) {
+        console.error(`Error fetching existing primary app relations:`, fetchPrimaryError);
+        continue;
+      }
+
+      // Create maps for fast lookup
+      const existingRelationsMap = new Map();
+      existingPrimaryRelations?.forEach(rel => {
+        existingRelationsMap.set(rel.user_id, rel);
+      });
+
+      const userScopeMap = new Map();
+      allDuplicateUserApps?.forEach(userApp => {
+        const userId = userApp.user_id;
+        if (!userScopeMap.has(userId)) {
+          userScopeMap.set(userId, {
+            scopes: new Set(),
+            created_at: userApp.created_at
+          });
         }
+        
+        // Combine all scopes for this user across all duplicate apps
+        const userScopes = userApp.scopes || [];
+        userScopes.forEach((scope: string) => {
+          userScopeMap.get(userId).scopes.add(scope);
+        });
+        
+        // Keep earliest created_at
+        if (userApp.created_at < userScopeMap.get(userId).created_at) {
+          userScopeMap.get(userId).created_at = userApp.created_at;
+        }
+      });
 
-        // Delete the duplicate application
-        const { error: deleteError } = await supabaseAdmin
-          .from('applications')
-          .delete()
-          .eq('id', duplicateApp.id);
+      // Prepare bulk operations
+      const updatesToProcess: any[] = [];
+      const insertsToProcess: any[] = [];
 
-        if (deleteError) {
-          console.error(`Error deleting duplicate app ${duplicateApp.id}:`, deleteError);
+      userScopeMap.forEach((userData, userId) => {
+        const existingRelation = existingRelationsMap.get(userId);
+        const allScopes = Array.from(userData.scopes);
+        
+        if (existingRelation) {
+          // Merge with existing relationship
+          const existingScopes = new Set(existingRelation.scopes || []);
+          allScopes.forEach(scope => existingScopes.add(scope));
+          
+          updatesToProcess.push({
+            id: existingRelation.id,
+            scopes: Array.from(existingScopes),
+            updated_at: new Date().toISOString()
+          });
         } else {
-          deletedCount++;
+          // Create new relationship
+          insertsToProcess.push({
+            user_id: userId,
+            application_id: primaryApp.id,
+            scopes: allScopes,
+            created_at: userData.created_at,
+            updated_at: new Date().toISOString()
+          });
         }
+      });
+
+      // Execute bulk operations
+      if (updatesToProcess.length > 0) {
+        console.log(`Processing ${updatesToProcess.length} scope updates for "${appName}"`);
+        // Use upsert for bulk updates (more efficient than individual updates)
+        const { error: bulkUpdateError } = await supabaseAdmin
+          .from('user_applications')
+          .upsert(updatesToProcess, { 
+            onConflict: 'id',
+            ignoreDuplicates: false 
+          });
+        
+        if (bulkUpdateError) {
+          console.error(`Error bulk updating user_applications:`, bulkUpdateError);
+          // Fallback to individual updates if bulk fails
+          for (const update of updatesToProcess) {
+            const { error: updateError } = await supabaseAdmin
+              .from('user_applications')
+              .update({
+                scopes: update.scopes,
+                updated_at: update.updated_at
+              })
+              .eq('id', update.id);
+            
+            if (updateError) {
+              console.error(`Error updating user_application ${update.id}:`, updateError);
+            }
+          }
+        }
+      }
+
+      if (insertsToProcess.length > 0) {
+        console.log(`Creating ${insertsToProcess.length} new user-app relationships for "${appName}"`);
+        // Process inserts in batches of 100 to avoid payload limits
+        for (let i = 0; i < insertsToProcess.length; i += 100) {
+          const batch = insertsToProcess.slice(i, i + 100);
+          const { error: insertError } = await supabaseAdmin
+            .from('user_applications')
+            .insert(batch);
+          
+          if (insertError) {
+            console.error(`Error inserting user_applications batch ${i}-${i + batch.length}:`, insertError);
+          }
+        }
+      }
+
+      // Delete all user_applications for duplicate apps in one operation
+      const { error: deleteRelationsError } = await supabaseAdmin
+        .from('user_applications')
+        .delete()
+        .in('application_id', duplicateAppIds);
+
+      if (deleteRelationsError) {
+        console.error(`Error deleting user_applications for duplicate apps:`, deleteRelationsError);
+        continue;
+      }
+
+      // Delete all duplicate applications in one operation
+      const { error: deleteAppsError } = await supabaseAdmin
+        .from('applications')
+        .delete()
+        .in('id', duplicateAppIds);
+
+      if (deleteAppsError) {
+        console.error(`Error deleting duplicate apps:`, deleteAppsError);
+      } else {
+        deletedCount += duplicateAppIds.length;
       }
 
       mergedCount++;

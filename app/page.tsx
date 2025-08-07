@@ -203,6 +203,7 @@ export default function ShadowITDashboard() {
   const [currentPage, setCurrentPage] = useState(1)
   const [userCurrentPage, setUserCurrentPage] = useState(1)
   const [scopeCurrentPage, setScopeCurrentPage] = useState(1)
+  const [totalRecords, setTotalRecords] = useState(0);
   const itemsPerPage = 20
 
   // Sorting state - will be set based on AI risk score data availability
@@ -754,6 +755,7 @@ export default function ShadowITDashboard() {
           // Get exact total count and hasMore from the new metadata structure
           const hasMore = firstPageData.metadata?.hasMore;
           const totalRecords = firstPageData.metadata?.totalRecords;
+          setTotalRecords(totalRecords);
           console.log(`[PERF] ✅ First page loaded: ${rawData.length} apps, hasMore: ${hasMore}, totalRecords: ${totalRecords}`);
           
           // PHASE 2: Load first 4 more pages immediately (total 5 pages)
@@ -1093,7 +1095,7 @@ export default function ShadowITDashboard() {
                   return { ...appWithRiskLevels, aiRiskScore };
                 }
                 
-                // Method 2: Normalized match
+                // Method 2: Normalized match (case-insensitive, trimmed)
                 const normalizedAppName = app.name.toLowerCase().trim();
                 aiRiskScore = aiRiskScoreMap.get(normalizedAppName);
                 if (aiRiskScore !== undefined) {
@@ -1111,15 +1113,37 @@ export default function ShadowITDashboard() {
                   }
                 }
                 
-                // Method 4: Flexible contains-based search
+                // Method 4: IMPROVED precise matching - avoid false positives
+                // Only match if there's a substantial overlap and length similarity
                 for (const [key, value] of aiRiskScoreMap.entries()) {
                   const normalizedKey = key.toLowerCase().trim();
-                  if (normalizedKey.length > 3 && (
-                    normalizedAppName.includes(normalizedKey) || 
-                    normalizedKey.includes(normalizedAppName)
-                  )) {
-                    matchedCount++;
-                    return { ...appWithRiskLevels, aiRiskScore: value };
+                  
+                  // Skip if either string is too short to be meaningful
+                  if (normalizedKey.length <= 3 || normalizedAppName.length <= 3) {
+                    continue;
+                  }
+                  
+                  // Calculate similarity more precisely
+                  const lengthDiff = Math.abs(normalizedKey.length - normalizedAppName.length);
+                  const maxLength = Math.max(normalizedKey.length, normalizedAppName.length);
+                  const lengthSimilarity = 1 - (lengthDiff / maxLength);
+                  
+                  // Only consider matches if:
+                  // 1. Length similarity is high (>= 0.7) OR
+                  // 2. One is clearly a subset of the other with high confidence
+                  const isSubstring = normalizedAppName.includes(normalizedKey) || normalizedKey.includes(normalizedAppName);
+                  
+                  if (isSubstring) {
+                    // For substring matches, require high length similarity to avoid false positives
+                    // e.g., "GPT for Gmail" should not match "GPT for Gmail™ - AI Writer"
+                    if (lengthSimilarity >= 0.8) {
+                      matchedCount++;
+                      console.log(`[AI_RISK] 🎯 Matched "${app.name}" with AI data for "${key}" (similarity: ${(lengthSimilarity * 100).toFixed(1)}%)`);
+                      return { ...appWithRiskLevels, aiRiskScore: value };
+                    } else {
+                      // Log potential false positive that was avoided
+                      console.log(`[AI_RISK] ❌ Avoided false match: "${app.name}" vs "${key}" (similarity: ${(lengthSimilarity * 100).toFixed(1)}% - too low)`);
+                    }
                   }
                 }
                 
@@ -3154,27 +3178,27 @@ export default function ShadowITDashboard() {
                         const activeFilters = [filterCategory, filterTime, filterRisk, filterManaged].filter(Boolean).length;
                         
                         if (activeFilters === 0) {
-                          return `We found ${sortedApps.length} applications.`;
+                          return `We found ${totalRecords} applications.`;
                         }
 
                         // Single filter messages
                         if (activeFilters === 1) {
                           if (filterCategory) {
-                            return `We found ${sortedApps.length} applications in ${filterCategory}.`;
+                            return `We found ${totalRecords} applications in ${filterCategory}.`;
                           }
                           if (filterTime) {
-                            return `We found ${sortedApps.length} applications added ${filterTime.toLowerCase()}.`;
+                            return `We found ${totalRecords} applications added ${filterTime.toLowerCase()}.`;
                           }
                           if (filterRisk) {
-                            return `We found ${sortedApps.length} ${filterRisk.toLowerCase()} risk applications.`;
+                            return `We found ${totalRecords} ${filterRisk.toLowerCase()} risk applications.`;
                           }
                           if (filterManaged) {
-                            return `We found ${sortedApps.length} ${filterManaged.toLowerCase()} applications.`;
+                            return `We found ${totalRecords} ${filterManaged.toLowerCase()} applications.`;
                           }
                         }
 
                         // Multiple filters - show total count with "filtered"
-                        return `We found ${sortedApps.length} filtered applications.`;
+                        return `We found ${totalRecords} filtered applications.`;
                       })()}
                     </p>
                   </div>
@@ -4304,24 +4328,24 @@ export default function ShadowITDashboard() {
                                               const activeFilters = [filterCategory, filterTime, filterRisk, filterManaged].filter(Boolean).length;
                       
                       if (activeFilters === 0) {
-                        return `We found ${sortedApps.length} applications.`;
+                        return `We found ${totalRecords} applications.`;
                       }
 
                       // Single filter messages
                       if (activeFilters === 1) {
                         if (filterCategory) {
-                          return `We found ${sortedApps.length} applications in ${filterCategory}.`;
+                          return `We found ${totalRecords} applications in ${filterCategory}.`;
                         }
                         if (filterRisk) {
-                          return `We found ${sortedApps.length} ${filterRisk.toLowerCase()} risk applications.`;
+                          return `We found ${totalRecords} ${filterRisk.toLowerCase()} risk applications.`;
                         }
                         if (filterManaged) {
-                          return `We found ${sortedApps.length} ${filterManaged.toLowerCase()} applications.`;
+                          return `We found ${totalRecords} ${filterManaged.toLowerCase()} applications.`;
                         }
                       }
 
                       // Multiple filters - show total count with "filtered"
-                      return `We found ${sortedApps.length} filtered applications.`;
+                      return `We found ${totalRecords} filtered applications.`;
                     })()}
                   </h2>
                 </div>

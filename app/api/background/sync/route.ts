@@ -42,6 +42,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // **NEW: Check for existing running syncs to prevent duplicates**
+    const { data: existingSync, error: checkError } = await supabaseAdmin
+      .from('sync_status')
+      .select('id, status, created_at')
+      .eq('organization_id', organization_id)
+      .eq('status', 'IN_PROGRESS')
+      .neq('id', sync_id) // Don't count the current sync
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (checkError) {
+      console.error(`[MAIN SYNC] Error checking for existing syncs:`, checkError);
+    } else if (existingSync && existingSync.length > 0) {
+      const existingSyncRecord = existingSync[0];
+      const timeDiff = Date.now() - new Date(existingSyncRecord.created_at).getTime();
+      const minutesAgo = Math.floor(timeDiff / (1000 * 60));
+      
+      // If there's a sync running that started less than 30 minutes ago, skip this one
+      if (minutesAgo < 30) {
+        console.log(`⚠️ [MAIN SYNC] Duplicate sync detected! Existing sync ${existingSyncRecord.id} started ${minutesAgo} minutes ago. Skipping sync ${sync_id}.`);
+        
+        // Mark this sync as completed with a note about duplication
+        await supabaseAdmin
+          .from('sync_status')
+          .update({
+            status: 'COMPLETED',
+            progress: 100,
+            message: `⚠️ Duplicate sync skipped - another sync (${existingSyncRecord.id}) was already running`,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sync_id);
+          
+        return NextResponse.json({ 
+          success: true,
+          skipped: true,
+          reason: 'duplicate_sync_detected',
+          existingSyncId: existingSyncRecord.id,
+          message: `Sync skipped - duplicate of ${existingSyncRecord.id}`
+        });
+      } else {
+        console.log(`[MAIN SYNC] Found old sync (${minutesAgo} minutes ago), proceeding with new sync`);
+      }
+    }
+
     // Log initial resource usage
     monitor.logResourceUsage('MAIN SYNC START');
 
