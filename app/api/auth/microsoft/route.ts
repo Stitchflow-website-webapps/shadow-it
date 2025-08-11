@@ -560,41 +560,14 @@ export async function GET(request: NextRequest) {
       org = newOrg;
     }
 
-    // Create corresponding organization in organize-app-inbox schema
-    try {
-      const { error: organizeOrgError } = await organizeSupabaseAdmin
-        .from('organizations')
-        .upsert({
-          name: `${emailDomain}'s Organization`,
-          identity_provider: '',
-          email_provider: '',
-          shadow_org_id: org.id,
-          updated_at: new Date().toISOString()
-        }, { 
-          onConflict: 'shadow_org_id',
-          ignoreDuplicates: false 
-        });
-      
-      if (organizeOrgError) {
-        console.error('Error creating organize-app-inbox organization:', organizeOrgError);
-        // Don't throw - this shouldn't block the main auth flow
-      } else {
-        console.log('Created organize-app-inbox organization for:', emailDomain);
-      }
-    } catch (organizeError) {
-      console.error('Error in organize-app-inbox org creation:', organizeError);
-      // Don't throw - this shouldn't block the main auth flow
-    }
-
-    // DOMAIN MAPPING LOGIC: Check if domain already exists in organize-app-inbox schema
-    // This happens AFTER shadow IT org creation to ensure shadow IT functionality doesn't break
+    // DOMAIN MAPPING LOGIC: Check if domain already exists in organize-app-inbox schema first
+    // This prevents creating duplicate organizations for the same domain
     try {
       // Check if there's an existing organize-app-inbox organization with the same domain
       const { data: existingOrganizeOrgByDomain } = await organizeSupabaseAdmin
         .from('organizations')
         .select('id, name, domain, shadow_org_id')
         .eq('domain', emailDomain)
-        .neq('shadow_org_id', org.id) // Exclude the one we just created
         .single();
       
       if (existingOrganizeOrgByDomain) {
@@ -619,11 +592,31 @@ export async function GET(request: NextRequest) {
           console.log('Successfully mapped existing organize-app-inbox organization to shadow IT org for domain:', emailDomain);
         }
       } else {
-        console.log('No additional domain mapping needed for:', emailDomain);
+        // No existing organization found, create a new one
+        console.log('No existing organize-app-inbox organization found for domain:', emailDomain, '- creating new one');
+        
+        const { error: organizeOrgError } = await organizeSupabaseAdmin
+          .from('organizations')
+          .insert({
+            name: `${emailDomain}'s Organization`,
+            domain: emailDomain,
+            identity_provider: '',
+            email_provider: '',
+            shadow_org_id: org.id,
+            updated_at: new Date().toISOString(),
+            created_at: new Date().toISOString()
+          });
+        
+        if (organizeOrgError) {
+          console.error('Error creating organize-app-inbox organization:', organizeOrgError);
+          // Don't throw - this shouldn't block the main auth flow
+        } else {
+          console.log('Created new organize-app-inbox organization for:', emailDomain);
+        }
       }
     } catch (error) {
-      // No existing organization found by domain, which is expected
-      console.log('No existing organize-app-inbox organization found for domain mapping:', emailDomain);
+      console.error('Error in organize-app-inbox org domain mapping:', error);
+      // Don't throw - this shouldn't block the main auth flow
     }
 
     // Check if this organization already has completed a successful sync
@@ -696,10 +689,44 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(authUrl);
     }
 
-    // If the user and organization already exist with completed sync and no data issues, 
-    // redirect directly to the dashboard instead of the loading page
-    if (!isNewUser && existingCompletedSync && !needsFreshSync) {
-      console.log('Returning user with healthy completed sync detected, skipping loading page');
+    // Check if organization already has application data (similar to Google auth logic)
+    const { data: existingApplicationData } = await supabaseAdmin
+      .from('applications')
+      .select('id')
+      .eq('organization_id', org.id)
+      .limit(1);
+      
+    const hasExistingOrgData = existingApplicationData && existingApplicationData.length > 0;
+    
+    // If the organization already has data and sync is healthy, redirect to dashboard
+    // This applies to both new and existing users from the same organization
+    if (hasExistingOrgData && existingCompletedSync && !needsFreshSync) {
+      console.log('Organization has existing data and healthy sync - redirecting to dashboard (applies to new admins from existing orgs)');
+      
+      // Still update/store tokens for this user in sync_status for future background jobs
+      try {
+        await supabaseAdmin
+          .from('sync_status')
+          .upsert({
+            organization_id: org.id,
+            user_email: userData.userPrincipalName,
+            status: 'COMPLETED',
+            progress: 100,
+            message: 'Admin tokens stored for existing organization',
+            access_token: access_token,
+            refresh_token: refresh_token,
+            token_expiry: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null,
+            updated_at: new Date().toISOString()
+          }, { 
+            onConflict: 'organization_id,user_email',
+            ignoreDuplicates: false 
+          });
+        console.log('Updated sync_status with new admin tokens for existing org');
+      } catch (error) {
+        console.error('Error updating sync_status with admin tokens:', error);
+        // Don't block the flow if this fails
+      }
+      
       const dashboardUrl = new URL('https://www.stitchflow.com/tools/shadow-it-scan/');
       
       // Generate a unique session ID for the user
