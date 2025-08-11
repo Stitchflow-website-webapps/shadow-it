@@ -689,10 +689,44 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(authUrl);
     }
 
-    // If the user and organization already exist with completed sync and no data issues, 
-    // redirect directly to the dashboard instead of the loading page
-    if (!isNewUser && existingCompletedSync && !needsFreshSync) {
-      console.log('Returning user with healthy completed sync detected, skipping loading page');
+    // Check if organization already has application data (similar to Google auth logic)
+    const { data: existingApplicationData } = await supabaseAdmin
+      .from('applications')
+      .select('id')
+      .eq('organization_id', org.id)
+      .limit(1);
+      
+    const hasExistingOrgData = existingApplicationData && existingApplicationData.length > 0;
+    
+    // If the organization already has data and sync is healthy, redirect to dashboard
+    // This applies to both new and existing users from the same organization
+    if (hasExistingOrgData && existingCompletedSync && !needsFreshSync) {
+      console.log('Organization has existing data and healthy sync - redirecting to dashboard (applies to new admins from existing orgs)');
+      
+      // Still update/store tokens for this user in sync_status for future background jobs
+      try {
+        await supabaseAdmin
+          .from('sync_status')
+          .upsert({
+            organization_id: org.id,
+            user_email: userData.userPrincipalName,
+            status: 'COMPLETED',
+            progress: 100,
+            message: 'Admin tokens stored for existing organization',
+            access_token: access_token,
+            refresh_token: refresh_token,
+            token_expiry: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null,
+            updated_at: new Date().toISOString()
+          }, { 
+            onConflict: 'organization_id,user_email',
+            ignoreDuplicates: false 
+          });
+        console.log('Updated sync_status with new admin tokens for existing org');
+      } catch (error) {
+        console.error('Error updating sync_status with admin tokens:', error);
+        // Don't block the flow if this fails
+      }
+      
       const dashboardUrl = new URL('https://www.manage.stitchflow.io/');
       
       // Generate a unique session ID for the user

@@ -115,6 +115,11 @@ export default function Sidebar({
         // Add newly discovered apps to newAppIds
         newlyAddedApps.forEach(id => currentNewAppIds.add(id));
         
+        // CLEANUP: Remove any newAppIds that no longer exist in the database
+        // This fixes the badge count for existing users with corrupted localStorage
+        const validNewAppIds = Array.from(currentNewAppIds).filter(id => currentAppIds.has(id));
+        currentNewAppIds = new Set(validNewAppIds);
+        
         // Update localStorage with current state
         localStorage.setItem(`allAppIds_${orgId}`, JSON.stringify(Array.from(currentAppIds)));
         localStorage.setItem(`newAppIds_${orgId}`, JSON.stringify(Array.from(currentNewAppIds)));

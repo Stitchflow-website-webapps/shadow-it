@@ -882,16 +882,30 @@ function AppInboxContent() {
         const currentAppIds = appsData.map(app => app.id)
         localStorage.setItem(`allAppIds_${shadowOrgId}`, JSON.stringify(currentAppIds))
         
-        // Load new app IDs from localStorage
+        // Load new app IDs from localStorage and clean up invalid ones
         const storedNewAppIds = localStorage.getItem(`newAppIds_${shadowOrgId}`)
         console.log('Loading from localStorage:', storedNewAppIds)
         if (storedNewAppIds) {
           try {
             const parsedIds = JSON.parse(storedNewAppIds)
             console.log('Parsed IDs:', parsedIds)
-            setNewAppIds(new Set(parsedIds))
+            
+            // CLEANUP: Filter out any newAppIds that no longer exist in the database
+            const validNewAppIds = parsedIds.filter((id: string) => currentAppIds.includes(id))
+            console.log('Valid new app IDs after cleanup:', validNewAppIds)
+            
+            setNewAppIds(new Set(validNewAppIds))
+            
+            // Update localStorage if cleanup occurred
+            if (validNewAppIds.length !== parsedIds.length) {
+              console.log('Cleaned up invalid new app IDs from localStorage')
+              localStorage.setItem(`newAppIds_${shadowOrgId}`, JSON.stringify(validNewAppIds))
+            }
           } catch (error) {
             console.error('Error parsing new app IDs:', error)
+            // Reset to empty if corrupted
+            setNewAppIds(new Set())
+            localStorage.setItem(`newAppIds_${shadowOrgId}`, JSON.stringify([]))
           }
         } else {
           // If no stored new app IDs, initialize all apps as new
@@ -1065,6 +1079,12 @@ function AppInboxContent() {
       const allAppIds = updatedApps.map(app => app.id)
       localStorage.setItem(`allAppIds_${shadowOrgId}`, JSON.stringify(allAppIds))
       
+      // Remove deleted app from newAppIds localStorage to fix badge count
+      const updatedNewAppIds = new Set(newAppIds)
+      updatedNewAppIds.delete(appId)
+      setNewAppIds(updatedNewAppIds)
+      localStorage.setItem(`newAppIds_${shadowOrgId}`, JSON.stringify(Array.from(updatedNewAppIds)))
+      
       // If the removed app was selected in tray, close tray
       if (selectedApp && selectedApp.id === appId) {
         setSelectedApp(null)
@@ -1172,6 +1192,12 @@ function AppInboxContent() {
       // Update allAppIds localStorage to reflect removal
       const allAppIds = updatedApps.map(app => app.id)
       localStorage.setItem(`allAppIds_${shadowOrgId}`, JSON.stringify(allAppIds))
+      
+      // Remove deleted apps from newAppIds localStorage to fix badge count
+      const updatedNewAppIds = new Set(newAppIds)
+      appIds.forEach(appId => updatedNewAppIds.delete(appId))
+      setNewAppIds(updatedNewAppIds)
+      localStorage.setItem(`newAppIds_${shadowOrgId}`, JSON.stringify(Array.from(updatedNewAppIds)))
       
       // Clear selection
       setSelectedAppIds(new Set())
