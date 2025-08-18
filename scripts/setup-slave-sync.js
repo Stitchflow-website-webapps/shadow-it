@@ -14,7 +14,7 @@ const http = require('http');
 
 // Configuration
 const config = {
-  baseUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://your-app-domain.vercel.app',
+  baseUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://www.manage.stitchflow.io/',
   qstashToken: process.env.QSTASH_TOKEN,
   qstashCurrentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
   qstashNextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
@@ -237,8 +237,8 @@ async function main() {
   console.log('🚀 Setting up Slave-to-Prod Sync with QStash');
   console.log('='.repeat(50));
   
-  // Step 1: Validate environment
-  validateEnvironment();
+  // // Step 1: Validate environment
+  // validateEnvironment();
   
   // Step 2: Check existing schedules
   const hasExisting = await listExistingSchedules();

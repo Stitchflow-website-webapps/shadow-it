@@ -4,12 +4,7 @@
 
 1. **Add environment variables to your `.env.local`:**
 ```bash
-QSTASH_URL="https://qstash.upstash.io"
-QSTASH_TOKEN="eyJVc2VySUQiOiJiYWE3MTE3Zi1lZWVmLTRlNGItOTA2Ni1jZGNiYmM4YTBjZTUiLCJQYXNzd29yZCI6ImFlNmM4YzJjMjE3ZTQxYmNiMjc1YjFjNjU0MzE0MTBiIn0="
-QSTASH_CURRENT_SIGNING_KEY="sig_5JnsH9ouqFHSNYHsQ8YfRTYrvCu3"
-QSTASH_NEXT_SIGNING_KEY="sig_76d6sSSPd5QhVxRmFc8x4biWuqGN"
-NEXT_PUBLIC_APP_URL="https://your-app-domain.vercel.app"
-```
+
 
 2. **Run the setup script:**
 ```bash

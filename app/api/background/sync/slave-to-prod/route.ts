@@ -105,7 +105,15 @@ export async function POST(request: NextRequest) {
         SELECT 1 FROM "AI-database-shadow-it".ai_risk_scores r 
         WHERE r."Tool Name" = shadow_it_slave.tool_name 
         AND r."Vendor" = shadow_it_slave.vendor
-      );
+      )
+      AND vendor IS NOT NULL 
+      AND TRIM(vendor) != ''
+      AND "Security Certifications" IS NOT NULL 
+      AND TRIM("Security Certifications") != ''
+      AND "Supports SSO/SAML/SCIM" IS NOT NULL 
+      AND TRIM("Supports SSO/SAML/SCIM") != ''
+      AND "What the app does" IS NOT NULL 
+      AND TRIM("What the app does") != '';
     `;
     
     const { data: insertResult, error: insertError } = await supabaseAI.rpc('exec_sql', {
@@ -118,6 +126,26 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('✅ New records inserted successfully');
+    
+    // Check how many records were skipped due to validation
+    const skippedQuery = `
+      SELECT COUNT(*) as skipped_count
+      FROM "ai_risk-analysis_test_dhanu".shadow_it_slave
+      WHERE (
+        vendor IS NULL OR TRIM(vendor) = '' OR
+        "Security Certifications" IS NULL OR TRIM("Security Certifications") = '' OR
+        "Supports SSO/SAML/SCIM" IS NULL OR TRIM("Supports SSO/SAML/SCIM") = '' OR
+        "What the app does" IS NULL OR TRIM("What the app does") = ''
+      );
+    `;
+    
+    const { data: skippedResult } = await supabaseAI.rpc('exec_sql', {
+      query: skippedQuery
+    });
+    
+    if (skippedResult && skippedResult.length > 0) {
+      console.log(`⚠️  ${skippedResult[0].skipped_count} records skipped due to missing required fields (Vendor, Security Certifications, Supports SSO/SAML/SCIM, What the app does)`);
+    }
     
     // Step 2: Update existing records
     console.log('🔄 Step 2: Updating existing records...');
@@ -205,7 +233,15 @@ export async function POST(request: NextRequest) {
         "Integration Complexity" = s."Integration Complexity",
         "Average 5" = s."Average 5"
       FROM "ai_risk-analysis_test_dhanu".shadow_it_slave s
-      WHERE r."Tool Name" = s.tool_name AND r."Vendor" = s.vendor;
+      WHERE r."Tool Name" = s.tool_name AND r."Vendor" = s.vendor
+      AND s.vendor IS NOT NULL 
+      AND TRIM(s.vendor) != ''
+      AND s."Security Certifications" IS NOT NULL 
+      AND TRIM(s."Security Certifications") != ''
+      AND s."Supports SSO/SAML/SCIM" IS NOT NULL 
+      AND TRIM(s."Supports SSO/SAML/SCIM") != ''
+      AND s."What the app does" IS NOT NULL 
+      AND TRIM(s."What the app does") != '';
     `;
     
     const { data: updateResult, error: updateError } = await supabaseAI.rpc('exec_sql', {
