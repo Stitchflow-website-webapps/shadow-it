@@ -48,25 +48,28 @@ export async function POST(request: NextRequest) {
     // Step 1: Insert new records from slave to main
     console.log('📥 Step 1: Inserting new records from slave database...');
     
-    // Since Supabase doesn't support complex INSERT...SELECT with validation easily,
-    // let's first get the data we want to insert, then insert it
-    const { data: slaveData, error: slaveError } = await supabaseAI
+    // Fetch all records from slave database first
+    const { data: allSlaveData, error: slaveError } = await supabaseAI
       .schema('ai_risk-analysis_test_dhanu')
       .from('shadow_it_slave')
-      .select('*')
-      .not('vendor', 'is', null)
-      .neq('vendor', '')
-      .not('Security Certification', 'is', null)
-      .neq('Security Certification', '')
-      .not('Supports SSO/SAML/SCIM', 'is', null)
-      .neq('Supports SSO/SAML/SCIM', '')
-      .not('What the app does', 'is', null)
-      .neq('What the app does', '');
+      .select('*');
     
     if (slaveError) {
       console.error('❌ Error fetching slave data:', slaveError);
       throw new Error(`Fetch slave data failed: ${slaveError.message}`);
     }
+    
+    // Filter records in JavaScript to handle special characters in column names
+    const slaveData = allSlaveData?.filter(record => {
+      return record.vendor && 
+             record.vendor.trim() !== '' &&
+             record['Security Certification'] && 
+             record['Security Certification'].trim() !== '' &&
+             record['Supports SSO/SAML/SCIM'] && 
+             record['Supports SSO/SAML/SCIM'].trim() !== '' &&
+             record['What the app does'] && 
+             record['What the app does'].trim() !== '';
+    }) || [];
     
     console.log(`📊 Found ${slaveData?.length || 0} valid records in slave database`);
     
@@ -187,14 +190,9 @@ export async function POST(request: NextRequest) {
     
     console.log('✅ New records inserted successfully');
     
-    // Check how many records were skipped due to validation
-    const { data: allSlaveData } = await supabaseAI
-      .schema('ai_risk-analysis_test_dhanu')
-      .from('shadow_it_slave')
-      .select('*', { count: 'exact', head: true });
-    
+    // Calculate how many records were skipped due to validation
     const validRecords = slaveData?.length || 0;
-    const totalRecords = allSlaveData || 0;
+    const totalRecords = allSlaveData?.length || 0;
     const skippedCount = totalRecords - validRecords;
     
     if (skippedCount > 0) {
