@@ -56,8 +56,8 @@ export async function POST(request: NextRequest) {
       .select('*')
       .not('vendor', 'is', null)
       .neq('vendor', '')
-      .not('Security Certifications', 'is', null)
-      .neq('Security Certifications', '')
+      .not('Security Certification', 'is', null)
+      .neq('Security Certification', '')
       .not('Supports SSO/SAML/SCIM', 'is', null)
       .neq('Supports SSO/SAML/SCIM', '')
       .not('What the app does', 'is', null)
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
             'Data Backup/Retrieval/Deletion Details': record['Data Backup/Retrieval/Deletion Details'],
             'User Opt-Out of AI?': record['User Opt-Out of AI?'],
             'Human Review Involvement': record['Human Review Involvement'],
-            'Security Certifications': record['Security Certifications'],
+            'Security Certifications': record['Security Certification'],
             'AI Specific Security Standards': record['AI Specific Security Standards'],
             'Vulnerability Disclosure': record['Vulnerability Disclosure'],
             'Recently Known Breaches/ Incidents / Public Issues': record['Recently Known Breaches/ Incidents / Public Issues'],
@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
             'Data Backup/Retrieval/Deletion Details': record['Data Backup/Retrieval/Deletion Details'],
             'User Opt-Out of AI?': record['User Opt-Out of AI?'],
             'Human Review Involvement': record['Human Review Involvement'],
-            'Security Certifications': record['Security Certifications'],
+            'Security Certifications': record['Security Certification'],
             'AI Specific Security Standards': record['AI Specific Security Standards'],
             'Vulnerability Disclosure': record['Vulnerability Disclosure'],
             'Recently Known Breaches/ Incidents / Public Issues': record['Recently Known Breaches/ Incidents / Public Issues'],
