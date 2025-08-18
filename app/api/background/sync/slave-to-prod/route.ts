@@ -48,212 +48,273 @@ export async function POST(request: NextRequest) {
     // Step 1: Insert new records from slave to main
     console.log('📥 Step 1: Inserting new records from slave database...');
     
-    const insertQuery = `
-      INSERT INTO "AI-database-shadow-it".ai_risk_scores (
-        "Tool Name", "Vendor", "What the app does", "URL / Website", "Pricing",
-        "AI-Native", "Key AI Features", "Public AI or Private AI?", "Open Source?", "Type of AI Used",
-        "Privacy Policy", "Terms of Use", "Security page", "DPA Link", "Status Page", "Trust Center",
-        "Hosted On", "Release Date", "Latest PR", "Funding Details", "Organization Stage",
-        "Customer Rating", "Community Sentiment", "Proprietary Model or 3rd Party?",
-        "AI Model Hosting Location / Data Residency", "Data Sent to AI Model?", "Type of Data Sent",
-        "Customer/Org Data Used for Model Training?", "Data Retention Policy",
-        "Data Backup/Retrieval/Deletion Details", "User Opt-Out of AI?", "Human Review Involvement",
-        "Security Certifications", "AI Specific Security Standards", "Vulnerability Disclosure",
-        "Recently Known Breaches/ Incidents / Public Issues", "Supports SSO/SAML/SCIM",
-        "Authentication Methods", "APIs Available?", "Supports RBAC (or some form of user permissions and roles)?",
-        "Bug Bounty System Available?", "Trust Contact Info (email ID if available)",
-        "Other AI-Specific Terms / Disclosures", "Org Level Criticality (company wide/ specific usage)",
-        "Departments/Teams Suitable for App Usage", "Impact to Business (when app data/functionality is compromised)",
-        "App Performance/Popularity Sentiment", "Ease of App Setup", "Need Employee Training Before Usage?",
-        "Overall Security Risk Factor & Tier", "Renewals & Upgrade Terms", "Notes / Observations",
-        "Global Adoption Rank", "No. of Active Customers (Reported)", "Popularity percentage",
-        "Benchmark Usage by Peers", "Stack Inclusion Rate", "Best paired with", "Other popular apps in this space",
-        "Data Sensitivity & Processing", "Data Residency & Control", "Training Data Usage", "Policy Transparency",
-        "Average 1", "Vulnerability Management", "Authentication & Access Controls", "Breach History",
-        "Average 2", "Operational Importance", "Data Criticality", "User Base & Scope", "Average 3",
-        "Model Transparency", "Human Oversight", "Model Provenance & Type", "User Opt-Out Options",
-        "Average 4", "Company Stability", "Support & Documentation", "Integration Complexity",
-        "Average 5"
-      )
-      SELECT
-        tool_name, vendor, "What the app does", "URL / Website", pricing,
-        "AI-Native", "Key AI Features", "Public AI or Private AI?", "Open Source?", "Type of AI Used",
-        "Privacy Policy", "Terms of Use", "Security page", "DPA Link", "Status Page", "Trust Center",
-        "Hosted On", "Release Date", "Latest PR", "Funding Details", "Organization Stage",
-        "Customer Rating", "Community Sentiment", "Proprietary Model or 3rd Party?",
-        "AI Model Hosting Location / Data Residency", "Data Sent to AI Model?", "Type of Data Sent",
-        "Customer/Org Data Used for Model Training?", "Data Retention Policy",
-        "Data Backup/Retrieval/Deletion Details", "User Opt-Out of AI?", "Human Review Involvement",
-        "Security Certifications", "AI Specific Security Standards", "Vulnerability Disclosure",
-        "Recently Known Breaches/ Incidents / Public Issues", "Supports SSO/SAML/SCIM",
-        "Authentication Methods", "APIs Available?", "Supports RBAC (or some form of user permissions and roles)?",
-        "Bug Bounty System Available?", "Trust Contact Info (email ID if available)",
-        "Other AI-Specific Terms / Disclosures", "Org Level Criticality (company wide/ specific usage)",
-        "Departments/Teams Suitable for App Usage", "Impact to Business (when app data/functionality is compromised)",
-        "App Performance/Popularity Sentiment", "Ease of App Setup", "Need Employee Training Before Usage?",
-        "Overall Security Risk Factor & Tier", "Renewals & Upgrade Terms", "Notes / Observations",
-        "Global Adoption Rank", "No. of Active Customers (Reported)", "Popularity percentage",
-        "Benchmark Usage by Peers", "Stack Inclusion Rate", "Best paired with", "Other popular apps in this space",
-        "Data Sensitivity & Processing", "Data Residency & Control", "Training Data Usage", "Policy Transparency",
-        "Average 1", "Vulnerability Management", "Authentication & Access Controls", "Breach History",
-        "Average 2", "Operational Importance", "Data Criticality", "User Base & Scope", "Average 3",
-        "Model Transparency", "Human Oversight", "Model Provenance & Type", "User Opt-Out Options",
-        "Average 4", "Company Stability", "Support & Documentation", "Integration Complexity",
-        "Average 5"
-      FROM "ai_risk-analysis_test_dhanu".shadow_it_slave
-      WHERE NOT EXISTS (
-        SELECT 1 FROM "AI-database-shadow-it".ai_risk_scores r 
-        WHERE r."Tool Name" = shadow_it_slave.tool_name 
-        AND r."Vendor" = shadow_it_slave.vendor
-      )
-      AND vendor IS NOT NULL 
-      AND TRIM(vendor) != ''
-      AND "Security Certifications" IS NOT NULL 
-      AND TRIM("Security Certifications") != ''
-      AND "Supports SSO/SAML/SCIM" IS NOT NULL 
-      AND TRIM("Supports SSO/SAML/SCIM") != ''
-      AND "What the app does" IS NOT NULL 
-      AND TRIM("What the app does") != '';
-    `;
+    // Since Supabase doesn't support complex INSERT...SELECT with validation easily,
+    // let's first get the data we want to insert, then insert it
+    const { data: slaveData, error: slaveError } = await supabaseAI
+      .schema('ai_risk-analysis_test_dhanu')
+      .from('shadow_it_slave')
+      .select('*')
+      .not('vendor', 'is', null)
+      .neq('vendor', '')
+      .not('Security Certifications', 'is', null)
+      .neq('Security Certifications', '')
+      .not('Supports SSO/SAML/SCIM', 'is', null)
+      .neq('Supports SSO/SAML/SCIM', '')
+      .not('What the app does', 'is', null)
+      .neq('What the app does', '');
     
-    const { data: insertResult, error: insertError } = await supabaseAI.rpc('exec_sql', {
-      query: insertQuery
-    });
+    if (slaveError) {
+      console.error('❌ Error fetching slave data:', slaveError);
+      throw new Error(`Fetch slave data failed: ${slaveError.message}`);
+    }
     
-    if (insertError) {
-      console.error('❌ Error inserting new records:', insertError);
-      throw new Error(`Insert failed: ${insertError.message}`);
+    console.log(`📊 Found ${slaveData?.length || 0} valid records in slave database`);
+    
+    // Filter out records that already exist in the main database
+    const newRecords = [];
+    if (slaveData && slaveData.length > 0) {
+      for (const record of slaveData) {
+        const { data: existing } = await supabaseAI
+          .from('ai_risk_scores')
+          .select('Tool Name')
+          .eq('Tool Name', record.tool_name)
+          .eq('Vendor', record.vendor)
+          .single();
+        
+        if (!existing) {
+          // Transform the record to match the target schema
+          const transformedRecord = {
+            'Tool Name': record.tool_name,
+            'Vendor': record.vendor,
+            'What the app does': record['What the app does'],
+            'URL / Website': record['URL / Website'],
+            'Pricing': record.pricing,
+            'AI-Native': record['AI-Native'],
+            'Key AI Features': record['Key AI Features'],
+            'Public AI or Private AI?': record['Public AI or Private AI?'],
+            'Open Source?': record['Open Source?'],
+            'Type of AI Used': record['Type of AI Used'],
+            'Privacy Policy': record['Privacy Policy'],
+            'Terms of Use': record['Terms of Use'],
+            'Security page': record['Security page'],
+            'DPA Link': record['DPA Link'],
+            'Status Page': record['Status Page'],
+            'Trust Center': record['Trust Center'],
+            'Hosted On': record['Hosted On'],
+            'Release Date': record['Release Date'],
+            'Latest PR': record['Latest PR'],
+            'Funding Details': record['Funding Details'],
+            'Organization Stage': record['Organization Stage'],
+            'Customer Rating': record['Customer Rating'],
+            'Community Sentiment': record['Community Sentiment'],
+            'Proprietary Model or 3rd Party?': record['Proprietary Model or 3rd Party?'],
+            'AI Model Hosting Location / Data Residency': record['AI Model Hosting Location / Data Residency'],
+            'Data Sent to AI Model?': record['Data Sent to AI Model?'],
+            'Type of Data Sent': record['Type of Data Sent'],
+            'Customer/Org Data Used for Model Training?': record['Customer/Org Data Used for Model Training?'],
+            'Data Retention Policy': record['Data Retention Policy'],
+            'Data Backup/Retrieval/Deletion Details': record['Data Backup/Retrieval/Deletion Details'],
+            'User Opt-Out of AI?': record['User Opt-Out of AI?'],
+            'Human Review Involvement': record['Human Review Involvement'],
+            'Security Certifications': record['Security Certifications'],
+            'AI Specific Security Standards': record['AI Specific Security Standards'],
+            'Vulnerability Disclosure': record['Vulnerability Disclosure'],
+            'Recently Known Breaches/ Incidents / Public Issues': record['Recently Known Breaches/ Incidents / Public Issues'],
+            'Supports SSO/SAML/SCIM': record['Supports SSO/SAML/SCIM'],
+            'Authentication Methods': record['Authentication Methods'],
+            'APIs Available?': record['APIs Available?'],
+            'Supports RBAC (or some form of user permissions and roles)?': record['Supports RBAC (or some form of user permissions and roles)?'],
+            'Bug Bounty System Available?': record['Bug Bounty System Available?'],
+            'Trust Contact Info (email ID if available)': record['Trust Contact Info (email ID if available)'],
+            'Other AI-Specific Terms / Disclosures': record['Other AI-Specific Terms / Disclosures'],
+            'Org Level Criticality (company wide/ specific usage)': record['Org Level Criticality (company wide/ specific usage)'],
+            'Departments/Teams Suitable for App Usage': record['Departments/Teams Suitable for App Usage'],
+            'Impact to Business (when app data/functionality is compromised)': record['Impact to Business (when app data/functionality is compromised)'],
+            'App Performance/Popularity Sentiment': record['App Performance/Popularity Sentiment'],
+            'Ease of App Setup': record['Ease of App Setup'],
+            'Need Employee Training Before Usage?': record['Need Employee Training Before Usage?'],
+            'Overall Security Risk Factor & Tier': record['Overall Security Risk Factor & Tier'],
+            'Renewals & Upgrade Terms': record['Renewals & Upgrade Terms'],
+            'Notes / Observations': record['Notes / Observations'],
+            'Global Adoption Rank': record['Global Adoption Rank'],
+            'No. of Active Customers (Reported)': record['No. of Active Customers (Reported)'],
+            'Popularity percentage': record['Popularity percentage'],
+            'Benchmark Usage by Peers': record['Benchmark Usage by Peers'],
+            'Stack Inclusion Rate': record['Stack Inclusion Rate'],
+            'Best paired with': record['Best paired with'],
+            'Other popular apps in this space': record['Other popular apps in this space'],
+            'Data Sensitivity & Processing': record['Data Sensitivity & Processing'],
+            'Data Residency & Control': record['Data Residency & Control'],
+            'Training Data Usage': record['Training Data Usage'],
+            'Policy Transparency': record['Policy Transparency'],
+            'Average 1': record['Average 1'],
+            'Vulnerability Management': record['Vulnerability Management'],
+            'Authentication & Access Controls': record['Authentication & Access Controls'],
+            'Breach History': record['Breach History'],
+            'Average 2': record['Average 2'],
+            'Operational Importance': record['Operational Importance'],
+            'Data Criticality': record['Data Criticality'],
+            'User Base & Scope': record['User Base & Scope'],
+            'Average 3': record['Average 3'],
+            'Model Transparency': record['Model Transparency'],
+            'Human Oversight': record['Human Oversight'],
+            'Model Provenance & Type': record['Model Provenance & Type'],
+            'User Opt-Out Options': record['User Opt-Out Options'],
+            'Average 4': record['Average 4'],
+            'Company Stability': record['Company Stability'],
+            'Support & Documentation': record['Support & Documentation'],
+            'Integration Complexity': record['Integration Complexity'],
+            'Average 5': record['Average 5']
+          };
+          newRecords.push(transformedRecord);
+        }
+      }
+    }
+    
+    console.log(`📥 Inserting ${newRecords.length} new records...`);
+    
+    let insertError = null;
+    if (newRecords.length > 0) {
+      const { error } = await supabaseAI
+        .from('ai_risk_scores')
+        .insert(newRecords);
+      
+      if (error) {
+        console.error('❌ Error inserting new records:', error);
+        throw new Error(`Insert failed: ${error.message}`);
+      }
     }
     
     console.log('✅ New records inserted successfully');
     
     // Check how many records were skipped due to validation
-    const skippedQuery = `
-      SELECT COUNT(*) as skipped_count
-      FROM "ai_risk-analysis_test_dhanu".shadow_it_slave
-      WHERE (
-        vendor IS NULL OR TRIM(vendor) = '' OR
-        "Security Certifications" IS NULL OR TRIM("Security Certifications") = '' OR
-        "Supports SSO/SAML/SCIM" IS NULL OR TRIM("Supports SSO/SAML/SCIM") = '' OR
-        "What the app does" IS NULL OR TRIM("What the app does") = ''
-      );
-    `;
+    const { data: allSlaveData } = await supabaseAI
+      .schema('ai_risk-analysis_test_dhanu')
+      .from('shadow_it_slave')
+      .select('*', { count: 'exact', head: true });
     
-    const { data: skippedResult } = await supabaseAI.rpc('exec_sql', {
-      query: skippedQuery
-    });
+    const validRecords = slaveData?.length || 0;
+    const totalRecords = allSlaveData || 0;
+    const skippedCount = totalRecords - validRecords;
     
-    if (skippedResult && skippedResult.length > 0) {
-      console.log(`⚠️  ${skippedResult[0].skipped_count} records skipped due to missing required fields (Vendor, Security Certifications, Supports SSO/SAML/SCIM, What the app does)`);
+    if (skippedCount > 0) {
+      console.log(`⚠️  ${skippedCount} records skipped due to missing required fields (Vendor, Security Certifications, Supports SSO/SAML/SCIM, What the app does)`);
     }
     
     // Step 2: Update existing records
     console.log('🔄 Step 2: Updating existing records...');
     
-    const updateQuery = `
-      UPDATE "AI-database-shadow-it".ai_risk_scores r
-      SET
-        "What the app does" = s."What the app does",
-        "URL / Website" = s."URL / Website",
-        "Pricing" = s.pricing,
-        "AI-Native" = s."AI-Native",
-        "Key AI Features" = s."Key AI Features",
-        "Public AI or Private AI?" = s."Public AI or Private AI?",
-        "Open Source?" = s."Open Source?",
-        "Type of AI Used" = s."Type of AI Used",
-        "Privacy Policy" = s."Privacy Policy",
-        "Terms of Use" = s."Terms of Use",
-        "Security page" = s."Security page",
-        "DPA Link" = s."DPA Link",
-        "Status Page" = s."Status Page",
-        "Trust Center" = s."Trust Center",
-        "Hosted On" = s."Hosted On",
-        "Release Date" = s."Release Date",
-        "Latest PR" = s."Latest PR",
-        "Funding Details" = s."Funding Details",
-        "Organization Stage" = s."Organization Stage",
-        "Customer Rating" = s."Customer Rating",
-        "Community Sentiment" = s."Community Sentiment",
-        "Proprietary Model or 3rd Party?" = s."Proprietary Model or 3rd Party?",
-        "AI Model Hosting Location / Data Residency" = s."AI Model Hosting Location / Data Residency",
-        "Data Sent to AI Model?" = s."Data Sent to AI Model?",
-        "Type of Data Sent" = s."Type of Data Sent",
-        "Customer/Org Data Used for Model Training?" = s."Customer/Org Data Used for Model Training?",
-        "Data Retention Policy" = s."Data Retention Policy",
-        "Data Backup/Retrieval/Deletion Details" = s."Data Backup/Retrieval/Deletion Details",
-        "User Opt-Out of AI?" = s."User Opt-Out of AI?",
-        "Human Review Involvement" = s."Human Review Involvement",
-        "Security Certifications" = s."Security Certifications",
-        "AI Specific Security Standards" = s."AI Specific Security Standards",
-        "Vulnerability Disclosure" = s."Vulnerability Disclosure",
-        "Recently Known Breaches/ Incidents / Public Issues" = s."Recently Known Breaches/ Incidents / Public Issues",
-        "Supports SSO/SAML/SCIM" = s."Supports SSO/SAML/SCIM",
-        "Authentication Methods" = s."Authentication Methods",
-        "APIs Available?" = s."APIs Available?",
-        "Supports RBAC (or some form of user permissions and roles)?" = s."Supports RBAC (or some form of user permissions and roles)?",
-        "Bug Bounty System Available?" = s."Bug Bounty System Available?",
-        "Trust Contact Info (email ID if available)" = s."Trust Contact Info (email ID if available)",
-        "Other AI-Specific Terms / Disclosures" = s."Other AI-Specific Terms / Disclosures",
-        "Org Level Criticality (company wide/ specific usage)" = s."Org Level Criticality (company wide/ specific usage)",
-        "Departments/Teams Suitable for App Usage" = s."Departments/Teams Suitable for App Usage",
-        "Impact to Business (when app data/functionality is compromised)" = s."Impact to Business (when app data/functionality is compromised)",
-        "App Performance/Popularity Sentiment" = s."App Performance/Popularity Sentiment",
-        "Ease of App Setup" = s."Ease of App Setup",
-        "Need Employee Training Before Usage?" = s."Need Employee Training Before Usage?",
-        "Overall Security Risk Factor & Tier" = s."Overall Security Risk Factor & Tier",
-        "Renewals & Upgrade Terms" = s."Renewals & Upgrade Terms",
-        "Notes / Observations" = s."Notes / Observations",
-        "Global Adoption Rank" = s."Global Adoption Rank",
-        "No. of Active Customers (Reported)" = s."No. of Active Customers (Reported)",
-        "Popularity percentage" = s."Popularity percentage",
-        "Benchmark Usage by Peers" = s."Benchmark Usage by Peers",
-        "Stack Inclusion Rate" = s."Stack Inclusion Rate",
-        "Best paired with" = s."Best paired with",
-        "Other popular apps in this space" = s."Other popular apps in this space",
-        "Data Sensitivity & Processing" = s."Data Sensitivity & Processing",
-        "Data Residency & Control" = s."Data Residency & Control",
-        "Training Data Usage" = s."Training Data Usage",
-        "Policy Transparency" = s."Policy Transparency",
-        "Average 1" = s."Average 1",
-        "Vulnerability Management" = s."Vulnerability Management",
-        "Authentication & Access Controls" = s."Authentication & Access Controls",
-        "Breach History" = s."Breach History",
-        "Average 2" = s."Average 2",
-        "Operational Importance" = s."Operational Importance",
-        "Data Criticality" = s."Data Criticality",
-        "User Base & Scope" = s."User Base & Scope",
-        "Average 3" = s."Average 3",
-        "Model Transparency" = s."Model Transparency",
-        "Human Oversight" = s."Human Oversight",
-        "Model Provenance & Type" = s."Model Provenance & Type",
-        "User Opt-Out Options" = s."User Opt-Out Options",
-        "Average 4" = s."Average 4",
-        "Company Stability" = s."Company Stability",
-        "Support & Documentation" = s."Support & Documentation",
-        "Integration Complexity" = s."Integration Complexity",
-        "Average 5" = s."Average 5"
-      FROM "ai_risk-analysis_test_dhanu".shadow_it_slave s
-      WHERE r."Tool Name" = s.tool_name AND r."Vendor" = s.vendor
-      AND s.vendor IS NOT NULL 
-      AND TRIM(s.vendor) != ''
-      AND s."Security Certifications" IS NOT NULL 
-      AND TRIM(s."Security Certifications") != ''
-      AND s."Supports SSO/SAML/SCIM" IS NOT NULL 
-      AND TRIM(s."Supports SSO/SAML/SCIM") != ''
-      AND s."What the app does" IS NOT NULL 
-      AND TRIM(s."What the app does") != '';
-    `;
-    
-    const { data: updateResult, error: updateError } = await supabaseAI.rpc('exec_sql', {
-      query: updateQuery
-    });
+    let updateCount = 0;
+    if (slaveData && slaveData.length > 0) {
+      for (const record of slaveData) {
+        // Check if this record exists in the main database
+        const { data: existing } = await supabaseAI
+          .from('ai_risk_scores')
+          .select('Tool Name')
+          .eq('Tool Name', record.tool_name)
+          .eq('Vendor', record.vendor)
+          .single();
+        
+        if (existing) {
+          // Update the existing record
+          const updateData = {
+            'What the app does': record['What the app does'],
+            'URL / Website': record['URL / Website'],
+            'Pricing': record.pricing,
+            'AI-Native': record['AI-Native'],
+            'Key AI Features': record['Key AI Features'],
+            'Public AI or Private AI?': record['Public AI or Private AI?'],
+            'Open Source?': record['Open Source?'],
+            'Type of AI Used': record['Type of AI Used'],
+            'Privacy Policy': record['Privacy Policy'],
+            'Terms of Use': record['Terms of Use'],
+            'Security page': record['Security page'],
+            'DPA Link': record['DPA Link'],
+            'Status Page': record['Status Page'],
+            'Trust Center': record['Trust Center'],
+            'Hosted On': record['Hosted On'],
+            'Release Date': record['Release Date'],
+            'Latest PR': record['Latest PR'],
+            'Funding Details': record['Funding Details'],
+            'Organization Stage': record['Organization Stage'],
+            'Customer Rating': record['Customer Rating'],
+            'Community Sentiment': record['Community Sentiment'],
+            'Proprietary Model or 3rd Party?': record['Proprietary Model or 3rd Party?'],
+            'AI Model Hosting Location / Data Residency': record['AI Model Hosting Location / Data Residency'],
+            'Data Sent to AI Model?': record['Data Sent to AI Model?'],
+            'Type of Data Sent': record['Type of Data Sent'],
+            'Customer/Org Data Used for Model Training?': record['Customer/Org Data Used for Model Training?'],
+            'Data Retention Policy': record['Data Retention Policy'],
+            'Data Backup/Retrieval/Deletion Details': record['Data Backup/Retrieval/Deletion Details'],
+            'User Opt-Out of AI?': record['User Opt-Out of AI?'],
+            'Human Review Involvement': record['Human Review Involvement'],
+            'Security Certifications': record['Security Certifications'],
+            'AI Specific Security Standards': record['AI Specific Security Standards'],
+            'Vulnerability Disclosure': record['Vulnerability Disclosure'],
+            'Recently Known Breaches/ Incidents / Public Issues': record['Recently Known Breaches/ Incidents / Public Issues'],
+            'Supports SSO/SAML/SCIM': record['Supports SSO/SAML/SCIM'],
+            'Authentication Methods': record['Authentication Methods'],
+            'APIs Available?': record['APIs Available?'],
+            'Supports RBAC (or some form of user permissions and roles)?': record['Supports RBAC (or some form of user permissions and roles)?'],
+            'Bug Bounty System Available?': record['Bug Bounty System Available?'],
+            'Trust Contact Info (email ID if available)': record['Trust Contact Info (email ID if available)'],
+            'Other AI-Specific Terms / Disclosures': record['Other AI-Specific Terms / Disclosures'],
+            'Org Level Criticality (company wide/ specific usage)': record['Org Level Criticality (company wide/ specific usage)'],
+            'Departments/Teams Suitable for App Usage': record['Departments/Teams Suitable for App Usage'],
+            'Impact to Business (when app data/functionality is compromised)': record['Impact to Business (when app data/functionality is compromised)'],
+            'App Performance/Popularity Sentiment': record['App Performance/Popularity Sentiment'],
+            'Ease of App Setup': record['Ease of App Setup'],
+            'Need Employee Training Before Usage?': record['Need Employee Training Before Usage?'],
+            'Overall Security Risk Factor & Tier': record['Overall Security Risk Factor & Tier'],
+            'Renewals & Upgrade Terms': record['Renewals & Upgrade Terms'],
+            'Notes / Observations': record['Notes / Observations'],
+            'Global Adoption Rank': record['Global Adoption Rank'],
+            'No. of Active Customers (Reported)': record['No. of Active Customers (Reported)'],
+            'Popularity percentage': record['Popularity percentage'],
+            'Benchmark Usage by Peers': record['Benchmark Usage by Peers'],
+            'Stack Inclusion Rate': record['Stack Inclusion Rate'],
+            'Best paired with': record['Best paired with'],
+            'Other popular apps in this space': record['Other popular apps in this space'],
+            'Data Sensitivity & Processing': record['Data Sensitivity & Processing'],
+            'Data Residency & Control': record['Data Residency & Control'],
+            'Training Data Usage': record['Training Data Usage'],
+            'Policy Transparency': record['Policy Transparency'],
+            'Average 1': record['Average 1'],
+            'Vulnerability Management': record['Vulnerability Management'],
+            'Authentication & Access Controls': record['Authentication & Access Controls'],
+            'Breach History': record['Breach History'],
+            'Average 2': record['Average 2'],
+            'Operational Importance': record['Operational Importance'],
+            'Data Criticality': record['Data Criticality'],
+            'User Base & Scope': record['User Base & Scope'],
+            'Average 3': record['Average 3'],
+            'Model Transparency': record['Model Transparency'],
+            'Human Oversight': record['Human Oversight'],
+            'Model Provenance & Type': record['Model Provenance & Type'],
+            'User Opt-Out Options': record['User Opt-Out Options'],
+            'Average 4': record['Average 4'],
+            'Company Stability': record['Company Stability'],
+            'Support & Documentation': record['Support & Documentation'],
+            'Integration Complexity': record['Integration Complexity'],
+            'Average 5': record['Average 5']
+          };
+          
+          const { error: updateError } = await supabaseAI
+            .from('ai_risk_scores')
+            .update(updateData)
+            .eq('Tool Name', record.tool_name)
+            .eq('Vendor', record.vendor);
     
     if (updateError) {
-      console.error('❌ Error updating existing records:', updateError);
-      throw new Error(`Update failed: ${updateError.message}`);
+            console.error(`❌ Error updating record ${record.tool_name}:`, updateError);
+          } else {
+            updateCount++;
+          }
+        }
+      }
     }
     
-    console.log('✅ Existing records updated successfully');
+    console.log(`✅ ${updateCount} existing records updated successfully`);
     
     // Get sync statistics
     const { data: totalCount } = await supabaseAI
@@ -267,6 +328,9 @@ export async function POST(request: NextRequest) {
       type: isManual ? 'manual' : 'scheduled',
       statistics: {
         total_records: totalCount || 0,
+        new_records_inserted: newRecords.length,
+        existing_records_updated: updateCount,
+        records_skipped: skippedCount,
         sync_completed_at: new Date().toISOString()
       }
     };
