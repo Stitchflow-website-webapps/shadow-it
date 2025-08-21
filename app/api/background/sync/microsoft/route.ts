@@ -494,13 +494,19 @@ export async function GET(request: NextRequest) {
     // Update sync status to indicate progress
     await updateSyncStatus(syncRecord.id, 10, 'Connected to Microsoft Entra ID...');
 
-    // STEP 1: Fetch all users from Microsoft Entra ID
+    // STEP 1: Fetch users from Microsoft Entra ID with filtering
     console.log('👥 Fetching users from Microsoft Entra ID...');
-    const users = await microsoftService.getUsersList();
+    
+    // Check environment variables for user filtering preferences
+    const includeGuests = process.env.MICROSOFT_INCLUDE_GUESTS === 'true';
+    const includeDisabled = process.env.MICROSOFT_INCLUDE_DISABLED === 'true';
+    
+    const users = await microsoftService.getUsersList(includeGuests, includeDisabled);
     console.log(`✅ Successfully fetched ${users.length} users from Microsoft Entra ID`);
     
-    // Update progress
-    await updateSyncStatus(syncRecord.id, 30, `Found ${users.length} users in your organization...`);
+    // Update progress with dynamic message based on filtering
+    const filterMsg = includeGuests ? 'including guests' : 'excluding guests';
+    await updateSyncStatus(syncRecord.id, 30, `Found ${users.length} users (${filterMsg})...`);
 
     // Store users in database using batched processing
     console.log('💾 Storing users in database in batches...');
@@ -982,9 +988,14 @@ async function processMicrosoftData(
 
     // STEP 1: Fetch all users from Microsoft Entra ID
     console.log(`[Microsoft ${sync_id}] Fetching users from Microsoft Entra ID...`);
+    
+    // Check environment variables for user filtering preferences
+    const includeGuests = process.env.MICROSOFT_INCLUDE_GUESTS === 'true';
+    const includeDisabled = process.env.MICROSOFT_INCLUDE_DISABLED === 'true';
+    
     let users = [];
     try {
-      users = await microsoftService.getUsersList();
+      users = await microsoftService.getUsersList(includeGuests, includeDisabled);
       console.log(`[Microsoft ${sync_id}] Successfully fetched ${users.length} users from Microsoft Entra ID`);
     } catch (userFetchError: any) {
       console.error(`[Microsoft ${sync_id}] Error fetching users:`, userFetchError);
@@ -1008,8 +1019,9 @@ async function processMicrosoftData(
       throw new Error(errorMessage);
     }
     
-    // Update progress
-    await updateSyncStatus(sync_id, 30, `Found ${users.length} users in your organization...`);
+    // Update progress with dynamic message based on filtering
+    const filterMsg = includeGuests ? 'including guests' : 'excluding guests';
+    await updateSyncStatus(sync_id, 30, `Found ${users.length} users (${filterMsg})...`);
 
     // Store users in database using batched processing
     console.log(`[Microsoft ${sync_id}] Storing users in database in batches...`);

@@ -138,11 +138,20 @@ export async function POST(request: Request) {
 
     // 5. Fetch all users and app tokens from Google Workspace
     console.log(`[TestCron:${orgDomain}] Fetching data from Google Workspace API...`);
+    
+    // Check environment variables for user filtering preferences (consistent with main sync)
+    const includeSuspended = process.env.GOOGLE_INCLUDE_SUSPENDED === 'true';
+    const includeArchived = process.env.GOOGLE_INCLUDE_ARCHIVED === 'true';
+    
     const [allGoogleUsers, allGoogleTokens] = await Promise.all([
-      googleService.getUsersListPaginated(),
+      googleService.getUsersListPaginated(includeSuspended, includeArchived),
       googleService.getOAuthTokens()
     ]);
-    console.log(`[TestCron:${orgDomain}] Fetched ${allGoogleUsers.length} users and ${allGoogleTokens.length} total app tokens from Google.`);
+    
+    // Update progress with dynamic message based on filtering
+    const filterMsg = includeSuspended ? 'including suspended' : 'excluding suspended';
+    const archivedMsg = includeArchived ? 'including archived' : 'excluding archived';
+    console.log(`[TestCron:${orgDomain}] Fetched ${allGoogleUsers.length} users (${filterMsg}, ${archivedMsg}) and ${allGoogleTokens.length} total app tokens from Google.`);
     
     // **REMOVED: Emergency limits - processing all organizations regardless of size**
     console.log(`[TestCron:${orgDomain}] Processing large organization with ${allGoogleUsers.length} users and ${allGoogleTokens.length} tokens...`);

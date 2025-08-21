@@ -30,6 +30,8 @@ interface MicrosoftGraphUser {
   displayName: string;
   userPrincipalName?: string;
   lastSignInDateTime?: string;
+  userType?: string; // "Member", "Guest", or other types
+  accountEnabled?: boolean; // Whether the account is enabled
 }
 
 interface ServicePrincipalResponse {
@@ -320,8 +322,49 @@ export class MicrosoftWorkspaceService {
     return response;
   }
 
-  async getUsersList() {
-    return this.getAllPages<MicrosoftGraphUser>('/users?$select=id,mail,displayName,userPrincipalName');
+  async getUsersList(includeGuests: boolean = false, includeDisabled: boolean = false) {
+    // Include userType and accountEnabled in selection for filtering
+    const selectFields = 'id,mail,displayName,userPrincipalName,userType,accountEnabled';
+    
+    let endpoint = `/users?$select=${selectFields}`;
+    
+    // Build filter conditions
+    const filterConditions: string[] = [];
+    
+    // Filter by user type
+    if (!includeGuests) {
+      filterConditions.push("userType eq 'Member'");
+    }
+    
+    // Filter by account status
+    if (!includeDisabled) {
+      filterConditions.push("accountEnabled eq true");
+    }
+    
+    // Apply filters if any exist
+    if (filterConditions.length > 0) {
+      endpoint += `&$filter=${filterConditions.join(' and ')}`;
+    }
+    
+    console.log(`🔍 Fetching users with endpoint: ${endpoint}`);
+    console.log(`📋 Filters: includeGuests=${includeGuests}, includeDisabled=${includeDisabled}`);
+    
+    const users = await this.getAllPages<MicrosoftGraphUser>(endpoint);
+    
+    console.log(`✅ Fetched ${users.length} users`);
+    
+    // Log detailed user type and status breakdown for debugging
+    const userBreakdown = users.reduce((acc, user) => {
+      const type = user.userType || 'Unknown';
+      const enabled = user.accountEnabled ? 'Enabled' : 'Disabled';
+      const key = `${type} (${enabled})`;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    console.log('📊 User breakdown:', userBreakdown);
+    
+    return users;
   }
 
   private async getAllPages<T>(endpoint: string, select?: string): Promise<T[]> {
@@ -369,17 +412,24 @@ export class MicrosoftWorkspaceService {
     return grants;
   }
 
-  async getOAuthTokens(): Promise<Token[]> {
+  async getOAuthTokens(specificUsers?: any[]): Promise<Token[]> {
     try {
       console.log('🔄 Starting OAuth token fetch from Microsoft Entra ID...');
       
-      // 1. Get all users in the organization with pagination
-      console.log('👥 Fetching all users in the organization...');
-      const users = await this.getAllPages<MicrosoftGraphUser>(
-        '/users', 
-        'id,displayName,mail,userPrincipalName,jobTitle,department,lastSignInDateTime'
-      );
-      console.log(`✅ Found ${users.length} users in the organization`);
+      // 1. Get users (either specific users or all organization members)
+      let users: any[];
+      if (specificUsers && specificUsers.length > 0) {
+        console.log(`👥 Using provided ${specificUsers.length} specific users for token processing...`);
+        users = specificUsers;
+      } else {
+        console.log('👥 Fetching all organization members...');
+        // Check environment variables for user filtering preferences
+        const includeGuests = process.env.MICROSOFT_INCLUDE_GUESTS === 'true';
+        const includeDisabled = process.env.MICROSOFT_INCLUDE_DISABLED === 'true';
+        
+        users = await this.getUsersList(includeGuests, includeDisabled);
+        console.log(`✅ Found ${users.length} users (guests: ${includeGuests ? 'included' : 'excluded'}, disabled: ${includeDisabled ? 'included' : 'excluded'})`);
+      }
 
       // 2. Get all service principals (applications) with pagination
       console.log('🔍 Fetching all service principals (applications)...');
@@ -503,24 +553,19 @@ export class MicrosoftWorkspaceService {
           // Get delegated permission grants for this user
           console.log(`  🔑 Fetching OAuth permission grants for ${userEmail}...`);
           
-          // First, get user-specific permission grants
+          // ONLY get user-specific permission grants - NOT admin consent grants
+          // Admin consent doesn't mean the user actually has access to the app
           const userOauthResponse = await this.client.api('/oauth2PermissionGrants')
             .filter(`principalId eq '${user.id}'`)
             .get();
           
-          let userSpecificGrants = userOauthResponse?.value || [];
-          console.log(`  ✅ Found ${userSpecificGrants.length} user-specific permission grants`);
+          userOAuth2Grants = userOauthResponse?.value || [];
+          console.log(`  ✅ Found ${userOAuth2Grants.length} user-specific permission grants`);
           
-          // Next, get admin consent permission grants (AllPrincipals) that apply to all users
-          const adminOauthResponse = await this.client.api('/oauth2PermissionGrants')
-            .filter(`consentType eq 'AllPrincipals'`)
-            .get();
-          
-          let adminGrants = adminOauthResponse?.value || [];
-          console.log(`  ✅ Found ${adminGrants.length} admin consent permission grants that apply to this user`);
-          
-          // Combine both types of grants
-          userOAuth2Grants = [...userSpecificGrants, ...adminGrants];
+          // NOTE: We deliberately do NOT include admin consent grants here
+          // Admin consent (AllPrincipals) only means the admin approved the app's permissions
+          // It does NOT mean every user in the tenant has access to that app
+          // User access is determined by appRoleAssignments, not admin consent
           
           console.log(`  📊 Total permission grants to process: ${userOAuth2Grants.length}`);
         } catch (error) {
@@ -596,7 +641,6 @@ export class MicrosoftWorkspaceService {
             // 2. Grants that specifically apply to this user
             
             let delegatedScopes: string[] = [];
-            let adminScopes: string[] = [];
             
             // Process all grants related to this app
             for (const grant of userOAuth2Grants) {
@@ -606,50 +650,49 @@ export class MicrosoftWorkspaceService {
               if (scopes.length === 0) continue;
               
               const isForThisApp = grant.clientId === resourceId || grant.resourceId === resourceId;
-              const isAdminConsent = grant.consentType === 'AllPrincipals';
-              const isForThisUser = grant.principalId === user.id || isAdminConsent;
+              const isForThisUser = grant.principalId === user.id;
               
               // Skip if this grant doesn't apply to this app or user
               if (!isForThisApp || !isForThisUser) continue;
               
-              if (isAdminConsent) {
-                // For admin consents, we should only include critical permissions that are explicitly granted
-                // to this user via an app role assignment. Only include admin scopes when they match
-                // the current role assignment and are application-specific.
-                // Skip admin consents for Microsoft Graph which apply globally
-
-                // Only include admin scopes if:
-                // 1. This is a direct app role assignment for this user (we're in the app role loop)
-                // 2. The admin scope is directly related to the current app permission
-                // 3. It's not a generic Microsoft Graph permission unless specifically assigned to the user
-                const isMicrosoftGraphScope = grant.resourceId === '00000003-0000-0000-c000-000000000000'; // Microsoft Graph ID
-                
-                // Only add admin-consented scopes that are relevant to this user's role
-                const relevantAdminScopes = scopes.filter((scope: string) => {
-                  // For Microsoft Graph scopes, only include if the user has a direct assignment
-                  if (isMicrosoftGraphScope) {
-                    // Only include if there's a matching app role that grants this scope
-                    return assignedRole?.value === scope;
-                  }
-                  
-                  // For other apps, include app-specific scopes
-                  return true;
-                });
-                
-                // Only add the relevant admin scopes
-                if (relevantAdminScopes.length > 0) {
-                  adminScopes = [...new Set([...adminScopes, ...relevantAdminScopes])];
-                  console.log(`    🛡️ Admin consent permissions (relevant): ${relevantAdminScopes.join(', ')}`);
-                }
-              } else {
-                // User consents always apply directly to the user
-                delegatedScopes = [...new Set([...delegatedScopes, ...scopes])];
-                console.log(`    🔑 User consent permissions: ${scopes.join(', ')}`);
+              // Since we only fetch user-specific grants now, all grants are user consents
+              delegatedScopes = [...new Set([...delegatedScopes, ...scopes])];
+              console.log(`    🔑 User consent permissions: ${scopes.join(', ')}`);
+            }
+            
+            // Check for admin-consented permissions, but ONLY for apps the user is actually assigned to
+            // This ensures we capture admin-granted permissions without creating false user-app relationships
+            try {
+              // Try to get admin grants by resourceId first (most common case)
+              let adminGrantsForApp = await this.client.api('/oauth2PermissionGrants')
+                .filter(`consentType eq 'AllPrincipals' and resourceId eq '${resourceId}'`)
+                .get();
+              
+              // If no results, try by clientId (less common but possible)
+              if (!adminGrantsForApp?.value?.length) {
+                adminGrantsForApp = await this.client.api('/oauth2PermissionGrants')
+                  .filter(`consentType eq 'AllPrincipals' and clientId eq '${resourceId}'`)
+                  .get();
               }
+              
+              if (adminGrantsForApp?.value) {
+                for (const adminGrant of adminGrantsForApp.value) {
+                  if (adminGrant.scope) {
+                    const adminScopes = adminGrant.scope.split(' ').filter((s: string) => s.trim() !== '');
+                    if (adminScopes.length > 0) {
+                      // Only add admin scopes for apps the user is actually assigned to
+                      delegatedScopes = [...new Set([...delegatedScopes, ...adminScopes])];
+                      console.log(`    🛡️ Admin consent permissions (for assigned app): ${adminScopes.join(', ')}`);
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.warn(`    ⚠️ Could not fetch admin grants for app ${resourceId}:`, error);
             }
             
             // Add all scopes to the permissions set
-            [...delegatedScopes, ...adminScopes].forEach(scope => {
+            delegatedScopes.forEach(scope => {
               assignedPermissions.add(scope);
             });
             
@@ -671,7 +714,7 @@ export class MicrosoftWorkspaceService {
               userEmail: userEmail,
               scopes: allPermissions,
               // Store individual permission types for risk assessment
-              adminScopes: adminScopes,
+              adminScopes: [], // No longer tracking separate admin scopes
               userScopes: delegatedScopes,
               appRoleScopes: assignedRole?.value ? [assignedRole.value] : [],
               permissionCount: allPermissions.length,
@@ -712,67 +755,27 @@ export class MicrosoftWorkspaceService {
             console.log(`    🔑 User consent permissions: ${userScopes.join(', ')}`);
           }
           
-          // Get admin-consented scopes ONLY for this application and only apply to this user 
-          // if they actually have access to this app either directly or via an admin consent
-          const isAdminConsent = grant.consentType === 'AllPrincipals';
-          const isForThisUser = grant.principalId === user.id || isAdminConsent;
+          // ONLY process user-specific grants - NOT admin consent grants
+          // Admin consent grants should only be processed when the user has actual app role assignments
+          const isForThisUser = grant.principalId === user.id;
           
-          // Skip if this grant doesn't apply to this user
+          // Skip if this grant doesn't apply to this user (only process user-specific grants)
           if (!isForThisUser) continue;
           
-          // For admin consents, only include if the user has a specific assignment
-          // We should only include admin consents for users who have an assignment to the app
-          if (isAdminConsent) {
-            // Use our pre-built set of directly assigned apps to check if user has access
-            const hasDirectAssignment = userDirectAssignedApps.has(clientId);
-            
-            // Skip if this is an admin consent without a direct user assignment
-            // This prevents all users from appearing to have access to all admin-consented apps
-            if (!hasDirectAssignment && !userScopes.length) {
-              console.log(`    ⏭️ Skipping admin-consented app without direct user assignment`);
-              continue;
-            }
-          }
-          
-          // Only use admin consents when they apply to this specific app
-          let adminScopes: string[] = [];
-          if (isAdminConsent && grant.scope) {
-            // For admin consents, we need to be more selective about what permissions we apply
-            const isMicrosoftGraphScope = grant.resourceId === '00000003-0000-0000-c000-000000000000'; // Microsoft Graph ID
-            
-            // Filter admin scopes to only include those relevant to this user
-            const allScopes = grant.scope.split(' ').filter((s: string) => s.trim() !== '');
-            adminScopes = allScopes.filter((scope: string) => {
-              // For Microsoft Graph, be very selective
-              if (isMicrosoftGraphScope) {
-                // Check if user has a direct assignment for this permission
-                // For now, include only basic scopes and exclude high-risk ones
-                const isBasicScope = ['User.Read', 'profile', 'email', 'openid', 'offline_access'].includes(scope);
-                return isBasicScope;
-              }
-              // For other app-specific scopes, include them if the user has access to the app
-              return true;
-            });
-            
-            if (adminScopes.length > 0) {
-              console.log(`    🛡️ Admin consent permissions (filtered): ${adminScopes.join(', ')}`);
-            }
-          }
-          
-          // Combine user and admin scopes
-          const allScopes = [...new Set([...userScopes, ...adminScopes])];
+          // Use only user-consented scopes
+          const allScopes = userScopes;
           
           // Skip if there are no scopes
           if (allScopes.length === 0) {
-            console.log(`    ⚠️ No permissions found for this app and user`);
+            console.log(`    ⚠️ No user consent permissions found for this app`);
             continue;
           }
           
           console.log(`    📊 Total distinct permissions: ${allScopes.length}`);
           
           // Classify permissions by risk level
-          const highRiskPermissions = allScopes.filter(p => classifyPermissionRisk(p) === 'high');
-          const mediumRiskPermissions = allScopes.filter(p => classifyPermissionRisk(p) === 'medium');
+          const highRiskPermissions = allScopes.filter((p: string) => classifyPermissionRisk(p) === 'high');
+          const mediumRiskPermissions = allScopes.filter((p: string) => classifyPermissionRisk(p) === 'medium');
           
           if (highRiskPermissions.length > 0) {
             console.log(`    ⚠️ High risk permissions: ${highRiskPermissions.join(', ')}`);
@@ -785,7 +788,7 @@ export class MicrosoftWorkspaceService {
             userEmail: userEmail,
             scopes: allScopes,
             // Store individual permission types for risk assessment
-            adminScopes: adminScopes,
+            adminScopes: [], // No admin scopes for OAuth grants
             userScopes: userScopes,
             appRoleScopes: [],
             permissionCount: allScopes.length,
@@ -809,7 +812,6 @@ export class MicrosoftWorkspaceService {
           displayText: tokens[0].displayText,
           userEmail: tokens[0].userEmail,
           scopes: tokens[0].scopes,
-          adminScopes: tokens[0].adminScopes,
           userScopes: tokens[0].userScopes, 
           assignmentType: tokens[0].assignmentType
         }, null, 2));

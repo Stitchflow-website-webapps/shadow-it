@@ -161,10 +161,18 @@ export async function POST(request: Request) {
 
     // 5. Fetch all users and application tokens (with scopes) from Microsoft Graph API
     console.log(`[TestCron:Microsoft:${orgDomain}] Fetching data from Microsoft Graph API...`);
-    const allMSUsers = await microsoftService.getUsersList();
+    
+    // Check environment variables for user filtering preferences (consistent with main sync)
+    const includeGuests = process.env.MICROSOFT_INCLUDE_GUESTS === 'true';
+    const includeDisabled = process.env.MICROSOFT_INCLUDE_DISABLED === 'true';
+    
+    const allMSUsers = await microsoftService.getUsersList(includeGuests, includeDisabled);
     const allMSAppTokens = await microsoftService.getOAuthTokens();
 
-    console.log(`[TestCron:Microsoft:${orgDomain}] Fetched ${allMSUsers.length} users and ${allMSAppTokens.length} user-app tokens.`);
+    // Update progress with dynamic message based on filtering
+    const filterMsg = includeGuests ? 'including guests' : 'excluding guests';
+    const disabledMsg = includeDisabled ? 'including disabled' : 'excluding disabled';
+    console.log(`[TestCron:Microsoft:${orgDomain}] Fetched ${allMSUsers.length} users (${filterMsg}, ${disabledMsg}) and ${allMSAppTokens.length} user-app tokens.`);
     
     // **REMOVED: Emergency limits - processing all organizations regardless of size**
     console.log(`[TestCron:Microsoft:${orgDomain}] Processing large organization with ${allMSUsers.length} users and ${allMSAppTokens.length} tokens...`);
