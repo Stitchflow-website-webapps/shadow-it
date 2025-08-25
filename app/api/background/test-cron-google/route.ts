@@ -6,7 +6,6 @@ import { categorizeApplication } from '@/app/api/background/sync/categorize/rout
 import { EmailService } from '@/app/lib/services/email-service';
 import { ResourceMonitor, processInBatchesWithResourceControl } from '@/lib/resource-monitor';
 
-
 /**
  * A test cron job for a specific organization.
  * This job fetches and compares user and application data from Google Workspace against the database and logs the differences without sending notifications or triggering a full sync.
@@ -139,11 +138,20 @@ export async function POST(request: Request) {
 
     // 5. Fetch all users and app tokens from Google Workspace
     console.log(`[TestCron:${orgDomain}] Fetching data from Google Workspace API...`);
+    
+    // Check environment variables for user filtering preferences (consistent with main sync)
+    const includeSuspended = process.env.GOOGLE_INCLUDE_SUSPENDED === 'true';
+    const includeArchived = process.env.GOOGLE_INCLUDE_ARCHIVED === 'true';
+    
     const [allGoogleUsers, allGoogleTokens] = await Promise.all([
-      googleService.getUsersListPaginated(),
+      googleService.getUsersListPaginated(includeSuspended, includeArchived),
       googleService.getOAuthTokens()
     ]);
-    console.log(`[TestCron:${orgDomain}] Fetched ${allGoogleUsers.length} users and ${allGoogleTokens.length} total app tokens from Google.`);
+    
+    // Update progress with dynamic message based on filtering
+    const filterMsg = includeSuspended ? 'including suspended' : 'excluding suspended';
+    const archivedMsg = includeArchived ? 'including archived' : 'excluding archived';
+    console.log(`[TestCron:${orgDomain}] Fetched ${allGoogleUsers.length} users (${filterMsg}, ${archivedMsg}) and ${allGoogleTokens.length} total app tokens from Google.`);
     
     // **REMOVED: Emergency limits - processing all organizations regardless of size**
     console.log(`[TestCron:${orgDomain}] Processing large organization with ${allGoogleUsers.length} users and ${allGoogleTokens.length} tokens...`);
@@ -972,7 +980,6 @@ async function processRelationshipsOnly(orgDomain: string | null) {
     }, { status: 500 });
   }
 } 
-
 // **NEW: Helper function to clean app names for webhook**
 function cleanAppNameForWebhook(appName: string): string {
   // Remove all commas and "Inc" or "Inc." suffixes (case insensitive)

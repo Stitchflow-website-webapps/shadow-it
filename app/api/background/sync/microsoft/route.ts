@@ -140,11 +140,10 @@ async function sendSyncWebhookNotification(organizationId: string, syncId: strin
       return;
     }
 
-    // Clean app names and create comma-separated string
+    // Clean app names and create array of strings
     const cleanedAppNames = applications
       .map(app => cleanAppNameForWebhook(app.name))
-      .filter(name => name && name.trim()) // Remove empty names
-      .join(', ');
+      .filter(name => name && name.trim()); // Remove empty names
 
     // Prepare webhook payload in the correct format
     const webhookPayload = {
@@ -430,22 +429,29 @@ export async function GET(request: NextRequest) {
       tenantId: 'common' // Use 'common' to handle any tenant
     });
 
-    microsoftService.setCredentials({
+    await microsoftService.setCredentials({
       refresh_token: syncRecord.refresh_token
     });
 
     // Attempt to refresh tokens before making API calls
     console.log(`🔄 Refreshing Microsoft tokens...`);
-    const refreshedTokens = await microsoftService.refreshAccessToken(true); // Force refresh
-    
-    if (!refreshedTokens?.id_token) {
-      const errorMessage = 'Microsoft token refresh failed: Refresh token did not return an id_token.';
-      console.error(`❌ ${errorMessage}`);
+    let refreshedTokens;
+    try {
+      refreshedTokens = await microsoftService.refreshAccessToken(true); // Force refresh
+      if (!refreshedTokens?.id_token) {
+        throw new Error("Refresh token did not return an id_token.");
+      }
+      console.log(`✅ Successfully refreshed Microsoft tokens`);
+    } catch (refreshError: any) {
+      console.error(`❌ Microsoft token refresh failed:`, refreshError.message);
+      
+      const errorMessage = refreshError.message.includes('invalid_grant') || refreshError.message.includes('expired')
+        ? 'Microsoft authentication has expired. Please re-authenticate your Microsoft account.'
+        : `Microsoft token refresh failed: ${refreshError.message}`;
+        
       await updateSyncStatus(syncRecord.id, 0, errorMessage, 'FAILED');
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
-    console.log(`✅ Successfully refreshed Microsoft tokens`);
-
 
     // Extract tenant ID from the id_token
     let tenantId: string;
@@ -472,7 +478,7 @@ export async function GET(request: NextRequest) {
     });
     
     // Set the full credentials on the new, correctly-scoped service instance
-    microsoftService.setCredentials(refreshedTokens);
+    await microsoftService.setCredentials(refreshedTokens);
     
     // Update the sync_status record with new tokens for future use
     await supabaseAdmin
@@ -488,13 +494,19 @@ export async function GET(request: NextRequest) {
     // Update sync status to indicate progress
     await updateSyncStatus(syncRecord.id, 10, 'Connected to Microsoft Entra ID...');
 
-    // STEP 1: Fetch all users from Microsoft Entra ID
+    // STEP 1: Fetch users from Microsoft Entra ID with filtering
     console.log('👥 Fetching users from Microsoft Entra ID...');
-    const users = await microsoftService.getUsersList();
+    
+    // Check environment variables for user filtering preferences
+    const includeGuests = process.env.MICROSOFT_INCLUDE_GUESTS === 'true';
+    const includeDisabled = process.env.MICROSOFT_INCLUDE_DISABLED === 'true';
+    
+    const users = await microsoftService.getUsersList(includeGuests, includeDisabled);
     console.log(`✅ Successfully fetched ${users.length} users from Microsoft Entra ID`);
     
-    // Update progress
-    await updateSyncStatus(syncRecord.id, 30, `Found ${users.length} users in your organization...`);
+    // Update progress with dynamic message based on filtering
+    const filterMsg = includeGuests ? 'including guests' : 'excluding guests';
+    await updateSyncStatus(syncRecord.id, 30, `Found ${users.length} users (${filterMsg})...`);
 
     // Store users in database using batched processing
     console.log('💾 Storing users in database in batches...');
@@ -976,9 +988,14 @@ async function processMicrosoftData(
 
     // STEP 1: Fetch all users from Microsoft Entra ID
     console.log(`[Microsoft ${sync_id}] Fetching users from Microsoft Entra ID...`);
+    
+    // Check environment variables for user filtering preferences
+    const includeGuests = process.env.MICROSOFT_INCLUDE_GUESTS === 'true';
+    const includeDisabled = process.env.MICROSOFT_INCLUDE_DISABLED === 'true';
+    
     let users = [];
     try {
-      users = await microsoftService.getUsersList();
+      users = await microsoftService.getUsersList(includeGuests, includeDisabled);
       console.log(`[Microsoft ${sync_id}] Successfully fetched ${users.length} users from Microsoft Entra ID`);
     } catch (userFetchError: any) {
       console.error(`[Microsoft ${sync_id}] Error fetching users:`, userFetchError);
@@ -1002,8 +1019,9 @@ async function processMicrosoftData(
       throw new Error(errorMessage);
     }
     
-    // Update progress
-    await updateSyncStatus(sync_id, 30, `Found ${users.length} users in your organization...`);
+    // Update progress with dynamic message based on filtering
+    const filterMsg = includeGuests ? 'including guests' : 'excluding guests';
+    await updateSyncStatus(sync_id, 30, `Found ${users.length} users (${filterMsg})...`);
 
     // Store users in database using batched processing
     console.log(`[Microsoft ${sync_id}] Storing users in database in batches...`);

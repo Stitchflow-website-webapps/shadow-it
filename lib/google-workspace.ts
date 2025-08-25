@@ -400,15 +400,53 @@ export class GoogleWorkspaceService {
     }
   }
 
-  async getUsersList() {
-    // **NEW: Use rate limiter for API calls**
+  async getUsersList(includeSuspended: boolean = false, includeArchived: boolean = false) {
+    // **NEW: Use rate limiter for API calls with filtering support**
     return await this.rateLimiter.makeRequest(async () => {
+      // Build query parameter for filtering
+      let query = '';
+      const queryParts: string[] = [];
+      
+      // Filter out suspended users unless explicitly included
+      if (!includeSuspended) {
+        queryParts.push('isSuspended=false');
+      }
+      
+      // Note: Google API doesn't have direct archived filter in query,
+      // so we'll filter in the response processing
+      
+      if (queryParts.length > 0) {
+        query = queryParts.join(' AND ');
+      }
+      
       const response = await this.admin.users.list({
         customer: 'my_customer',
         maxResults: 500,
         orderBy: 'email',
+        query: query || undefined,
       });
-      return response.data.users;
+      
+      let users = response.data.users || [];
+      
+      // Filter out archived users if not explicitly included
+      if (!includeArchived) {
+        users = users.filter((user: any) => !user.archived);
+      }
+      
+      console.log(`✅ Fetched ${users.length} users (includeSuspended: ${includeSuspended}, includeArchived: ${includeArchived})`);
+      
+      // Log detailed user breakdown for debugging
+      const userBreakdown = users.reduce((acc: Record<string, number>, user: any) => {
+        const suspended = user.suspended ? 'Suspended' : 'Active';
+        const archived = user.archived ? 'Archived' : 'Live';
+        const key = `${suspended} (${archived})`;
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      console.log('📊 User breakdown:', userBreakdown);
+      
+      return users;
     });
   }
 
@@ -749,18 +787,30 @@ export class GoogleWorkspaceService {
   }
 
   // Add this optimized method to get user list with pagination support
-  async getUsersListPaginated(): Promise<any[]> {
+  async getUsersListPaginated(includeSuspended: boolean = false, includeArchived: boolean = false): Promise<any[]> {
     let users: any[] = [];
     let pageToken: string | undefined = undefined;
     
     try {
-      console.log('Starting paginated user list fetch');
-      // console.log('Using credentials with scopes:', this.oauth2Client.credentials.scope);
+      console.log(`Starting paginated user list fetch (includeSuspended: ${includeSuspended}, includeArchived: ${includeArchived})`);
+      
+      // Build query parameter for filtering
+      let query = '';
+      const queryParts: string[] = [];
+      
+      // Filter out suspended users unless explicitly included
+      if (!includeSuspended) {
+        queryParts.push('isSuspended=false');
+      }
+      
+      if (queryParts.length > 0) {
+        query = queryParts.join(' AND ');
+      }
       
       do {
         console.log(`Fetching user page${pageToken ? ' with token: ' + pageToken : ''}`);
         
-        // **NEW: Use rate limiter for paginated user list calls**
+        // **NEW: Use rate limiter for paginated user list calls with filtering**
         const response: any = await this.rateLimiter.makeRequest(async () => {
           return await this.admin.users.list({
             customer: 'my_customer',
@@ -768,7 +818,8 @@ export class GoogleWorkspaceService {
             orderBy: 'email',
             pageToken,
             viewType: 'admin_view',
-            projection: 'full'
+            projection: 'full',
+            query: query || undefined,
           });
         }).catch((error: any) => {
           console.error('Error in users.list API call:', {
@@ -788,20 +839,33 @@ export class GoogleWorkspaceService {
           throw error;
         });
         
-        // console.log('User page response:', {
-        //   hasUsers: !!response.data.users,
-        //   userCount: response.data.users?.length || 0,
-        //   hasNextPage: !!response.data.nextPageToken
-        // });
-        
         if (response.data.users && response.data.users.length > 0) {
-          users = [...users, ...response.data.users];
+          let pageUsers = response.data.users;
+          
+          // Filter out archived users if not explicitly included
+          if (!includeArchived) {
+            pageUsers = pageUsers.filter((user: any) => !user.archived);
+          }
+          
+          users = [...users, ...pageUsers];
         }
         
         pageToken = response.data.nextPageToken;
       } while (pageToken);
       
-      console.log(`Successfully fetched ${users.length} total users`);
+      console.log(`Successfully fetched ${users.length} total users with filtering`);
+      
+      // Log detailed user breakdown for debugging
+      const userBreakdown = users.reduce((acc: Record<string, number>, user: any) => {
+        const suspended = user.suspended ? 'Suspended' : 'Active';
+        const archived = user.archived ? 'Archived' : 'Live';
+        const key = `${suspended} (${archived})`;
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      console.log('📊 User breakdown:', userBreakdown);
+      
       return users;
     } catch (error: any) {
       console.error('Error in getUsersListPaginated:', {

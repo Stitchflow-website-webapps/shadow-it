@@ -199,11 +199,19 @@ async function processUsers(
     
     await updateSyncStatus(sync_id, 15, 'Fetching users from Google Workspace');
     
-    // Fetch users
+    // Fetch users with filtering (exclude suspended and archived by default)
     let users = [];
     try {
-      users = await googleService.getUsersListPaginated();
-      console.log(`[Users ${sync_id}] Successfully fetched ${users.length} users`);
+      // Check environment variables for user filtering preferences (consistent with Microsoft)
+      const includeSuspended = process.env.GOOGLE_INCLUDE_SUSPENDED === 'true';
+      const includeArchived = process.env.GOOGLE_INCLUDE_ARCHIVED === 'true';
+      
+      users = await googleService.getUsersListPaginated(includeSuspended, includeArchived);
+      
+      // Update progress with dynamic message based on filtering
+      const filterMsg = includeSuspended ? 'including suspended' : 'excluding suspended';
+      const archivedMsg = includeArchived ? 'including archived' : 'excluding archived';
+      console.log(`[Users ${sync_id}] Successfully fetched ${users.length} users (${filterMsg}, ${archivedMsg})`);
       
       // **REMOVED: Emergency limit check - processing all organizations regardless of size**
       console.log(`[Users ${sync_id}] Processing ${users.length} users for large organization...`);
