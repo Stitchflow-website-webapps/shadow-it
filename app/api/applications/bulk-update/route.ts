@@ -64,27 +64,67 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'No applications found to update' }, { status: 404 });
     }
 
-    // 2. Sync changes to the App Inbox 'apps' table ONLY when status is "Managed"
+    // 2. Sync changes to the App Inbox 'apps' table
+    // - For "Managed" status: Create app if not exists, or update if exists
+    // - For "Unmanaged" and "Newly discovered": Only update if app exists, don't create new
     const integrations = await getIntegrations();
     
     for (const app of updatedApps) {
-      // Only sync to inbox if the status is "Managed"
-      if (managementStatus !== "Managed") {
-        continue;
-      }
+      // Sync to inbox based on status
+      console.log(`Syncing app ${app.name} with status ${managementStatus} to App Inbox`);
       if (!app.organization_id) {
         console.warn(`Skipping app sync for ${app.name} because organization_id is missing.`);
         continue;
       }
 
-      // First get the org_id from the organizations table using shadow_org_id
-      const { data: organization, error: orgError } = await organizeDb
-        .from('organizations')
-        .select('id')
-        .eq('shadow_org_id', app.organization_id)
-        .single();
+      // Handle comma-separated shadow org IDs - find which org contains this shadow org ID
+      const shadowOrgIds = app.organization_id.split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0)
+      
+      if (shadowOrgIds.length === 0) {
+        console.warn(`Invalid shadow_org_id: ${app.organization_id}`);
+        continue;
+      }
 
-      if (orgError || !organization) {
+      let organization = null
+
+      // Try each shadow org ID to find which one contains the shadow org ID
+      for (const singleShadowOrgId of shadowOrgIds) {
+        // First try exact match
+        let { data: org, error: orgError } = await organizeDb
+          .from('organizations')
+          .select('id')
+          .eq('shadow_org_id', singleShadowOrgId)
+          .single();
+
+        // If no exact match, try to find organizations that contain this shadow org ID in comma-separated list
+        if (orgError || !org) {
+          const { data: orgs, error: orgsError } = await organizeDb
+            .from('organizations')
+            .select('id, shadow_org_id')
+            .not('shadow_org_id', 'is', null)
+
+          if (!orgsError && orgs) {
+            // Find organization that contains the shadow org ID in its comma-separated list
+            const foundOrg = orgs.find(orgItem => {
+              if (!orgItem.shadow_org_id) return false
+              const orgShadowIds = orgItem.shadow_org_id.split(',').map((id: string) => id.trim())
+              return orgShadowIds.includes(singleShadowOrgId)
+            })
+            
+            if (foundOrg) {
+              org = { id: foundOrg.id }
+              orgError = null // Clear the error since we found a match
+            }
+          }
+        }
+
+        if (!orgError && org) {
+          organization = org
+          break
+        }
+      }
+
+      if (!organization) {
         console.warn(`Organization not found for shadow_org_id: ${app.organization_id}`);
         continue;
       }
@@ -104,6 +144,7 @@ export async function PATCH(request: NextRequest) {
 
       // If app exists, update it
       if (existingApp) {
+        console.log(`Updating existing app ${app.name} in App Inbox with status ${managementStatus}`);
         const { error: updateError } = await organizeDb
           .from('apps')
           .update({ managed_status: managementStatus })
@@ -112,23 +153,32 @@ export async function PATCH(request: NextRequest) {
 
         if (updateError) {
           console.error('Error updating app in App Inbox:', updateError);
+        } else {
+          console.log(`Successfully updated app ${app.name} in App Inbox`);
         }
       } else {
-        // If app does not exist, create it
-        const integration = integrations.find(int => int.name.toLowerCase() === app.name.toLowerCase());
-        const connectionStatus = integration ? integration.connectionStatus : "Yes - CSV Sync";
+        // If app does not exist, only create it if status is "Managed"
+        if (managementStatus === "Managed") {
+          const integration = integrations.find(int => int.name.toLowerCase() === app.name.toLowerCase());
+          const connectionStatus = integration ? integration.connectionStatus : "Yes - CSV Sync";
 
-        const { error: createError } = await organizeDb
-          .from('apps')
-          .insert({
-            name: app.name,
-            managed_status: managementStatus,
-            org_id: organization.id,
-            stitchflow_status: connectionStatus,
-          });
-        
-        if (createError) {
-          console.error('Error creating app in App Inbox:', createError);
+          console.log(`Creating new app ${app.name} in App Inbox with status ${managementStatus}`);
+          const { error: createError } = await organizeDb
+            .from('apps')
+            .insert({
+              name: app.name,
+              managed_status: managementStatus,
+              org_id: organization.id,
+              stitchflow_status: connectionStatus,
+            });
+          
+          if (createError) {
+            console.error('Error creating app in App Inbox:', createError);
+          } else {
+            console.log(`Successfully created app ${app.name} in App Inbox`);
+          }
+        } else {
+          console.log(`App ${app.name} not found in App Inbox and status is ${managementStatus} - skipping creation`);
         }
       }
     }
@@ -139,4 +189,4 @@ export async function PATCH(request: NextRequest) {
     console.error('Error in bulk update:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-} 
+}

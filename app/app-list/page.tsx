@@ -819,6 +819,7 @@ function AppInboxContent() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filters, setFilters] = useState<FilterCondition[]>([])
   const [shadowOrgId, setShadowOrgId] = useState<string | null>(null)
+  const [fullShadowOrgIds, setFullShadowOrgIds] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [orgSettings, setOrgSettings] = useState<OrganizationSettings | null>(null)
   
@@ -859,6 +860,18 @@ function AppInboxContent() {
           const settings = { identityProvider, emailProvider };
           setOrgSettings(settings);
           localStorage.setItem(`orgSettings_${orgId}`, JSON.stringify(settings));
+          
+          // Store the full shadow org IDs for sync operations
+          // Always try to get the full comma-separated shadow org IDs from the database
+          const fullIdsResponse = await fetch(`/api/organize/organization/full-ids?shadowOrgId=${orgId}`)
+          if (fullIdsResponse.ok) {
+            const fullIdsData = await fullIdsResponse.json()
+            console.log('Fetched full shadow org IDs:', fullIdsData.fullShadowOrgIds)
+            setFullShadowOrgIds(fullIdsData.fullShadowOrgIds)
+          } else {
+            console.log('Failed to fetch full shadow org IDs, using single shadow org ID')
+            setFullShadowOrgIds(null)
+          }
         }
       } catch (error) {
         console.error('Error fetching organization settings:', error)
@@ -875,7 +888,11 @@ function AppInboxContent() {
       
       try {
         setIsLoading(true)
-        const appsData = await organizeApi.getApps(shadowOrgId)
+        // Use full shadow org IDs for app inbox operations if available, otherwise fall back to single shadow org ID
+        const operationShadowOrgId = fullShadowOrgIds || shadowOrgId;
+        console.log('Loading apps with shadow org ID:', operationShadowOrgId)
+        console.log('Full shadow org IDs available:', fullShadowOrgIds)
+        const appsData = await organizeApi.getApps(operationShadowOrgId)
         setApps(appsData)
         
         // Always store current app IDs for comparison
@@ -915,15 +932,18 @@ function AppInboxContent() {
         }
         
         // No auto-selection needed for table view
+        console.log('Successfully loaded apps:', appsData.length)
       } catch (error) {
         console.error('Error loading apps:', error)
+        // Set apps to empty array on error to show empty state
+        setApps([])
       } finally {
         setIsLoading(false)
       }
     }
 
     loadApps()
-  }, [shadowOrgId])
+  }, [shadowOrgId, fullShadowOrgIds])
 
   // Fetch user info
   const fetchUserInfo = async () => {
@@ -991,10 +1011,13 @@ function AppInboxContent() {
     if (!shadowOrgId) return
 
     try {
+      // Use full shadow org IDs for app inbox operations if available, otherwise fall back to single shadow org ID
+      const operationShadowOrgId = fullShadowOrgIds || shadowOrgId;
+      
       // Convert App to OrganizeApp and save to database
-      const organizeApps = newApps.map(app => appToOrganizeApp(app, shadowOrgId))
+      const organizeApps = newApps.map(app => appToOrganizeApp(app, operationShadowOrgId))
       const savedApps = await Promise.all(
-        organizeApps.map(app => organizeApi.createApp(app, shadowOrgId))
+        organizeApps.map(app => organizeApi.createApp(app, operationShadowOrgId))
       )
       
       setApps([...apps, ...savedApps])
@@ -1030,9 +1053,16 @@ function AppInboxContent() {
     if (!shadowOrgId) return
 
     try {
+      // Use full shadow org IDs for app inbox operations if available, otherwise fall back to single shadow org ID
+      const operationShadowOrgId = fullShadowOrgIds || shadowOrgId;
+      console.log('handleUpdateApp - shadowOrgId:', shadowOrgId)
+      console.log('handleUpdateApp - fullShadowOrgIds:', fullShadowOrgIds)
+      console.log('handleUpdateApp - operationShadowOrgId:', operationShadowOrgId)
+      console.log('handleUpdateApp - updatedApp:', updatedApp)
+      
       // Convert App to OrganizeApp for API call
-      const organizeApp = appToOrganizeApp(updatedApp, shadowOrgId)
-      const savedApp = await organizeApi.updateApp({ ...organizeApp, id: updatedApp.id } as OrganizeApp, shadowOrgId)
+      const organizeApp = appToOrganizeApp(updatedApp, operationShadowOrgId)
+      const savedApp = await organizeApi.updateApp({ ...organizeApp, id: updatedApp.id } as OrganizeApp, operationShadowOrgId)
       setApps(apps.map((app) => (app.id === savedApp.id ? savedApp : app)))
       
       // Update selectedApp if it's the same app being updated
@@ -1042,13 +1072,19 @@ function AppInboxContent() {
 
       // Sync with Shadow IT if managedStatus was changed
       if (updatedApp.managedStatus) {
+        // Use full shadow org IDs for sync if available, otherwise fall back to single shadow org ID
+        const syncShadowOrgId = fullShadowOrgIds || shadowOrgId;
+        console.log('Syncing to Shadow IT - appName:', updatedApp.name)
+        console.log('Syncing to Shadow IT - managementStatus:', updatedApp.managedStatus)
+        console.log('Syncing to Shadow IT - shadowOrgId:', syncShadowOrgId)
+        
         const syncResponse = await fetch('/api/applications/by-name', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 appName: updatedApp.name,
                 managementStatus: updatedApp.managedStatus,
-                shadowOrgId: shadowOrgId
+                shadowOrgId: syncShadowOrgId
             })
         });
 
@@ -1071,7 +1107,10 @@ function AppInboxContent() {
     if (!shadowOrgId) return
 
     try {
-      await organizeApi.deleteApp(appId, shadowOrgId)
+      // Use full shadow org IDs for app inbox operations if available, otherwise fall back to single shadow org ID
+      const operationShadowOrgId = fullShadowOrgIds || shadowOrgId;
+      
+      await organizeApi.deleteApp(appId, operationShadowOrgId)
       const updatedApps = apps.filter((app) => app.id !== appId)
       setApps(updatedApps)
       
@@ -1180,9 +1219,12 @@ function AppInboxContent() {
     if (!shadowOrgId || appIds.length === 0) return
 
     try {
+      // Use full shadow org IDs for app inbox operations if available, otherwise fall back to single shadow org ID
+      const operationShadowOrgId = fullShadowOrgIds || shadowOrgId;
+      
       // Remove apps one by one
       for (const appId of appIds) {
-        await organizeApi.deleteApp(appId, shadowOrgId)
+        await organizeApi.deleteApp(appId, operationShadowOrgId)
       }
       
       // Update the apps list

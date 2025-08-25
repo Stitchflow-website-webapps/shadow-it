@@ -46,6 +46,7 @@ export interface OrganizeApp {
   managed_status: string | null
   licenses_used: number | null
   usage_description: string | null
+  source_shadow_org_id?: string // Optional field added by API for tracking which shadow org the app belongs to
 }
 
 export interface OrganizeDatabase {

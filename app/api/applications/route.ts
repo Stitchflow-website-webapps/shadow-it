@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { organizeSupabaseAdmin } from '@/lib/supabase/organize-client';
 import { determineRiskLevel, determineRiskReason, transformRiskLevel, determineAppRiskReason } from '@/lib/risk-assessment';
 
 // Define types for the database responses
@@ -105,6 +106,163 @@ function appNameToDomain(appName: string): string {
   
   // Default to .com instead of .io
   return sanitized + '.com';
+}
+
+// Helper function to get integrations (copied from bulk-update route)
+async function getIntegrations() {
+  try {
+    const response = await fetch(
+      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/stitchflow-intg%20list-K5UBvEAIl4xhSgVYxIckYWH6WsdxMh.csv",
+    );
+    const csvText = await response.text();
+    const lines = csvText.split("\n");
+    const data = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const values = line.split(",").map((v) => v.trim().replace(/"/g, ""));
+      if (values.length >= 2) {
+        const name = values[0];
+        const status = values[1];
+        if (name && status) {
+          let mappedStatus = "Not connected";
+          if (status.toLowerCase().includes("csv") && status.toLowerCase().includes("api coming soon")) {
+            mappedStatus = "Yes - CSV Sync";
+          } else if (status.toLowerCase().includes("api")) {
+            mappedStatus = "Yes - API";
+          } else if (status.toLowerCase().includes("csv")) {
+            mappedStatus = "Yes - CSV Sync";
+          }
+          data.push({ name, connectionStatus: mappedStatus });
+        }
+      }
+    }
+    return data;
+  } catch (err) {
+    console.error("Error fetching integrations:", err);
+    return [];
+  }
+}
+
+// Sync function to update App Inbox when Shadow IT status changes
+async function syncToAppInbox(app: any, managementStatus: string) {
+  try {
+    console.log(`Syncing app ${app.name} with status ${managementStatus} to App Inbox`);
+    
+    if (!app.organization_id) {
+      console.warn(`Skipping app sync for ${app.name} because organization_id is missing.`);
+      return;
+    }
+
+    // Handle comma-separated shadow org IDs
+    const shadowOrgIds = app.organization_id.split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0);
+    
+    if (shadowOrgIds.length === 0) {
+      console.warn(`Invalid shadow_org_id: ${app.organization_id}`);
+      return;
+    }
+
+    let organization = null;
+
+    // Try each shadow org ID to find which one contains the shadow org ID
+    for (const singleShadowOrgId of shadowOrgIds) {
+      // First try exact match
+      let { data: org, error: orgError } = await organizeSupabaseAdmin
+        .from('organizations')
+        .select('id')
+        .eq('shadow_org_id', singleShadowOrgId)
+        .single();
+
+      // If no exact match, try to find organizations that contain this shadow org ID in comma-separated list
+      if (orgError || !org) {
+        const { data: orgs, error: orgsError } = await organizeSupabaseAdmin
+          .from('organizations')
+          .select('id, shadow_org_id')
+          .not('shadow_org_id', 'is', null);
+
+        if (!orgsError && orgs) {
+          // Find organization that contains the shadow org ID in its comma-separated list
+          const foundOrg = orgs.find(orgItem => {
+            if (!orgItem.shadow_org_id) return false;
+            const orgShadowIds = orgItem.shadow_org_id.split(',').map((id: string) => id.trim());
+            return orgShadowIds.includes(singleShadowOrgId);
+          });
+          
+          if (foundOrg) {
+            org = { id: foundOrg.id };
+            orgError = null; // Clear the error since we found a match
+          }
+        }
+      }
+
+      if (!orgError && org) {
+        organization = org;
+        break;
+      }
+    }
+
+    if (!organization) {
+      console.warn(`Organization not found for shadow_org_id: ${app.organization_id}`);
+      return;
+    }
+
+    // Check if the app already exists in the apps table
+    const { data: existingApp, error: findError } = await organizeSupabaseAdmin
+      .from('apps')
+      .select('id')
+      .eq('name', app.name)
+      .eq('org_id', organization.id)
+      .single();
+
+    if (findError && findError.code !== 'PGRST116') { // PGRST116: 'exact-one-row-not-found'
+      console.error('Error finding app in App Inbox:', findError);
+      return;
+    }
+
+    // If app exists, update it
+    if (existingApp) {
+      console.log(`Updating existing app ${app.name} in App Inbox with status ${managementStatus}`);
+      const { error: updateError } = await organizeSupabaseAdmin
+        .from('apps')
+        .update({ managed_status: managementStatus })
+        .eq('id', existingApp.id)
+        .eq('org_id', organization.id);
+
+      if (updateError) {
+        console.error('Error updating app in App Inbox:', updateError);
+      } else {
+        console.log(`Successfully updated app ${app.name} in App Inbox`);
+      }
+    } else {
+      // If app does not exist, only create it if status is "Managed"
+      if (managementStatus === "Managed") {
+        const integrations = await getIntegrations();
+        const integration = integrations.find(int => int.name.toLowerCase() === app.name.toLowerCase());
+        const connectionStatus = integration ? integration.connectionStatus : "Yes - CSV Sync";
+
+        console.log(`Creating new app ${app.name} in App Inbox with status ${managementStatus}`);
+        const { error: createError } = await organizeSupabaseAdmin
+          .from('apps')
+          .insert({
+            name: app.name,
+            managed_status: managementStatus,
+            org_id: organization.id,
+            stitchflow_status: connectionStatus,
+          });
+        
+        if (createError) {
+          console.error('Error creating app in App Inbox:', createError);
+        } else {
+          console.log(`Successfully created app ${app.name} in App Inbox`);
+        }
+      } else {
+        console.log(`App ${app.name} not found in App Inbox and status is ${managementStatus} - skipping creation`);
+      }
+    }
+  } catch (error) {
+    console.error('Error syncing to App Inbox:', error);
+  }
 }
 
 export async function GET(request: Request) {
@@ -359,13 +517,21 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'No update parameters provided' }, { status: 400 });
     }
 
-    const { error } = await supabaseAdmin
+    // Update the application in Shadow IT
+    const { data: updatedApp, error } = await supabaseAdmin
       .from('applications')
       .update(updateData)
-      .eq('id', id);
+      .eq('id', id)
+      .select('id, name, organization_id, management_status')
+      .single();
 
     if (error) {
       throw error;
+    }
+
+    // Sync to App Inbox if managementStatus was changed
+    if (managementStatus && updatedApp) {
+      await syncToAppInbox(updatedApp, managementStatus);
     }
 
     return NextResponse.json({ success: true });

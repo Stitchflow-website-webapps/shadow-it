@@ -50,15 +50,55 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'appName, managementStatus, and shadowOrgId are required' }, { status: 400 })
     }
 
-    // First get the org_id from the organizations table using shadow_org_id
-    const { data: organization, error: orgError } = await supabase
-      .from('organizations')
-      .select('id')
-      .eq('shadow_org_id', shadowOrgId)
-      .single()
+    // Handle comma-separated shadow org IDs - find which org contains this shadow org ID
+    const shadowOrgIds = shadowOrgId.split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0)
+    
+    if (shadowOrgIds.length === 0) {
+      return NextResponse.json({ error: 'Valid shadow org ID is required' }, { status: 400 })
+    }
 
-    if (orgError || !organization) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+    let organization = null
+    let orgError = null
+
+    // Try each shadow org ID to find which one contains the shadow org ID
+    for (const singleShadowOrgId of shadowOrgIds) {
+      // First try exact match
+      let { data: org, error: error } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('shadow_org_id', singleShadowOrgId)
+        .single()
+
+      // If no exact match, try to find organizations that contain this shadow org ID in comma-separated list
+      if (error || !org) {
+        const { data: orgs, error: orgsError } = await supabase
+          .from('organizations')
+          .select('id, shadow_org_id')
+          .not('shadow_org_id', 'is', null)
+
+        if (!orgsError && orgs) {
+          // Find organization that contains the shadow org ID in its comma-separated list
+          const foundOrg = orgs.find(orgItem => {
+            if (!orgItem.shadow_org_id) return false
+            const orgShadowIds = orgItem.shadow_org_id.split(',').map((id: string) => id.trim())
+            return orgShadowIds.includes(singleShadowOrgId)
+          })
+          
+          if (foundOrg) {
+            org = { id: foundOrg.id }
+            error = null // Clear the error since we found a match
+          }
+        }
+      }
+
+      if (!error && org) {
+        organization = org
+        break
+      }
+    }
+
+    if (!organization) {
+      return NextResponse.json({ error: 'Organization not found for any provided shadow org IDs' }, { status: 404 })
     }
 
     // Check if the app already exists in the apps table

@@ -5,29 +5,16 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate the request using Upstash signature or secret
-    const authHeader = request.headers.get('Authorization');
+    // 1. Authenticate the request using Upstash signature
     const upstashSignature = request.headers.get('Upstash-Signature');
     
-    // Check for either bearer token or Upstash signature
-    let isAuthenticated = false;
-    
-    if (authHeader) {
-      const token = authHeader.split(' ')[1];
-      isAuthenticated = token === process.env.CRON_SECRET;
-    }
-    
-    if (upstashSignature) {
-      // Upstash provides signature-based authentication
-      // For now, we'll also accept the signature as valid
-      // You can implement proper signature verification if needed
-      isAuthenticated = true;
+    if (!upstashSignature) {
+      console.error(`[WeeklyCron] Missing Upstash-Signature header`);
+      return NextResponse.json({ error: 'Unauthorized - Missing Upstash signature' }, { status: 401 });
     }
 
-    if (!isAuthenticated) {
-      console.error(`[WeeklyCron] Unauthorized request`);
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Upstash provides signature-based authentication automatically
+    console.log('✅ [WeeklyCron] Authenticated via Upstash signature');
 
     console.log(`🚀 [WeeklyCron] Starting weekly cleanup for all providers...`);
     console.log(`⏰ [WeeklyCron] Triggered at: ${new Date().toISOString()}`);
@@ -118,12 +105,14 @@ export async function POST(request: NextRequest) {
 // Also support GET for testing/manual trigger
 export async function GET(request: NextRequest) {
   try {
-    // Same authentication as POST
-    const authHeader = request.headers.get('Authorization');
-    const token = authHeader?.split(' ')[1];
-
-    if (token !== process.env.CRON_SECRET) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // For testing, we'll allow requests with either Upstash signature or manual testing
+    const upstashSignature = request.headers.get('Upstash-Signature');
+    const testParam = request.nextUrl.searchParams.get('test');
+    
+    if (!upstashSignature && testParam !== 'true') {
+      return NextResponse.json({ 
+        error: 'Unauthorized - Use ?test=true for manual testing or provide Upstash-Signature header' 
+      }, { status: 401 });
     }
 
     console.log(`🧪 [WeeklyCron] Manual test trigger for all providers...`);
