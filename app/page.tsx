@@ -25,6 +25,7 @@ import {
   Bell,
   ArrowRight,
   ArrowRightIcon,
+  Download,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -97,7 +98,7 @@ type Application = {
   logoUrl?: string      // Primary logo URL
   logoUrlFallback?: string // Fallback logo URL
   created_at?: string   // Added created_at field
-  managementStatus: "Managed" | "Unmanaged" | "Newly discovered"
+  managementStatus: "Managed" | "Unmanaged" | "Newly discovered" | "Needs review"
   ownerEmail: string
   notes: string
   scopes: string[]
@@ -3109,6 +3110,58 @@ export default function ShadowITDashboard() {
     return filteredApps.slice(startIndex, endIndex);
   }, [filteredApps, startIndex, endIndex]);
 
+  // Add export functionality
+  const handleExportUsers = () => {
+    if (!selectedApp) return;
+
+    // Prepare CSV data
+    const csvData = selectedApp.users.map(user => {
+      // Join scope permissions with semicolon for CSV
+      const scopePermissions = user.scopes.join('; ');
+      
+      return {
+        'User Email': user.email,
+        'User Name': user.name,
+        'User Scope Risk': transformRiskLevel(user.riskLevel),
+        'Scope Permissions': scopePermissions
+      };
+    });
+
+    // Convert to CSV format
+    const headers = Object.keys(csvData[0]) as Array<keyof typeof csvData[0]>;
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => 
+        headers.map(header => {
+          // Escape quotes and wrap in quotes if contains comma or newline
+          const value = row[header] || '';
+          if (value.includes(',') || value.includes('\n') || value.includes('"')) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
+        }).join(',')
+      )
+    ].join('\n');
+
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    // Create filename: app_name_shadow_it_userlist.csv
+    const appName = selectedApp.name.replace(/[^a-zA-Z0-9]/g, '_'); // Replace special chars with underscore
+    const filename = `${appName}_shadow_it_userlist.csv`;
+    
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   return (
     <div className="min-h-screen font-sans text-gray-900 bg-[#f8f5f3]">
       {/* Sidebar - only show when authenticated */}
@@ -3367,6 +3420,7 @@ export default function ShadowITDashboard() {
                               <option value="Managed">Managed</option>
                               <option value="Unmanaged">Unmanaged</option>
                               <option value="Newly discovered">Newly discovered</option>
+                              <option value="Needs review">Needs review</option>
                             </select>
                           </div>
                         </div>
@@ -3391,6 +3445,7 @@ export default function ShadowITDashboard() {
                                   <SelectItem value="Managed">Managed</SelectItem>
                                   <SelectItem value="Unmanaged">Unmanaged</SelectItem>
                                   <SelectItem value="Newly discovered">Newly discovered</SelectItem>
+                                  <SelectItem value="Needs review">Needs review</SelectItem>
                                 </SelectContent>
                               </Select>
                               <Button variant="ghost" size="sm" onClick={() => setSelectedAppIds(new Set())} disabled={isBulkUpdateInProgress}>
@@ -3637,6 +3692,7 @@ export default function ShadowITDashboard() {
                                       <option value="Managed">Managed</option>
                                       <option value="Unmanaged">Unmanaged</option>
                                       <option value="Newly discovered">Newly discovered</option>
+                                      <option value="Needs review">Needs review</option>
                                     </select>
                                   </TableCell>
                                   <TableCell>
@@ -4408,13 +4464,14 @@ export default function ShadowITDashboard() {
                         <div className="flex items-center gap-1">
                           <span className="text-sm text-muted-foreground font-medium">Managed Status:</span>
                           <select
-                              className="h-8 rounded-md border border-gray-200 bg-white px-2 text-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                              className="h-8 min-w-[140px] rounded-md border border-gray-200 bg-white px-2 text-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200"
                             value={editedStatuses[selectedApp.id] || selectedApp.managementStatus}
                             onChange={(e) => handleStatusChange(selectedApp.id, e.target.value)}
                           >
                             <option value="Managed">Managed</option>
                             <option value="Unmanaged">Unmanaged</option>
                             <option value="Newly discovered">Newly discovered</option>
+                            <option value="Needs review">Needs review</option>
                           </select>
                         </div>
                       </div>
@@ -4473,6 +4530,16 @@ export default function ShadowITDashboard() {
                               onChange={(e) => setUserSearchTerm(e.target.value)}
                               className="mt-1"
                             />
+                          </div>
+                          <div className="flex items-end">
+                            <Button
+                              onClick={handleExportUsers}
+                              variant="outline"
+                              className="flex items-center gap-2"
+                            >
+                              <Download className="h-4 w-4" />
+                              Export Users ({selectedApp?.users.length || 0})
+                            </Button>
                           </div>
                         </div>
 

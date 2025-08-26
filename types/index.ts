@@ -14,7 +14,7 @@ export type Application = {
   logoUrl?: string // Primary logo URL
   logoUrlFallback?: string // Fallback logo URL
   created_at?: string // Added created_at field
-  managementStatus: "Managed" | "Unmanaged" | "Needs Review"
+  managementStatus: "Managed" | "Unmanaged" | "Newly discovered" | "Needs review"
   ownerEmail: string
   notes: string
   scopes: string[]

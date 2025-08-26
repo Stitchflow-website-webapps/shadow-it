@@ -277,7 +277,7 @@ export default function Sidebar({
                     ? 'text-white'
                     : 'group-hover:text-[#1A1A1A]'
                 }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
-                  Applications
+                  Discovered apps
                 </span>
               </button>
               

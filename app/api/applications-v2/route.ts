@@ -101,19 +101,20 @@ function calculateScopeVariance(userApplications: any[]): { userGroups: number; 
   };
 }
 
-function transformManagementStatus(status: string): 'Managed' | 'Unmanaged' | 'Newly discovered' {
-  const validStatuses: ('Managed' | 'Unmanaged' | 'Newly discovered')[] = [
+function transformManagementStatus(status: string): 'Managed' | 'Unmanaged' | 'Newly discovered' | 'Needs review' {
+  const validStatuses: ('Managed' | 'Unmanaged' | 'Newly discovered' | 'Needs review')[] = [
     'Managed',
-    'Unmanaged', 
-    'Newly discovered'
+    'Unmanaged',
+    'Newly discovered',
+    'Needs review'
   ];
 
   if (validStatuses.includes(status as any)) {
-    return status as 'Managed' | 'Unmanaged' | 'Newly discovered';
+    return status as 'Managed' | 'Unmanaged' | 'Newly discovered' | 'Needs review';
   }
   
   // Handle backward compatibility - convert old statuses to "Newly discovered"
-  if (status === 'Needs Review' || status === 'Unknown' || status === 'Ignore' || status === 'Not specified') {
+  if (status === 'Unknown' || status === 'Ignore' || status === 'Not specified') {
     return 'Newly discovered';
   }
   
@@ -496,7 +497,7 @@ export async function PATCH(request: Request) {
     const updateData: any = {};
     
     if (managementStatus) {
-      if (!['Managed', 'Unmanaged', 'Newly discovered'].includes(managementStatus)) {
+      if (!['Managed', 'Unmanaged', 'Newly discovered', 'Needs review'].includes(managementStatus)) {
         return NextResponse.json({ error: 'Invalid management status' }, { status: 400 });
       }
       updateData.management_status = managementStatus;

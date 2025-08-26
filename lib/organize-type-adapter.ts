@@ -10,7 +10,7 @@ export function organizeAppToApp(organizeApp: OrganizeApp): App {
     emailProvider: '',
     ssoEnforced: organizeApp.sso_enforced || '',
     deprovisioning: organizeApp.deprovisioning || '',
-    managedStatus: organizeApp.managed_status || 'Unknown',
+    managedStatus: organizeApp.managed_status || 'Newly discovered',
     stitchflowStatus: organizeApp.stitchflow_status || '',
     appTier: organizeApp.app_tier || '',
     department: organizeApp.department || '',

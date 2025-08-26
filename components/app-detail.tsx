@@ -238,8 +238,7 @@ export function AppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fal
                 { value: "Managed", label: "Managed" },
                 { value: "Unmanaged", label: "Unmanaged" },
                 { value: "Newly discovered", label: "Newly discovered" },
-                { value: "Unknown", label: "Unknown" },
-                { value: "Ignore", label: "Ignore" },
+                { value: "Needs review", label: "Needs review" },
               ],
             }
           ]}
