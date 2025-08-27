@@ -1501,8 +1501,13 @@ export default function ShadowITDashboard() {
 
   // Memoize filtered applications
   const filteredApps = useMemo(() => {
-    return applications.filter((app) => {
-      const matchesSearch = searchTerm === "" || 
+    // Debug logging for "Older" filter
+    if (filterTime === "Older") {
+      console.log(`[DEBUG] Starting filter with ${applications.length} total applications`);
+    }
+
+    const filteredResult = applications.filter((app) => {
+      const matchesSearch = searchTerm === "" ||
       app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (app.category && app.category.toLowerCase().includes(searchTerm.toLowerCase()))
     const matchesRisk = filterRisk ? app.riskLevel === filterRisk : true
@@ -1513,31 +1518,61 @@ export default function ShadowITDashboard() {
 
     // Time filtering logic
     const matchesTime = filterTime ? (() => {
-      if (!app.created_at) return false;
-      
+      // Debug logging for "Older" filter
+      if (filterTime === "Older") {
+        console.log(`[DEBUG] App: ${app.name}, created_at: ${app.created_at}`);
+      }
+
+      // If no created_at timestamp, handle based on filter type
+      if (!app.created_at) {
+        const result = filterTime === "Older";
+        if (filterTime === "Older") {
+          console.log(`[DEBUG] No created_at for ${app.name}, returning: ${result}`);
+        }
+        return result;
+      }
+
       const appDate = new Date(app.created_at);
       const now = new Date();
-      
+
       switch (filterTime) {
         case "This Week":
           const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
           return appDate >= weekAgo;
         case "This Month":
-          return appDate.getMonth() === now.getMonth() && appDate.getFullYear() === now.getFullYear();
+          const thisMonthResult = appDate.getMonth() === now.getMonth() && appDate.getFullYear() === now.getFullYear();
+          console.log(`[DEBUG] ${app.name}: appDate month=${appDate.getMonth()}, now month=${now.getMonth()}, appDate year=${appDate.getFullYear()}, now year=${now.getFullYear()}, result=${thisMonthResult}`);
+          return thisMonthResult;
         case "Last Month":
           const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
           const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
           return appDate >= lastMonth && appDate < thisMonth;
         case "Older":
-          const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-          return appDate < currentMonth;
+          const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const olderResult = appDate < lastMonthStart;
+          console.log(`[DEBUG] ${app.name}: appDate=${appDate.toISOString()}, lastMonthStart=${lastMonthStart.toISOString()}, result=${olderResult}`);
+          return olderResult;
         default:
           return true; // "All Time"
       }
     })() : true;
 
-    return matchesSearch && matchesRisk && matchesManaged && matchesCategory && matchesTime
-  })
+    const finalResult = matchesSearch && matchesRisk && matchesManaged && matchesCategory && matchesTime;
+
+    // Debug logging for "Older" filter
+    if (filterTime === "Older") {
+      console.log(`[DEBUG] ${app.name}: search=${matchesSearch}, risk=${matchesRisk}, managed=${matchesManaged}, category=${matchesCategory}, time=${matchesTime}, final=${finalResult}`);
+    }
+
+    return finalResult;
+  });
+
+  // Debug logging for final result
+  if (filterTime === "Older") {
+    console.log(`[DEBUG] Final filtered result: ${filteredResult.length} applications`);
+  }
+
+  return filteredResult;
   }, [applications, searchTerm, filterRisk, filterManaged, filterCategory, filterTime, appCategories]) // Added appCategories to dependency array
 
   // Get unique categories for the filter dropdown
@@ -3248,29 +3283,30 @@ export default function ShadowITDashboard() {
                       {(() => {
                         // Count how many filters are active
                         const activeFilters = [filterCategory, filterTime, filterRisk, filterManaged].filter(Boolean).length;
-                        
+                        const filteredCount = filteredApps.length;
+
                         if (activeFilters === 0) {
-                          return `We found ${totalRecords} applications.`;
+                          return `We found ${filteredCount} applications.`;
                         }
 
                         // Single filter messages
                         if (activeFilters === 1) {
                           if (filterCategory) {
-                            return `We found ${totalRecords} applications in ${filterCategory}.`;
+                            return `We found ${filteredCount} applications in ${filterCategory}.`;
                           }
                           if (filterTime) {
-                            return `We found ${totalRecords} applications added ${filterTime.toLowerCase()}.`;
+                            return `We found ${filteredCount} applications added ${filterTime.toLowerCase()}.`;
                           }
                           if (filterRisk) {
-                            return `We found ${totalRecords} ${filterRisk.toLowerCase()} risk applications.`;
+                            return `We found ${filteredCount} ${filterRisk.toLowerCase()} risk applications.`;
                           }
                           if (filterManaged) {
-                            return `We found ${totalRecords} ${filterManaged.toLowerCase()} applications.`;
+                            return `We found ${filteredCount} ${filterManaged.toLowerCase()} applications.`;
                           }
                         }
 
                         // Multiple filters - show total count with "filtered"
-                        return `We found ${totalRecords} filtered applications.`;
+                        return `We found ${filteredCount} filtered applications.`;
                       })()}
                     </p>
                   </div>
@@ -4400,27 +4436,28 @@ export default function ShadowITDashboard() {
                   <h2 className="text-lg font-medium text-gray-800">
                     {(() => {
                       // Count how many filters are active
-                                              const activeFilters = [filterCategory, filterTime, filterRisk, filterManaged].filter(Boolean).length;
-                      
+                      const activeFilters = [filterCategory, filterTime, filterRisk, filterManaged].filter(Boolean).length;
+                      const filteredCount = filteredApps.length;
+
                       if (activeFilters === 0) {
-                        return `We found ${totalRecords} applications.`;
+                        return `We found ${filteredCount} applications.`;
                       }
 
                       // Single filter messages
                       if (activeFilters === 1) {
                         if (filterCategory) {
-                          return `We found ${totalRecords} applications in ${filterCategory}.`;
+                          return `We found ${filteredCount} applications in ${filterCategory}.`;
                         }
                         if (filterRisk) {
-                          return `We found ${totalRecords} ${filterRisk.toLowerCase()} risk applications.`;
+                          return `We found ${filteredCount} ${filterRisk.toLowerCase()} risk applications.`;
                         }
                         if (filterManaged) {
-                          return `We found ${totalRecords} ${filterManaged.toLowerCase()} applications.`;
+                          return `We found ${filteredCount} ${filterManaged.toLowerCase()} applications.`;
                         }
                       }
 
                       // Multiple filters - show total count with "filtered"
-                      return `We found ${totalRecords} filtered applications.`;
+                      return `We found ${filteredCount} filtered applications.`;
                     })()}
                   </h2>
                 </div>
