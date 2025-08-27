@@ -989,8 +989,39 @@ function AppInboxContent() {
     setIsSidebarOpen(false)
   }
 
-  const handleSignOut = () => {
-    router.push('/api/auth/session/logout');
+  const handleSignOut = async () => {
+    try {
+      // Make POST request to logout API
+      const response = await fetch('/api/auth/session/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        console.log('Logout successful');
+      } else {
+        console.error('Logout API failed:', response.status);
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+
+    // Always perform client-side cleanup as fallback
+    if (typeof window !== 'undefined') {
+      const cookiesToClear = ['orgId', 'userEmail', 'accessToken', 'refreshToken', 'shadow_session_id', 'user_info'];
+      cookiesToClear.forEach(cookieName => {
+        document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+      });
+
+      // Clear storage
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // Redirect to main page where login modal will be shown
+      window.location.href = '/';
+    }
   }
 
   // Handle organization settings update
