@@ -19,8 +19,10 @@ export async function POST(request: NextRequest) {
 
 
 
-    // Execute the complex query using raw SQL to get applications with high-risk user counts
-    const { data, error } = await supabaseAdmin
+    // Get basic application data first
+    console.log('Fetching applications for organization:', organizationId);
+    
+    const { data: applications, error: appError } = await supabaseAdmin
       .from('applications')
       .select(`
         id,
@@ -45,59 +47,46 @@ export async function POST(request: NextRequest) {
       .eq('organization_id', organizationId)
       .order('name');
 
-    if (error) {
-      console.error('Database error:', error);
+    if (appError) {
+      console.error('Database error fetching applications:', appError);
       return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
     }
 
-    if (!data || data.length === 0) {
+    if (!applications || applications.length === 0) {
       return NextResponse.json({ error: 'No data found for this organization' }, { status: 404 });
     }
 
-    // Get high-risk user counts and total user counts for each application
-    const appStats = new Map<string, { highRiskCount: number; totalCount: number }>();
+    // Get user counts for each application efficiently
+    console.log(`Processing user counts for ${applications.length} applications`);
     
-    for (const app of data) {
+    const finalData = await Promise.all(applications.map(async (app) => {
       try {
-        // Get total user count
-        const { data: totalUsers, error: totalError } = await supabaseAdmin
+        // Get all user applications for this app
+        const { data: userApps, error: userAppError } = await supabaseAdmin
           .from('user_applications')
-          .select('user_id')
+          .select('user_id, scopes')
           .eq('application_id', app.id);
 
-        if (totalError) {
-          console.error(`Error fetching total users for ${app.id}:`, totalError);
-          appStats.set(app.id, { highRiskCount: 0, totalCount: 0 });
-          continue;
+        if (userAppError) {
+          console.error(`Error fetching user apps for ${app.id}:`, userAppError);
+          return {
+            ...app,
+            high_risk_user_count: 0,
+            total_user_count: 0
+          };
         }
 
-        const totalUserCount = new Set(totalUsers?.map(ua => ua.user_id) || []).size;
+        // Count unique users
+        const uniqueUsers = new Set(userApps?.map(ua => ua.user_id) || []);
+        const totalUserCount = uniqueUsers.size;
 
-        // Get high-risk user count
-        const { data: userApps, error: userAppsError } = await supabaseAdmin
-          .from('user_applications')
-          .select('scopes, user_id')
-          .eq('application_id', app.id);
-
-        if (userAppsError) {
-          console.error(`Error fetching user apps for ${app.id}:`, userAppsError);
-          appStats.set(app.id, { highRiskCount: 0, totalCount: totalUserCount });
-          continue;
-        }
-
-        let highRiskUserCount = 0;
-        const processedUsers = new Set<string>();
-
+        // Count high-risk users
+        const highRiskUsers = new Set<string>();
+        
         for (const userApp of userApps || []) {
-          if (!userApp.scopes || !userApp.user_id) continue;
+          if (!userApp.scopes || !Array.isArray(userApp.scopes)) continue;
           
-          if (processedUsers.has(userApp.user_id)) continue; // Count each user only once per app
-          processedUsers.add(userApp.user_id);
-
-          const scopes = Array.isArray(userApp.scopes) ? userApp.scopes : [userApp.scopes];
-          
-          // Check for high-risk scopes
-          const hasHighRiskScope = scopes.some((scope: string) => {
+          const hasHighRiskScope = userApp.scopes.some((scope: string) => {
             // Google high-risk scopes
             if (scope.includes('admin') || 
                 scope.includes('gmail') || 
@@ -137,23 +126,44 @@ export async function POST(request: NextRequest) {
           });
 
           if (hasHighRiskScope) {
-            highRiskUserCount++;
+            highRiskUsers.add(userApp.user_id);
           }
         }
 
-        appStats.set(app.id, { highRiskCount: highRiskUserCount, totalCount: totalUserCount });
-      } catch (err) {
-        console.error(`Error processing users for app ${app.id}:`, err);
-        appStats.set(app.id, { highRiskCount: 0, totalCount: 0 });
+        return {
+          ...app,
+          high_risk_user_count: highRiskUsers.size,
+          total_user_count: totalUserCount
+        };
+      } catch (error) {
+        console.error(`Error processing app ${app.id}:`, error);
+        return {
+          ...app,
+          high_risk_user_count: 0,
+          total_user_count: 0
+        };
       }
-    }
+    }));
 
-    if (error) {
-      console.error('Database error:', error);
-      return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
-    }
+    // Sort by high risk user count descending, then by name
+    finalData.sort((a, b) => {
+      if (b.high_risk_user_count !== a.high_risk_user_count) {
+        return b.high_risk_user_count - a.high_risk_user_count;
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
 
-    if (!data || data.length === 0) {
+    console.log(`Processed ${finalData.length} applications. Sample data:`, {
+      firstApp: finalData[0] ? {
+        id: finalData[0].id,
+        name: finalData[0].name,
+        category: finalData[0].category,
+        high_risk_user_count: finalData[0].high_risk_user_count,
+        total_user_count: finalData[0].total_user_count
+      } : 'No apps'
+    });
+
+    if (!finalData || finalData.length === 0) {
       return NextResponse.json({ error: 'No data found for this organization' }, { status: 404 });
     }
 
@@ -173,37 +183,47 @@ export async function POST(request: NextRequest) {
       'Microsoft App ID',
       'Category Status',
       'Provider',
-      'User Count',
-      'Owner Email',
-      'Notes',
-      'AI Risk Score',
       'High Risk User Count',
       'Total User Count'
     ];
 
-    const csvRows = data.map((row: any) => {
-      const stats = appStats.get(row.id) || { highRiskCount: 0, totalCount: 0 };
+    // Helper function to safely escape CSV values
+    const escapeCsvValue = (value: any): string => {
+      if (value === null || value === undefined) {
+        return '';
+      }
+      
+      const stringValue = String(value);
+      
+      // If the value contains comma, newline, or quotes, wrap it in quotes and escape internal quotes
+      if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('\r') || stringValue.includes('"')) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      
+      return stringValue;
+    };
+
+    // Process data and create CSV rows with proper escaping
+    const csvRows = finalData.map((row: any) => {
+      console.log(`Processing row for app: ${row.name} (${row.id})`);
+      
       return [
-        row.id || '',
-        row.organization_id || '',
-        row.google_app_id || '',
-        `"${(row.name || '').replace(/"/g, '""')}"`, // Escape quotes in name
-        row.category || '',
-        row.risk_level || '',
-        row.management_status || '',
-        row.total_permissions || '',
-        row.created_at || '',
-        row.updated_at || '',
-        `"${(Array.isArray(row.all_scopes) ? row.all_scopes.join('; ') : (row.all_scopes || '')).replace(/"/g, '""')}"`, // Handle array and escape quotes
-        row.microsoft_app_id || '',
-        row.category_status || '',
-        row.provider || '',
-        row.user_count || '',
-        row.owner_email || '',
-        `"${(row.notes || '').replace(/"/g, '""')}"`, // Escape quotes in notes
-        row.ai_risk_score || '',
-        stats.highRiskCount,
-        stats.totalCount
+        escapeCsvValue(row.id),
+        escapeCsvValue(row.organization_id),
+        escapeCsvValue(row.google_app_id),
+        escapeCsvValue(row.name),
+        escapeCsvValue(row.category),
+        escapeCsvValue(row.risk_level),
+        escapeCsvValue(row.management_status),
+        escapeCsvValue(row.total_permissions),
+        escapeCsvValue(row.created_at),
+        escapeCsvValue(row.updated_at),
+        escapeCsvValue(Array.isArray(row.all_scopes) ? row.all_scopes.join('; ') : row.all_scopes),
+        escapeCsvValue(row.microsoft_app_id),
+        escapeCsvValue(row.category_status),
+        escapeCsvValue(row.provider),
+        escapeCsvValue(row.high_risk_user_count || 0),
+        escapeCsvValue(row.total_user_count || 0)
       ];
     });
 
