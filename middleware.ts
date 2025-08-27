@@ -34,6 +34,7 @@ export function middleware(request: NextRequest) {
     '/api/user',
     '/api/session-info', // Add the new session-info API
     '/api/sync/status',
+    '/api/app/auth/session/logout',
     '/favicon.ico',
     '/images',  // Add images directory
     '/.*\\.(?:jpg|jpeg|gif|png|svg|ico|css|js)$'
