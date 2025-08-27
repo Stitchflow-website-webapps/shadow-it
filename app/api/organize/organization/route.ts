@@ -19,35 +19,50 @@ export async function GET(request: NextRequest) {
 
     // Try each shadow org ID until we find a valid organization
     for (const singleShadowOrgId of shadowOrgIds) {
-      // First try exact match
-      let { data: organization, error: orgError } = await organizeSupabaseAdmin
+      let organizations = null
+      let orgError = null
+
+      // First try to find organizations that contain this shadow org ID in comma-separated list
+      const { data: orgs, error: orgsError } = await organizeSupabaseAdmin
         .from('organizations')
         .select('*')
-        .eq('shadow_org_id', singleShadowOrgId)
-        .single()
+        .not('shadow_org_id', 'is', null)
 
-      // If no exact match, try to find organizations that contain this shadow org ID in comma-separated list
-      if (orgError || !organization) {
-        const { data: orgs, error: orgsError } = await organizeSupabaseAdmin
-          .from('organizations')
-          .select('*')
-          .not('shadow_org_id', 'is', null)
-
-        if (!orgsError && orgs) {
-          // Find organization that contains the shadow org ID in its comma-separated list
-          organization = orgs.find(org => {
-            if (!org.shadow_org_id) return false
-            const orgShadowIds = org.shadow_org_id.split(',').map((id: string) => id.trim())
-            return orgShadowIds.includes(singleShadowOrgId)
-          })
-          
-          if (organization) {
-            orgError = null // Clear the error since we found a match
-          }
+      if (!orgsError && orgs) {
+        // Find organization that contains the shadow org ID in its comma-separated list
+        const matchingOrg = orgs.find(org => {
+          if (!org.shadow_org_id) return false
+          const orgShadowIds = org.shadow_org_id.split(',').map((id: string) => id.trim())
+          return orgShadowIds.includes(singleShadowOrgId)
+        })
+        
+        if (matchingOrg) {
+          organizations = [matchingOrg]
+          orgError = null
         }
       }
 
-      if (!orgError && organization) {
+      // If no comma-separated match found, try exact match
+      if (!organizations || organizations.length === 0) {
+        const { data: exactOrgs, error: exactError } = await organizeSupabaseAdmin
+          .from('organizations')
+          .select('*')
+          .eq('shadow_org_id', singleShadowOrgId)
+
+        if (!exactError && exactOrgs && exactOrgs.length > 0) {
+          organizations = exactOrgs
+          orgError = null
+        } else {
+          orgError = exactError
+        }
+      }
+
+      if (!orgError && organizations && organizations.length > 0) {
+        // If there are multiple organizations, use the oldest one
+        const organization = organizations.sort((a, b) => 
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )[0]
+
         // Add info about which shadow org ID was used
         const orgWithSource = {
           ...organization,
@@ -91,6 +106,66 @@ export async function PUT(request: NextRequest) {
     // Update all organizations that match the shadow org IDs
     for (const singleShadowOrgId of shadowOrgIds) {
       try {
+        let organizations = null
+        let findError = null
+
+        // First try to find organizations that contain this shadow org ID in comma-separated list
+        const { data: orgs, error: orgsError } = await organizeSupabaseAdmin
+          .from('organizations')
+          .select('*')
+          .not('shadow_org_id', 'is', null)
+
+        if (!orgsError && orgs) {
+          // Find organization that contains the shadow org ID in its comma-separated list
+          const matchingOrgs = orgs.filter(org => {
+            if (!org.shadow_org_id) return false
+            const orgShadowIds = org.shadow_org_id.split(',').map((id: string) => id.trim())
+            return orgShadowIds.includes(singleShadowOrgId)
+          })
+          
+          if (matchingOrgs.length > 0) {
+            organizations = matchingOrgs
+          }
+        }
+
+        // If no comma-separated match found, try exact match
+        if (!organizations || organizations.length === 0) {
+          const { data: exactOrgs, error: exactError } = await organizeSupabaseAdmin
+            .from('organizations')
+            .select('*')
+            .eq('shadow_org_id', singleShadowOrgId)
+
+          if (!exactError && exactOrgs && exactOrgs.length > 0) {
+            organizations = exactOrgs
+          } else {
+            findError = exactError
+          }
+        }
+
+        if (findError) {
+          console.warn(`Failed to find organizations for shadow org ID: ${singleShadowOrgId}`, findError)
+          continue
+        }
+
+        if (!organizations || organizations.length === 0) {
+          console.warn(`No organizations found for shadow org ID: ${singleShadowOrgId}`)
+          continue
+        }
+
+        // If there are multiple organizations, log a warning but proceed with the first one
+        if (organizations.length > 1) {
+          console.warn(`Multiple organizations found for shadow org ID: ${singleShadowOrgId}. Using the first one.`, {
+            count: organizations.length,
+            orgIds: organizations.map(org => org.id)
+          })
+        }
+
+        // Use the first organization (oldest by creation date)
+        const targetOrg = organizations.sort((a, b) => 
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )[0]
+
+        // Update the target organization
         const { data: organization, error: updateError } = await organizeSupabaseAdmin
           .from('organizations')
           .update({
@@ -98,7 +173,7 @@ export async function PUT(request: NextRequest) {
             email_provider,
             updated_at: new Date().toISOString()
           })
-          .eq('shadow_org_id', singleShadowOrgId)
+          .eq('id', targetOrg.id)
           .select()
           .single()
 

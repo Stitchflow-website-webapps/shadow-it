@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
 
 
-    // Execute the query using direct SQL since we need complex joins
+    // Execute the complex query using raw SQL to get applications with high-risk user counts
     const { data, error } = await supabaseAdmin
       .from('applications')
       .select(`
@@ -54,22 +54,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No data found for this organization' }, { status: 404 });
     }
 
-    // Get high-risk user counts for each application
-    const highRiskCounts = new Map<string, number>();
+    // Get high-risk user counts and total user counts for each application
+    const appStats = new Map<string, { highRiskCount: number; totalCount: number }>();
     
     for (const app of data) {
       try {
+        // Get total user count
+        const { data: totalUsers, error: totalError } = await supabaseAdmin
+          .from('user_applications')
+          .select('user_id')
+          .eq('application_id', app.id);
+
+        if (totalError) {
+          console.error(`Error fetching total users for ${app.id}:`, totalError);
+          appStats.set(app.id, { highRiskCount: 0, totalCount: 0 });
+          continue;
+        }
+
+        const totalUserCount = new Set(totalUsers?.map(ua => ua.user_id) || []).size;
+
+        // Get high-risk user count
         const { data: userApps, error: userAppsError } = await supabaseAdmin
           .from('user_applications')
-          .select(`
-            scopes,
-            user:users!inner(id)
-          `)
+          .select('scopes, user_id')
           .eq('application_id', app.id);
 
         if (userAppsError) {
           console.error(`Error fetching user apps for ${app.id}:`, userAppsError);
-          highRiskCounts.set(app.id, 0);
+          appStats.set(app.id, { highRiskCount: 0, totalCount: totalUserCount });
           continue;
         }
 
@@ -77,11 +89,10 @@ export async function POST(request: NextRequest) {
         const processedUsers = new Set<string>();
 
         for (const userApp of userApps || []) {
-          if (!userApp.scopes || !userApp.user) continue;
+          if (!userApp.scopes || !userApp.user_id) continue;
           
-          const userId = (userApp.user as any).id;
-          if (processedUsers.has(userId)) continue; // Count each user only once per app
-          processedUsers.add(userId);
+          if (processedUsers.has(userApp.user_id)) continue; // Count each user only once per app
+          processedUsers.add(userApp.user_id);
 
           const scopes = Array.isArray(userApp.scopes) ? userApp.scopes : [userApp.scopes];
           
@@ -130,11 +141,20 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        highRiskCounts.set(app.id, highRiskUserCount);
+        appStats.set(app.id, { highRiskCount: highRiskUserCount, totalCount: totalUserCount });
       } catch (err) {
-        console.error(`Error processing high-risk users for app ${app.id}:`, err);
-        highRiskCounts.set(app.id, 0);
+        console.error(`Error processing users for app ${app.id}:`, err);
+        appStats.set(app.id, { highRiskCount: 0, totalCount: 0 });
       }
+    }
+
+    if (error) {
+      console.error('Database error:', error);
+      return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
+    }
+
+    if (!data || data.length === 0) {
+      return NextResponse.json({ error: 'No data found for this organization' }, { status: 404 });
     }
 
     // Convert data to CSV format
@@ -157,30 +177,35 @@ export async function POST(request: NextRequest) {
       'Owner Email',
       'Notes',
       'AI Risk Score',
-      'High Risk User Count'
+      'High Risk User Count',
+      'Total User Count'
     ];
 
-    const csvRows = data.map((row: any) => [
-      row.id || '',
-      row.organization_id || '',
-      row.google_app_id || '',
-      `"${(row.name || '').replace(/"/g, '""')}"`, // Escape quotes in name
-      row.category || '',
-      row.risk_level || '',
-      row.management_status || '',
-      row.total_permissions || '',
-      row.created_at || '',
-      row.updated_at || '',
-      `"${(Array.isArray(row.all_scopes) ? row.all_scopes.join('; ') : (row.all_scopes || '')).replace(/"/g, '""')}"`, // Handle array and escape quotes
-      row.microsoft_app_id || '',
-      row.category_status || '',
-      row.provider || '',
-      row.user_count || '',
-      row.owner_email || '',
-      `"${(row.notes || '').replace(/"/g, '""')}"`, // Escape quotes in notes
-      row.ai_risk_score || '',
-      highRiskCounts.get(row.id) || 0
-    ]);
+    const csvRows = data.map((row: any) => {
+      const stats = appStats.get(row.id) || { highRiskCount: 0, totalCount: 0 };
+      return [
+        row.id || '',
+        row.organization_id || '',
+        row.google_app_id || '',
+        `"${(row.name || '').replace(/"/g, '""')}"`, // Escape quotes in name
+        row.category || '',
+        row.risk_level || '',
+        row.management_status || '',
+        row.total_permissions || '',
+        row.created_at || '',
+        row.updated_at || '',
+        `"${(Array.isArray(row.all_scopes) ? row.all_scopes.join('; ') : (row.all_scopes || '')).replace(/"/g, '""')}"`, // Handle array and escape quotes
+        row.microsoft_app_id || '',
+        row.category_status || '',
+        row.provider || '',
+        row.user_count || '',
+        row.owner_email || '',
+        `"${(row.notes || '').replace(/"/g, '""')}"`, // Escape quotes in notes
+        row.ai_risk_score || '',
+        stats.highRiskCount,
+        stats.totalCount
+      ];
+    });
 
     const csvContent = [csvHeaders, ...csvRows]
       .map(row => row.join(','))

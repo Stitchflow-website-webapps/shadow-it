@@ -754,7 +754,7 @@ function SimpleEmptyState({ onAddApp, orgSettings, onSettingsUpdate }: {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center p-6 space-y-8">
         <div className="space-y-3">
-          <h1 className="text-3xl font-semibold text-gray-900">Welcome to App List</h1>
+          <h1 className="text-3xl font-semibold text-gray-900">Welcome to Managed Apps</h1>
           <p className="text-lg text-gray-600">
             To get started, add your first app. You can configure your organization settings later for full functionality.
           </p>
@@ -786,7 +786,7 @@ function SimpleEmptyState({ onAddApp, orgSettings, onSettingsUpdate }: {
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center p-6 space-y-8">
       <div className="space-y-3">
-        <h1 className="text-3xl font-semibold text-gray-900">Welcome to App List</h1>
+        <h1 className="text-3xl font-semibold text-gray-900">Welcome to Managed Apps</h1>
         <p className="text-lg text-gray-600">
           Your organization is configured. Add your first app to get started.
         </p>
@@ -1317,7 +1317,7 @@ function AppInboxContent() {
           <div className="space-y-6">
             {/* Action Bar */}
             <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-gray-900">App List</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Managed Apps</h1>
               <div className="flex items-center gap-3">
                 {selectedAppIds.size > 0 && (
                   <AlertDialog>
@@ -1331,7 +1331,7 @@ function AppInboxContent() {
                       <AlertDialogHeader>
                         <AlertDialogTitle className="text-h4 text-primary-text font-semibold">Remove Apps</AlertDialogTitle>
                         <AlertDialogDescription className="text-body text-secondary-text">
-                          Are you sure you want to remove {selectedAppIds.size} selected app{selectedAppIds.size !== 1 ? 's' : ''} from your App List? This action cannot be undone.
+                          Are you sure you want to remove {selectedAppIds.size} selected app{selectedAppIds.size !== 1 ? 's' : ''} from your Managed Apps? This action cannot be undone.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>

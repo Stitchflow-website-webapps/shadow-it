@@ -277,7 +277,7 @@ export default function Sidebar({
                     ? 'text-white'
                     : 'group-hover:text-[#1A1A1A]'
                 }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
-                  Discovered apps
+                  Discovered Apps
                 </span>
               </button>
               
@@ -347,7 +347,7 @@ export default function Sidebar({
                       ? 'text-white'
                       : 'group-hover:text-[#1A1A1A]'
                   }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
-                    Managed App List
+                    Managed Apps
                   </span>
                   
                 </div>

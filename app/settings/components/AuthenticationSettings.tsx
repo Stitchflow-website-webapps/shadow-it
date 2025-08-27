@@ -40,28 +40,30 @@ export default function AuthenticationSettings() {
     setShadowOrgId(orgId);
     setUserEmail(email);
 
-    // Load organization settings from localStorage or fetch from server
+    // Load organization settings from server first, fallback to localStorage if needed
     const loadSettings = async () => {
       setIsLoading(true);
       if (orgId) {
-        const savedSettings = localStorage.getItem(`orgSettings_${orgId}`);
-        if (savedSettings) {
-          try {
-            const settings = JSON.parse(savedSettings);
-            const sanitizedSettings = {
-              identityProvider: settings.identityProvider === 'EMPTY' ? '' : settings.identityProvider,
-              emailProvider: settings.emailProvider === 'EMPTY' ? '' : settings.emailProvider,
-            };
-            setOrgSettings(sanitizedSettings);
-            setTempSettings(sanitizedSettings);
-          } catch (error) {
-            console.error('Error parsing org settings:', error);
-            // Fetch from server if local storage is corrupt
-            await fetchSettings(orgId);
-          }
-        } else {
-          // Fetch from server if not in local storage
+        try {
+          // Always try to fetch fresh data from server first
           await fetchSettings(orgId);
+        } catch (error) {
+          console.error('Error fetching from server, falling back to localStorage:', error);
+          // Fallback to localStorage only if server request fails
+          const savedSettings = localStorage.getItem(`orgSettings_${orgId}`);
+          if (savedSettings) {
+            try {
+              const settings = JSON.parse(savedSettings);
+              const sanitizedSettings = {
+                identityProvider: settings.identityProvider === 'EMPTY' ? '' : settings.identityProvider,
+                emailProvider: settings.emailProvider === 'EMPTY' ? '' : settings.emailProvider,
+              };
+              setOrgSettings(sanitizedSettings);
+              setTempSettings(sanitizedSettings);
+            } catch (parseError) {
+              console.error('Error parsing org settings from localStorage:', parseError);
+            }
+          }
         }
       }
       setIsLoading(false);
@@ -71,21 +73,19 @@ export default function AuthenticationSettings() {
   }, []);
 
   const fetchSettings = async (orgId: string) => {
-    try {
-      const response = await fetch(`/api/organize/organization?shadowOrgId=${orgId}`);
-      if (response.ok) {
-        const data = await response.json();
-        const settings = {
-          identityProvider: data.identity_provider === 'EMPTY' ? '' : data.identity_provider,
-          emailProvider: data.email_provider === 'EMPTY' ? '' : data.email_provider,
-        };
-        setOrgSettings(settings);
-        setTempSettings(settings);
-        localStorage.setItem(`orgSettings_${orgId}`, JSON.stringify(settings));
-      }
-    } catch (error) {
-      console.error('Error fetching organization settings:', error);
+    const response = await fetch(`/api/organize/organization?shadowOrgId=${orgId}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch settings: ${response.status}`);
     }
+    
+    const data = await response.json();
+    const settings = {
+      identityProvider: data.identity_provider === 'EMPTY' ? '' : data.identity_provider,
+      emailProvider: data.email_provider === 'EMPTY' ? '' : data.email_provider,
+    };
+    setOrgSettings(settings);
+    setTempSettings(settings);
+    localStorage.setItem(`orgSettings_${orgId}`, JSON.stringify(settings));
   };
 
   const handleSave = async () => {
@@ -114,7 +114,7 @@ export default function AuthenticationSettings() {
           throw new Error('Failed to save settings to the database');
         }
 
-        // Also save to localStorage for consistency
+        // Update localStorage with the new settings
         localStorage.setItem(`orgSettings_${shadowOrgId}`, JSON.stringify(tempSettings));
         setOrgSettings(tempSettings);
         setIsEditMode(false);
