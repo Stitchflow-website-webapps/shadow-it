@@ -2,11 +2,41 @@ import type { App } from "@/types/app"
 import type { FilterCondition } from "@/components/app-filters"
 import { getLicenseUtilizationStatus } from "@/lib/utils"
 
+// Field configuration for filter logic
+const FILTER_FIELDS = [
+  { value: 'name', label: 'App Name', type: 'text' },
+  { value: 'department', label: 'Department', type: 'text' },
+  { value: 'owner', label: 'Owner', type: 'text' },
+  { value: 'ssoEnforced', label: 'SSO Enforced', type: 'select', options: ['Yes', 'No'] },
+  { value: 'deprovisioning', label: 'Deprovisioning', type: 'select', options: ['Okta SCIM', 'Azure AD federation', 'OneLogin SCIM', 'JumpCloud federation', 'Google federation', 'Workflow', 'Manual', 'Unknown'] },
+  { value: 'managedStatus', label: 'Managed Status', type: 'select', options: ['Managed', 'Unmanaged', 'Newly discovered'] },
+  { value: 'stitchflowStatus', label: 'Stitchflow Status', type: 'select', options: ['Yes - API', 'Yes - CSV Sync', 'Not connected'] },
+  { value: 'appTier', label: 'App Tier', type: 'select', options: ['Tier 1', 'Tier 2', 'Tier 3'] },
+  { value: 'appPlan', label: 'App Plan', type: 'select', options: ['Annual Plan', 'Monthly Plan', 'N/A', 'Other'] },
+  { value: 'planLimit', label: 'Plan Limit', type: 'number' },
+  { value: 'licensesUsed', label: 'Licenses Used', type: 'number' },
+  { value: 'costPerUser', label: 'Cost Per User', type: 'number' },
+  { value: 'renewalDate', label: 'Renewal Date', type: 'date' },
+  { value: 'comment', label: 'Access Policy & Notes', type: 'limited_text' },
+  { value: 'usageDescription', label: "App Usage", type: 'limited_text' },
+]
+
+// Helper function to get field configuration
+const getFieldConfig = (fieldValue: string) => {
+  return FILTER_FIELDS.find(f => f.value === fieldValue)
+}
+
 // Helper function to parse date strings, including month-only
 const parseDateString = (dateString: string): Date | null => {
   if (!dateString || dateString === '—' || dateString === "Not specified") return null
 
-  // Try parsing as a full date first
+  // Try parsing as a full date first - treat as local date to avoid timezone issues
+  if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    // For YYYY-MM-DD format, parse as local date
+    const [year, month, day] = dateString.split('-').map(Number)
+    return new Date(year, month - 1, day) // month is 0-indexed
+  }
+
   const fullDate = new Date(dateString)
   if (!isNaN(fullDate.getTime())) {
     return fullDate
@@ -140,6 +170,12 @@ function evaluateFilterCondition(app: App, filter: FilterCondition): boolean {
       return appValue.toLowerCase() === filter.value.toLowerCase()
     
     case 'is_not':
+      // For limited_text fields, this acts as "doesn't contain"
+      // For other fields, this acts as exact "is not" match
+      const fieldConfig = getFieldConfig(filter.field)
+      if (fieldConfig?.type === 'limited_text') {
+        return !appValue.toLowerCase().includes(filter.value.toLowerCase())
+      }
       return appValue.toLowerCase() !== filter.value.toLowerCase()
     
     case 'starts_with':

@@ -91,9 +91,15 @@ export function getLicenseUtilizationStatus(licensesUsed: number | null, planLim
   const utilizationPercent = (licensesUsed / numericLimit) * 100;
   
   // Determine status based on percentage
-  if (utilizationPercent >= 100) {
+  if (utilizationPercent > 100) {
     return {
       status: 'Exceeded limit',
+      variant: 'destructive',
+      color: 'bg-red-50 text-red-700 border-red-200'
+    };
+  } else if (utilizationPercent === 100) {
+    return {
+      status: 'At capacity',
       variant: 'destructive',
       color: 'bg-red-50 text-red-700 border-red-200'
     };

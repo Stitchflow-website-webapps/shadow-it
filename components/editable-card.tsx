@@ -52,18 +52,27 @@ interface EditableCardProps {
 // Helper function to calculate days until renewal
 const getDaysUntilRenewal = (renewalDate: string): number => {
   if (!renewalDate || renewalDate === "Not specified") return 0
-  
+
   try {
     const today = new Date()
-    const renewal = new Date(renewalDate)
-    
+    let renewal: Date
+
+    // Parse renewal date as local date to avoid timezone issues
+    if (renewalDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // For YYYY-MM-DD format, parse as local date
+      const [year, month, day] = renewalDate.split('-').map(Number)
+      renewal = new Date(year, month - 1, day) // month is 0-indexed
+    } else {
+      renewal = new Date(renewalDate)
+    }
+
     // Reset time to start of day for accurate day calculation
     today.setHours(0, 0, 0, 0)
     renewal.setHours(0, 0, 0, 0)
-    
+
     const diffTime = renewal.getTime() - today.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    
+
     return diffDays
   } catch {
     return 0
@@ -424,7 +433,14 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
               
               {isDatePickerEnabled ? (
                 <Calendar
-                  selected={currentValue && currentValue !== "unset" ? new Date(currentValue) : null}
+                  selected={currentValue && currentValue !== "unset" ? (() => {
+                    // Parse date as local date to avoid timezone issues
+                    if (currentValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                      const [year, month, day] = currentValue.split('-').map(Number)
+                      return new Date(year, month - 1, day) // month is 0-indexed
+                    }
+                    return new Date(currentValue)
+                  })() : null}
                   onChange={(date: Date | null) => {
                     if (date) {
                       handleFieldChange(field.field, format(date, 'yyyy-MM-dd'));
@@ -627,7 +643,16 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
     if (field.type === "date" && currentValue && currentValue !== "Not specified") {
       // Try to parse the date and format it nicely
       try {
-        const date = new Date(currentValue)
+        let date: Date
+        // Parse date as local date to avoid timezone issues
+        if (currentValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          // For YYYY-MM-DD format, parse as local date
+          const [year, month, day] = currentValue.split('-').map(Number)
+          date = new Date(year, month - 1, day) // month is 0-indexed
+        } else {
+          date = new Date(currentValue)
+        }
+
         if (!isNaN(date.getTime())) {
           // Special handling for renewal date field
           if (field.field === "renewalDate") {
@@ -653,7 +678,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
                   {daysUntil < 0 ? (
                     <>
                       <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
                         <span className="font-semibold">Overdue</span>
                         <span className="font-normal text-red-600">
                           ({Math.abs(daysUntil)} days ago)
@@ -663,7 +688,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
                   ) : daysUntil <= 30 ? (
                     <>
                       <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
                         <span className="font-semibold">Due soon</span>
                         <span className="font-normal text-red-600">
                           ({daysUntil} days)
@@ -673,7 +698,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
                   ) : daysUntil <= 90 ? (
                     <>
                       <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                        <div className="w-2 h-2 rounded-full bg-yellow-500 flex-shrink-0" />
                         <span className="font-semibold">Upcoming</span>
                         <span className="font-normal text-yellow-600">
                           ({daysUntil} days)
@@ -683,7 +708,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
                   ) : (
                     <>
                       <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
                         <span className="font-semibold">On Track</span>
                         <span className="font-normal text-emerald-600">
                           ({daysUntil} days)
@@ -788,14 +813,25 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
           
           const utilizationStatus = getLicenseUtilizationStatus(licensesUsedValue, planLimitValue);
           return utilizationStatus ? (
-            <div className={cn(
-              "text-xs font-medium",
-              utilizationStatus.status === 'Exceeded limit' ? "text-red-600" :
-              utilizationStatus.status === 'Near capacity' ? "text-orange-600" :
-              utilizationStatus.status === 'Growing usage' ? "text-yellow-600" :
-              "text-emerald-600"
-            )}>
-              {utilizationStatus.status}
+            <div className="flex items-center gap-1">
+              <div className={cn(
+                "w-2 h-2 rounded-full flex-shrink-0",
+                utilizationStatus.status === 'Exceeded limit' ? "bg-red-500" :
+                utilizationStatus.status === 'At capacity' ? "bg-red-500" :
+                utilizationStatus.status === 'Near capacity' ? "bg-orange-500" :
+                utilizationStatus.status === 'Growing usage' ? "bg-yellow-500" :
+                "bg-emerald-500"
+              )} />
+              <span className={cn(
+                "text-xs font-medium",
+                utilizationStatus.status === 'Exceeded limit' ? "text-red-600" :
+                utilizationStatus.status === 'At capacity' ? "text-red-600" :
+                utilizationStatus.status === 'Near capacity' ? "text-orange-600" :
+                utilizationStatus.status === 'Growing usage' ? "text-yellow-600" :
+                "text-emerald-600"
+              )}>
+                {utilizationStatus.status}
+              </span>
             </div>
           ) : null;
         })()}
