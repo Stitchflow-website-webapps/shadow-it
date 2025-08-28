@@ -70,6 +70,7 @@ async function runBackgroundCleanup(baseUrl: string, jobId: string) {
     
     console.log(`🚀 [WeeklyCron-${jobId}] Triggering Microsoft cleanup (fire-and-forget)...`);
     const microsoftCleanupUrl = `${baseUrl}/api/admin/cleanup-guest-disabled-users`;
+    console.log(`🔗 [WeeklyCron-${jobId}] Microsoft cleanup URL: ${microsoftCleanupUrl}`);
     
     // Fire-and-forget: Don't await the response to avoid timeout
     fetch(microsoftCleanupUrl, {
@@ -81,6 +82,7 @@ async function runBackgroundCleanup(baseUrl: string, jobId: string) {
         dry_run: false // Set to false for actual cleanup
       }),
     }).then(async (response) => {
+      console.log(`📡 [WeeklyCron-${jobId}] Microsoft cleanup response status: ${response.status}`);
       if (response.ok) {
         const result = await response.json();
         console.log(`✅ [WeeklyCron-${jobId}] Microsoft cleanup completed successfully`);
@@ -90,6 +92,13 @@ async function runBackgroundCleanup(baseUrl: string, jobId: string) {
         console.error(`❌ [WeeklyCron-${jobId}] Microsoft cleanup failed: ${response.status} - ${errorData}`);
       }
     }).catch((error) => {
+      console.log(`🔍 [WeeklyCron-${jobId}] Microsoft cleanup fetch error details:`, {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        cause: error.cause
+      });
+      
       // This is expected for long-running operations that timeout
       if (error.code === 'UND_ERR_HEADERS_TIMEOUT' || error.message.includes('timeout')) {
         console.log(`⏰ [WeeklyCron-${jobId}] Microsoft cleanup fetch timed out (expected for long operations)`);
@@ -101,6 +110,7 @@ async function runBackgroundCleanup(baseUrl: string, jobId: string) {
     
     console.log(`🚀 [WeeklyCron-${jobId}] Triggering Google cleanup (fire-and-forget)...`);
     const googleCleanupUrl = `${baseUrl}/api/admin/cleanup-google-suspended-archived-users`;
+    console.log(`🔗 [WeeklyCron-${jobId}] Google cleanup URL: ${googleCleanupUrl}`);
     
     // Fire-and-forget: Don't await the response to avoid timeout
     fetch(googleCleanupUrl, {
@@ -112,6 +122,7 @@ async function runBackgroundCleanup(baseUrl: string, jobId: string) {
         dry_run: false // Set to false for actual cleanup
       }),
     }).then(async (response) => {
+      console.log(`📡 [WeeklyCron-${jobId}] Google cleanup response status: ${response.status}`);
       if (response.ok) {
         const result = await response.json();
         console.log(`✅ [WeeklyCron-${jobId}] Google cleanup completed successfully`);
@@ -121,6 +132,13 @@ async function runBackgroundCleanup(baseUrl: string, jobId: string) {
         console.error(`❌ [WeeklyCron-${jobId}] Google cleanup failed: ${response.status} - ${errorData}`);
       }
     }).catch((error) => {
+      console.log(`🔍 [WeeklyCron-${jobId}] Google cleanup fetch error details:`, {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        cause: error.cause
+      });
+      
       // This is expected for long-running operations that timeout
       if (error.code === 'UND_ERR_HEADERS_TIMEOUT' || error.message.includes('timeout')) {
         console.log(`⏰ [WeeklyCron-${jobId}] Google cleanup fetch timed out (expected for long operations)`);
