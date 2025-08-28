@@ -47,8 +47,8 @@ const FILTER_FIELDS = [
   { value: 'licensesUsed', label: 'Licenses Used', type: 'number' },
   { value: 'costPerUser', label: 'Cost Per User', type: 'number' },
   { value: 'renewalDate', label: 'Renewal Date', type: 'date' },
-  { value: 'comment', label: 'Access Policy & Notes', type: 'text' },
-  { value: 'usageDescription', label: "App Usage", type: 'text' },
+  { value: 'comment', label: 'Access Policy & Notes', type: 'limited_text' },
+  { value: 'usageDescription', label: "App Usage", type: 'limited_text' },
 ]
 
 const getOperatorOptions = (fieldType: string) => {
@@ -60,6 +60,11 @@ const getOperatorOptions = (fieldType: string) => {
         { value: 'is_not', label: 'is not' },
         { value: 'starts_with', label: 'starts with' },
         { value: 'ends_with', label: 'ends with' },
+      ]
+    case 'limited_text':
+      return [
+        { value: 'contains', label: 'contains' },
+        { value: 'is_not', label: "doesn't contain" },
       ]
     case 'select':
       return [

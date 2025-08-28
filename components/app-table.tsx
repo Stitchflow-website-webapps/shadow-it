@@ -31,7 +31,13 @@ type SortDirection = 'asc' | 'desc'
 const parseDateString = (dateString: string): Date | null => {
   if (!dateString || dateString === '—' || dateString === "Not specified") return null
 
-  // Try parsing as a full date first
+  // Try parsing as a full date first - treat as local date to avoid timezone issues
+  if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    // For YYYY-MM-DD format, parse as local date
+    const [year, month, day] = dateString.split('-').map(Number)
+    return new Date(year, month - 1, day) // month is 0-indexed
+  }
+
   const fullDate = new Date(dateString)
   if (!isNaN(fullDate.getTime())) {
     return fullDate
@@ -384,8 +390,9 @@ export function AppTable({
                     return utilizationStatus ? (
                       <div className="flex items-center gap-1 mt-1">
                         <div className={cn(
-                          "w-1 h-1 rounded-full",
+                          "w-2 h-2 rounded-full flex-shrink-0",
                           utilizationStatus.status === 'Exceeded limit' ? "bg-red-500" :
+                          utilizationStatus.status === 'At capacity' ? "bg-red-500" :
                           utilizationStatus.status === 'Near capacity' ? "bg-orange-500" :
                           utilizationStatus.status === 'Growing usage' ? "bg-yellow-500" :
                           "bg-emerald-500"
@@ -424,7 +431,7 @@ export function AppTable({
                               statusInfo.color
                             )}
                           >
-                            <div className={cn("w-1.5 h-1.5 rounded-full", statusInfo.dot)} />
+                            <div className={cn("w-2 h-2 rounded-full flex-shrink-0", statusInfo.dot)} />
                             <span className="font-semibold whitespace-nowrap">{statusInfo.label}</span>
                             <span className="font-normal opacity-75">
                               {daysUntil < 0 ? `${Math.abs(daysUntil)}d` : `${daysUntil}d`}
