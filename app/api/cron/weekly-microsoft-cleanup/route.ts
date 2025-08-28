@@ -26,8 +26,47 @@ export async function POST(request: NextRequest) {
     
     console.log(`🔗 [WeeklyCron] Using base URL: ${baseUrl}`);
 
-    // 3. Run cleanup for Microsoft organizations
-    console.log(`🔄 [WeeklyCron] Starting Microsoft cleanup...`);
+    // 3. Generate a unique job ID for tracking
+    const jobId = `weekly-cleanup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`📋 [WeeklyCron] Job ID: ${jobId}`);
+
+    // 4. Immediately respond to Upstash to avoid timeout
+    const response = NextResponse.json({
+      success: true,
+      message: 'Weekly cleanup job started successfully',
+      jobId: jobId,
+      timestamp: new Date().toISOString(),
+      status: 'STARTED',
+      note: 'Cleanup is running in the background. Check logs for progress.'
+    });
+
+    // 5. Start the long-running cleanup process in the background (fire-and-forget)
+    // This runs after the response is sent to Upstash
+    runBackgroundCleanup(baseUrl, jobId).catch(error => {
+      console.error(`❌ [WeeklyCron] Background cleanup failed for job ${jobId}:`, error);
+    });
+
+    return response;
+
+  } catch (error) {
+    console.error(`❌ [WeeklyCron] Weekly cleanup initialization failed:`, error);
+    
+    return NextResponse.json({
+      success: false,
+      error: 'Weekly cleanup initialization failed',
+      details: (error as Error).message,
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
+  }
+}
+
+// Background cleanup function that runs after responding to Upstash
+async function runBackgroundCleanup(baseUrl: string, jobId: string) {
+  console.log(`🔄 [WeeklyCron-${jobId}] Starting background cleanup process...`);
+  
+  try {
+    // Microsoft cleanup
+    console.log(`🔄 [WeeklyCron-${jobId}] Starting Microsoft cleanup...`);
     const microsoftCleanupUrl = `${baseUrl}/api/admin/cleanup-guest-disabled-users`;
     
     const microsoftResponse = await fetch(microsoftCleanupUrl, {
@@ -43,15 +82,15 @@ export async function POST(request: NextRequest) {
     let microsoftResult = null;
     if (microsoftResponse.ok) {
       microsoftResult = await microsoftResponse.json();
-      console.log(`✅ [WeeklyCron] Microsoft cleanup completed successfully`);
-      console.log(`📊 [WeeklyCron] Microsoft Summary:`, microsoftResult.summary);
+      console.log(`✅ [WeeklyCron-${jobId}] Microsoft cleanup completed successfully`);
+      console.log(`📊 [WeeklyCron-${jobId}] Microsoft Summary:`, microsoftResult.summary);
     } else {
       const errorData = await microsoftResponse.text();
-      console.error(`❌ [WeeklyCron] Microsoft cleanup failed: ${microsoftResponse.status} - ${errorData}`);
+      console.error(`❌ [WeeklyCron-${jobId}] Microsoft cleanup failed: ${microsoftResponse.status} - ${errorData}`);
     }
     
-    // 4. Run cleanup for Google organizations
-    console.log(`🔄 [WeeklyCron] Starting Google cleanup...`);
+    // Google cleanup
+    console.log(`🔄 [WeeklyCron-${jobId}] Starting Google cleanup...`);
     const googleCleanupUrl = `${baseUrl}/api/admin/cleanup-google-suspended-archived-users`;
     
     const googleResponse = await fetch(googleCleanupUrl, {
@@ -67,14 +106,14 @@ export async function POST(request: NextRequest) {
     let googleResult = null;
     if (googleResponse.ok) {
       googleResult = await googleResponse.json();
-      console.log(`✅ [WeeklyCron] Google cleanup completed successfully`);
-      console.log(`📊 [WeeklyCron] Google Summary:`, googleResult.summary);
+      console.log(`✅ [WeeklyCron-${jobId}] Google cleanup completed successfully`);
+      console.log(`📊 [WeeklyCron-${jobId}] Google Summary:`, googleResult.summary);
     } else {
       const errorData = await googleResponse.text();
-      console.error(`❌ [WeeklyCron] Google cleanup failed: ${googleResponse.status} - ${errorData}`);
+      console.error(`❌ [WeeklyCron-${jobId}] Google cleanup failed: ${googleResponse.status} - ${errorData}`);
     }
     
-    // 5. Combine results and return summary
+    // Final summary
     const combinedSummary = {
       microsoft: microsoftResult?.summary || { error: 'Microsoft cleanup failed' },
       google: googleResult?.summary || { error: 'Google cleanup failed' },
@@ -85,27 +124,12 @@ export async function POST(request: NextRequest) {
       totalRemovedApplications: (microsoftResult?.summary?.totalRemovedApplications || 0) + (googleResult?.summary?.totalRemovedApplications || 0)
     };
     
-    console.log(`🎉 [WeeklyCron] All cleanups completed!`);
-    console.log(`📊 [WeeklyCron] Combined Summary:`, combinedSummary);
+    console.log(`🎉 [WeeklyCron-${jobId}] All background cleanups completed!`);
+    console.log(`📊 [WeeklyCron-${jobId}] Final Combined Summary:`, combinedSummary);
+    console.log(`⏰ [WeeklyCron-${jobId}] Background cleanup finished at: ${new Date().toISOString()}`);
     
-    return NextResponse.json({
-      success: true,
-      message: 'Weekly cleanup completed for all providers',
-      timestamp: new Date().toISOString(),
-      summary: combinedSummary,
-      microsoftSuccess: !!microsoftResult,
-      googleSuccess: !!googleResult
-    });
-
   } catch (error) {
-    console.error(`❌ [WeeklyCron] Weekly cleanup failed:`, error);
-    
-    return NextResponse.json({
-      success: false,
-      error: 'Weekly cleanup failed',
-      details: (error as Error).message,
-      timestamp: new Date().toISOString()
-    }, { status: 500 });
+    console.error(`❌ [WeeklyCron-${jobId}] Background cleanup process failed:`, error);
   }
 }
 
@@ -131,8 +155,15 @@ export async function GET(request: NextRequest) {
     
     console.log(`🔗 [WeeklyCron] Test using base URL: ${baseUrl}`);
     
+    // Generate a unique job ID for tracking
+    const jobId = `test-cleanup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`📋 [WeeklyCron] Test Job ID: ${jobId}`);
+
+    // For testing, we can run synchronously since it's DRY RUN (faster)
+    // But if tests become slow, we can make this async too
+    
     // Test Microsoft cleanup in DRY RUN mode
-    console.log(`🔄 [WeeklyCron] Testing Microsoft cleanup...`);
+    console.log(`🔄 [WeeklyCron-${jobId}] Testing Microsoft cleanup...`);
     const microsoftCleanupUrl = `${baseUrl}/api/admin/cleanup-guest-disabled-users`;
     
     const microsoftResponse = await fetch(microsoftCleanupUrl, {
@@ -148,14 +179,14 @@ export async function GET(request: NextRequest) {
     let microsoftResult = null;
     if (microsoftResponse.ok) {
       microsoftResult = await microsoftResponse.json();
-      console.log(`✅ [WeeklyCron] Microsoft test completed successfully`);
+      console.log(`✅ [WeeklyCron-${jobId}] Microsoft test completed successfully`);
     } else {
       const errorData = await microsoftResponse.text();
-      console.error(`❌ [WeeklyCron] Microsoft test failed: ${microsoftResponse.status} - ${errorData}`);
+      console.error(`❌ [WeeklyCron-${jobId}] Microsoft test failed: ${microsoftResponse.status} - ${errorData}`);
     }
     
     // Test Google cleanup in DRY RUN mode
-    console.log(`🔄 [WeeklyCron] Testing Google cleanup...`);
+    console.log(`🔄 [WeeklyCron-${jobId}] Testing Google cleanup...`);
     const googleCleanupUrl = `${baseUrl}/api/admin/cleanup-google-suspended-archived-users`;
     
     const googleResponse = await fetch(googleCleanupUrl, {
@@ -171,15 +202,18 @@ export async function GET(request: NextRequest) {
     let googleResult = null;
     if (googleResponse.ok) {
       googleResult = await googleResponse.json();
-      console.log(`✅ [WeeklyCron] Google test completed successfully`);
+      console.log(`✅ [WeeklyCron-${jobId}] Google test completed successfully`);
     } else {
       const errorData = await googleResponse.text();
-      console.error(`❌ [WeeklyCron] Google test failed: ${googleResponse.status} - ${errorData}`);
+      console.error(`❌ [WeeklyCron-${jobId}] Google test failed: ${googleResponse.status} - ${errorData}`);
     }
+    
+    console.log(`🎉 [WeeklyCron-${jobId}] Test run completed!`);
     
     return NextResponse.json({
       success: true,
       message: 'Test run completed for all providers (DRY RUN)',
+      jobId: jobId,
       timestamp: new Date().toISOString(),
       microsoft: microsoftResult,
       google: googleResult,
