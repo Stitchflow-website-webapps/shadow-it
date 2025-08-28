@@ -20,6 +20,7 @@ interface CleanupResult {
   removedApplications: number;
   guestUsers: number;
   disabledUsers: number;
+  orphanedUsers: number; // Users in DB but not in current active member list
   retryCount: number;
   details: {
     removedUserEmails: string[];
@@ -91,7 +92,8 @@ export async function POST(request: NextRequest) {
       totalRemovedRelationships: results.reduce((sum, r) => sum + r.removedRelationships, 0),
       totalRemovedApplications: results.reduce((sum, r) => sum + r.removedApplications, 0),
       totalGuestUsers: results.reduce((sum, r) => sum + r.guestUsers, 0),
-      totalDisabledUsers: results.reduce((sum, r) => sum + r.disabledUsers, 0)
+      totalDisabledUsers: results.reduce((sum, r) => sum + r.disabledUsers, 0),
+      totalUsersNotInActiveMemberList: results.reduce((sum, r) => sum + r.orphanedUsers, 0)
     };
     
     console.log(`\n🎉 Cleanup completed!`);
@@ -151,6 +153,7 @@ async function processOrganizationWithRetry(org: any, dry_run: boolean, maxRetri
     removedApplications: 0,
     guestUsers: 0,
     disabledUsers: 0,
+    orphanedUsers: 0,
     retryCount: maxRetries,
     details: {
       removedUserEmails: [],
@@ -171,6 +174,7 @@ async function processOrganization(org: any, dry_run: boolean): Promise<CleanupR
     removedApplications: 0,
     guestUsers: 0,
     disabledUsers: 0,
+    orphanedUsers: 0,
     retryCount: 0,
     details: {
       removedUserEmails: [],
@@ -227,57 +231,96 @@ async function processOrganization(org: any, dry_run: boolean): Promise<CleanupR
     await correctMicrosoftService.setCredentials(refreshedTokens);
     console.log(`✅ Microsoft service initialized for ${org.name} (tenant: ${tenantId})`);
 
-    // Step 3: Fetch guest users and disabled users from Microsoft
-    console.log(`🔍 Fetching guest users and disabled users from Microsoft...`);
+    // Step 3: Fetch ALL users from Microsoft and identify current active members
+    console.log(`🔍 Fetching all users from Microsoft to identify current state...`);
     
-    // Get guest users (enabled and disabled)
-    const guestUsers = await correctMicrosoftService.getUsersList(true, true); // Include guests and disabled
-    const filteredGuestUsers = guestUsers.filter(user => 
-      user.userType === 'Guest' || user.accountEnabled === false
+    // Get ALL users from Microsoft (guests, disabled, and enabled members)
+    const allMicrosoftUsers = await correctMicrosoftService.getUsersList(true, true); // Include guests and disabled
+    
+    // Filter for different user types
+    const activeMemberUsers = allMicrosoftUsers.filter(user => 
+      user.userType === 'Member' && user.accountEnabled === true
+    );
+    const guestUsers = allMicrosoftUsers.filter(u => u.userType === 'Guest');
+    const disabledUsers = allMicrosoftUsers.filter(u => u.accountEnabled === false);
+    
+    result.guestUsers = guestUsers.length;
+    result.disabledUsers = disabledUsers.length;
+    
+    console.log(`📊 Microsoft user breakdown:`);
+    console.log(`   - Active Members (Member + Enabled): ${activeMemberUsers.length}`);
+    console.log(`   - Guest Users: ${guestUsers.length}`);
+    console.log(`   - Disabled Users: ${disabledUsers.length}`);
+    console.log(`   - Total: ${allMicrosoftUsers.length}`);
+    
+    // Create sets for different user types
+    const activeMemberEmails = new Set(
+      activeMemberUsers
+        .map(u => (u.mail || u.userPrincipalName)?.toLowerCase())
+        .filter(Boolean)
     );
     
-    const guestCount = filteredGuestUsers.filter(u => u.userType === 'Guest').length;
-    const disabledCount = filteredGuestUsers.filter(u => u.accountEnabled === false).length;
+    const allMicrosoftUserEmails = new Set(
+      allMicrosoftUsers
+        .map(u => (u.mail || u.userPrincipalName)?.toLowerCase())
+        .filter(Boolean)
+    );
     
-    result.guestUsers = guestCount;
-    result.disabledUsers = disabledCount;
+    console.log(`📊 Active member emails in Microsoft: ${activeMemberEmails.size}`);
     
-    console.log(`📊 Found ${guestCount} guest users and ${disabledCount} disabled users in Microsoft`);
+    // Step 4: Find users in database that are not current active members in Microsoft
+    console.log(`🔍 Checking database users against current active Microsoft members...`);
     
-    if (filteredGuestUsers.length === 0) {
-      console.log(`✅ No guest or disabled users found for ${org.name} - nothing to clean up`);
-      result.success = true;
-      return result;
-    }
-
-    // Step 4: Find these users in our database
-    const userEmails = filteredGuestUsers
-      .map(u => (u.mail || u.userPrincipalName)?.toLowerCase())
-      .filter(Boolean);
-    
-    console.log(`🔍 Checking database for ${userEmails.length} guest/disabled user emails...`);
-    
-    const { data: usersToRemove, error: usersError } = await supabaseAdmin
+    const { data: allDatabaseUsers, error: allUsersError } = await supabaseAdmin
       .from('users')
-      .select('id, email, name')
+      .select('id, email, name, microsoft_user_id')
       .eq('organization_id', org.id)
-      .in('email', userEmails);
-
-    if (usersError) {
-      throw new Error(`Failed to fetch users from database: ${usersError.message}`);
+      .not('microsoft_user_id', 'is', null); // Only check users that came from Microsoft
+    
+    if (allUsersError) {
+      throw new Error(`Failed to fetch database users: ${allUsersError.message}`);
     }
-
-    if (!usersToRemove || usersToRemove.length === 0) {
-      console.log(`✅ No guest/disabled users found in database for ${org.name} - nothing to clean up`);
+    
+    console.log(`📊 Found ${allDatabaseUsers?.length || 0} Microsoft users in database`);
+    
+    // Find users in database that are NOT in the current active member list
+    const usersNotInActiveMemberList = (allDatabaseUsers || []).filter(dbUser => 
+      dbUser.email && !activeMemberEmails.has(dbUser.email.toLowerCase())
+    );
+    
+    // Also find completely orphaned users (not in Microsoft at all)
+    const completelyOrphanedUsers = (allDatabaseUsers || []).filter(dbUser => 
+      dbUser.email && !allMicrosoftUserEmails.has(dbUser.email.toLowerCase())
+    );
+    
+    console.log(`📊 Database vs Microsoft analysis:`);
+    console.log(`   - Users in DB: ${allDatabaseUsers?.length || 0}`);
+    console.log(`   - Active members in Microsoft: ${activeMemberEmails.size}`);
+    console.log(`   - Users in DB but not active members: ${usersNotInActiveMemberList.length}`);
+    console.log(`   - Users completely missing from Microsoft: ${completelyOrphanedUsers.length}`);
+    
+    result.orphanedUsers = usersNotInActiveMemberList.length;
+    
+    // Step 5: Determine which users to remove (users not in active member list)
+    if (usersNotInActiveMemberList.length === 0) {
+      console.log(`✅ All database users are current active members in Microsoft - nothing to clean up`);
       result.success = true;
       return result;
     }
 
-    console.log(`📊 Found ${usersToRemove.length} guest/disabled users in database to remove`);
-    result.details.removedUserEmails = usersToRemove.map(u => u.email);
+    console.log(`📊 Found ${usersNotInActiveMemberList.length} users in database to remove (not in active member list)`);
+    
+    if (usersNotInActiveMemberList.length > 0) {
+      console.log(`🔍 Users in DB but not in active member list:`, 
+        usersNotInActiveMemberList.map(u => ({ email: u.email, name: u.name })));
+    }
+    
+    // Use the users that are not in the active member list
+    const uniqueUsersToRemove = usersNotInActiveMemberList;
+    result.details.removedUserEmails = uniqueUsersToRemove.map(u => u.email);
 
-    // Step 5: Get user-application relationships for these users
-    const userIds = usersToRemove.map(u => u.id);
+    // Step 6: Get user-application relationships for these users
+    const userIds = uniqueUsersToRemove.map(u => u.id);
     
     const { data: relationshipsToRemove, error: relationshipsError } = await supabaseAdmin
       .from('user_applications')
@@ -309,7 +352,7 @@ async function processOrganization(org: any, dry_run: boolean): Promise<CleanupR
       affectedApplications.get(app.id)!.relationshipsToRemove++;
     }
 
-    // Step 6: Remove user-application relationships (if not dry run)
+    // Step 7: Remove user-application relationships (if not dry run)
     if (!dry_run && relationshipsToRemove && relationshipsToRemove.length > 0) {
       console.log(`🗑️ Removing ${relationshipsToRemove.length} user-application relationships...`);
       
@@ -331,9 +374,9 @@ async function processOrganization(org: any, dry_run: boolean): Promise<CleanupR
       }
     }
 
-    // Step 7: Remove users (if not dry run)
+    // Step 8: Remove users (if not dry run)
     if (!dry_run) {
-      console.log(`🗑️ Removing ${usersToRemove.length} guest/disabled users...`);
+      console.log(`🗑️ Removing ${uniqueUsersToRemove.length} users (guest/disabled + orphaned)...`);
       
       const { error: deleteUsersError } = await supabaseAdmin
         .from('users')
@@ -344,10 +387,10 @@ async function processOrganization(org: any, dry_run: boolean): Promise<CleanupR
         throw new Error(`Failed to remove users: ${deleteUsersError.message}`);
       }
       
-      result.removedUsers = usersToRemove.length;
+      result.removedUsers = uniqueUsersToRemove.length;
     }
 
-    // Step 8: Check for applications that became empty and remove them
+    // Step 9: Check for applications that became empty and remove them
     const applicationsToRemove: string[] = [];
     
     for (const [appId, appInfo] of affectedApplications.entries()) {
@@ -364,7 +407,7 @@ async function processOrganization(org: any, dry_run: boolean): Promise<CleanupR
       }
     }
 
-    // Step 9: Remove empty applications (if not dry run)
+    // Step 10: Remove empty applications (if not dry run)
     if (!dry_run && applicationsToRemove.length > 0) {
       console.log(`🗑️ Removing ${applicationsToRemove.length} empty applications...`);
       
@@ -380,7 +423,7 @@ async function processOrganization(org: any, dry_run: boolean): Promise<CleanupR
       result.removedApplications = applicationsToRemove.length;
     }
 
-    // Step 9: Recalculate application risk levels after user removal
+    // Step 11: Recalculate application risk levels after user removal
     if (!dry_run && (result.removedUsers > 0 || result.removedRelationships > 0)) {
       console.log(`🔄 Recalculating application risk levels after user removal...`);
       
@@ -394,7 +437,9 @@ async function processOrganization(org: any, dry_run: boolean): Promise<CleanupR
     }
 
     console.log(`✅ Cleanup completed for ${org.name}:`);
-    console.log(`   👥 Users: ${result.removedUsers} removed (${result.guestUsers} guests, ${result.disabledUsers} disabled)`);
+    console.log(`   👥 Users: ${result.removedUsers} removed (users not in active member list)`);
+    console.log(`   📊 Microsoft active members: ${activeMemberUsers.length}`);
+    console.log(`   📊 Microsoft stats: ${result.guestUsers} guests, ${result.disabledUsers} disabled`);
     console.log(`   🔗 Relationships: ${result.removedRelationships} removed`);
     console.log(`   📱 Applications: ${result.removedApplications} removed`);
 

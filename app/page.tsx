@@ -1411,73 +1411,12 @@ export default function ShadowITDashboard() {
   }, []);
 
   const handleSignOut = async () => {
-    try {
-      // Make POST request to logout API
-      const response = await fetch('/api/auth/session/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        // API successfully cleared server-side session and cookies
-        console.log('Logout successful');
-      } else {
-        console.error('Logout API failed:', response.status);
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-
-    // Always perform client-side cleanup as fallback/additional cleanup
-    if (typeof window !== 'undefined') {
-      // Clear all cookies by setting them to expire in the past
-      const allCookies = document.cookie.split(';');
-      console.log('Cookies before clearing:', allCookies);
-
-      // Specifically clear the critical cookies with all path/domain combinations
-      const cookiesToClear = ['orgId', 'userEmail', 'accessToken', 'refreshToken', 'shadow_session_id', 'user_info'];
-      const domains = [window.location.hostname, '', null, 'stitchflow.io', `.${window.location.hostname}`];
-      const paths = ['/', '', '/', '', null];
-
-      // Try all combinations to ensure cookies are cleared
-      for (const cookieName of cookiesToClear) {
-        for (const domain of domains) {
-          for (const path of paths) {
-            const domainStr = domain ? `; domain=${domain}` : '';
-            const pathStr = path ? `; path=${path}` : '';
-            document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT${pathStr}${domainStr}`;
-          }
-        }
-      }
-
-      // Also try to clear all cookies generically
-      allCookies.forEach((cookie: string) => {
-        const [name] = cookie.trim().split('=');
-        if (name) {
-          // Try with different domain/path combinations
-          for (const domain of domains) {
-            for (const path of paths) {
-              const domainStr = domain ? `; domain=${domain}` : '';
-              const pathStr = path ? `; path=${path}` : '';
-              document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT${pathStr}${domainStr}`;
-            }
-          }
-        }
-      });
-
-      // Clear local storage
-      localStorage.clear();
-
-      // Clear session storage too
-      sessionStorage.clear();
-
-      console.log('Cookies after clearing:', document.cookie);
-
-      // Show login modal instead of redirecting
-      setShowLoginModal(true);
-    }
+    const { signOut } = await import('@/lib/auth-utils');
+    await signOut({
+      showLoginModal: true,
+      setShowLoginModal: setShowLoginModal,
+      suppressErrors: false
+    });
   };
 
   

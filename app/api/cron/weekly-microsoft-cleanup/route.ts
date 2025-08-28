@@ -19,11 +19,18 @@ export async function POST(request: NextRequest) {
     console.log(`🚀 [WeeklyCron] Starting weekly cleanup for all providers...`);
     console.log(`⏰ [WeeklyCron] Triggered at: ${new Date().toISOString()}`);
     
-    // 2. Run cleanup for Microsoft organizations
-    console.log(`🔄 [WeeklyCron] Starting Microsoft cleanup...`);
-    const microsoftCleanupUrl = new URL('/api/admin/cleanup-guest-disabled-users', request.url);
+    // 2. Get the base URL for internal API calls
+    const host = request.headers.get('host') || 'localhost:3000';
+    const protocol = host.includes('localhost') ? 'http://' : 'https://';
+    const baseUrl = `${protocol}${host}`;
     
-    const microsoftResponse = await fetch(microsoftCleanupUrl.toString(), {
+    console.log(`🔗 [WeeklyCron] Using base URL: ${baseUrl}`);
+
+    // 3. Run cleanup for Microsoft organizations
+    console.log(`🔄 [WeeklyCron] Starting Microsoft cleanup...`);
+    const microsoftCleanupUrl = `${baseUrl}/api/admin/cleanup-guest-disabled-users`;
+    
+    const microsoftResponse = await fetch(microsoftCleanupUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -43,11 +50,11 @@ export async function POST(request: NextRequest) {
       console.error(`❌ [WeeklyCron] Microsoft cleanup failed: ${microsoftResponse.status} - ${errorData}`);
     }
     
-    // 3. Run cleanup for Google organizations
+    // 4. Run cleanup for Google organizations
     console.log(`🔄 [WeeklyCron] Starting Google cleanup...`);
-    const googleCleanupUrl = new URL('/api/admin/cleanup-google-suspended-archived-users', request.url);
+    const googleCleanupUrl = `${baseUrl}/api/admin/cleanup-google-suspended-archived-users`;
     
-    const googleResponse = await fetch(googleCleanupUrl.toString(), {
+    const googleResponse = await fetch(googleCleanupUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -67,7 +74,7 @@ export async function POST(request: NextRequest) {
       console.error(`❌ [WeeklyCron] Google cleanup failed: ${googleResponse.status} - ${errorData}`);
     }
     
-    // 4. Combine results and return summary
+    // 5. Combine results and return summary
     const combinedSummary = {
       microsoft: microsoftResult?.summary || { error: 'Microsoft cleanup failed' },
       google: googleResult?.summary || { error: 'Google cleanup failed' },
@@ -117,11 +124,18 @@ export async function GET(request: NextRequest) {
 
     console.log(`🧪 [WeeklyCron] Manual test trigger for all providers...`);
     
+    // Get the base URL for internal API calls
+    const host = request.headers.get('host') || 'localhost:3000';
+    const protocol = host.includes('localhost') ? 'http://' : 'https://';
+    const baseUrl = `${protocol}${host}`;
+    
+    console.log(`🔗 [WeeklyCron] Test using base URL: ${baseUrl}`);
+    
     // Test Microsoft cleanup in DRY RUN mode
     console.log(`🔄 [WeeklyCron] Testing Microsoft cleanup...`);
-    const microsoftCleanupUrl = new URL('/api/admin/cleanup-guest-disabled-users', request.url);
+    const microsoftCleanupUrl = `${baseUrl}/api/admin/cleanup-guest-disabled-users`;
     
-    const microsoftResponse = await fetch(microsoftCleanupUrl.toString(), {
+    const microsoftResponse = await fetch(microsoftCleanupUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -142,9 +156,9 @@ export async function GET(request: NextRequest) {
     
     // Test Google cleanup in DRY RUN mode
     console.log(`🔄 [WeeklyCron] Testing Google cleanup...`);
-    const googleCleanupUrl = new URL('/api/admin/cleanup-google-suspended-archived-users', request.url);
+    const googleCleanupUrl = `${baseUrl}/api/admin/cleanup-google-suspended-archived-users`;
     
-    const googleResponse = await fetch(googleCleanupUrl.toString(), {
+    const googleResponse = await fetch(googleCleanupUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
