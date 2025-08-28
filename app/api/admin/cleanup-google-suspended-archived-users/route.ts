@@ -81,8 +81,8 @@ export async function POST(request: NextRequest) {
       
       // Add delay between organizations (except for the last one)
       if (i < organizations.length - 1) {
-        console.log(`⏳ Waiting 1 minute before processing next organization...`);
-        await sleep(60000); // 1 minute delay
+        console.log(`⏳ Waiting 10 seconds before processing next organization...`);
+        await sleep(10000); // 10 second delay
       }
     }
     
@@ -303,9 +303,9 @@ async function processOrganization(org: any, dry_run: boolean): Promise<CleanupR
     result.details.removedUserEmails = usersToRemove.map(u => u.email);
     
     console.log(`📊 Found users to remove:`);
-    console.log(`   🚫 ${hardDeletedUserEmails.length} hard-deleted users: ${hardDeletedUserEmails.join(', ')}`);
-    console.log(`   ⏸️  ${suspendedUserEmails.length} suspended users: ${suspendedUserEmails.join(', ')}`);
-    console.log(`   📦 ${archivedUserEmails.length} archived users: ${archivedUserEmails.join(', ')}`);
+    console.log(`   🚫 ${hardDeletedUserEmails.length} hard-deleted users: ${hardDeletedUserEmails.slice(0, 5).join(', ')}${hardDeletedUserEmails.length > 5 ? ` ... and ${hardDeletedUserEmails.length - 5} more` : ''}`);
+    console.log(`   ⏸️  ${suspendedUserEmails.length} suspended users: ${suspendedUserEmails.slice(0, 5).join(', ')}${suspendedUserEmails.length > 5 ? ` ... and ${suspendedUserEmails.length - 5} more` : ''}`);
+    console.log(`   📦 ${archivedUserEmails.length} archived users: ${archivedUserEmails.slice(0, 5).join(', ')}${archivedUserEmails.length > 5 ? ` ... and ${archivedUserEmails.length - 5} more` : ''}`);
     
     if (usersToRemove.length === 0) {
       console.log(`✅ No users to remove for ${org.name} - all users are active in Google`);
@@ -313,20 +313,61 @@ async function processOrganization(org: any, dry_run: boolean): Promise<CleanupR
       return result;
     }
 
-    // Step 6: Get user-application relationships for these users
+    // Safety check: If we're about to remove more than 90% of users, something might be wrong
+    const totalDbUsers = allDbUsers?.length || 0;
+    const removalPercentage = totalDbUsers > 0 ? (usersToRemove.length / totalDbUsers) * 100 : 0;
+    
+    if (removalPercentage > 90) {
+      console.warn(`⚠️ WARNING: About to remove ${removalPercentage.toFixed(1)}% of users (${usersToRemove.length}/${totalDbUsers})`);
+      console.warn(`⚠️ This seems unusually high. Please verify the Google API is returning correct data.`);
+      
+      if (!dry_run) {
+        throw new Error(`Safety check failed: Attempting to remove ${removalPercentage.toFixed(1)}% of users. Run in dry_run mode first to verify.`);
+      }
+    }
+
+    // Step 6: Get user-application relationships for these users (in batches to avoid query limits)
     const userIds = usersToRemove.map(u => u.id);
     
-    const { data: relationshipsToRemove, error: relationshipsError } = await supabaseAdmin
-      .from('user_applications')
-      .select(`
-        id,
-        application_id,
-        applications!inner(id, name)
-      `)
-      .in('user_id', userIds);
+    console.log(`🔍 Fetching relationships for ${userIds.length} users...`);
+    
+    let relationshipsToRemove: any[] = [];
+    const batchSize = 100; // Process users in batches of 100
+    
+    try {
+      for (let i = 0; i < userIds.length; i += batchSize) {
+        const batch = userIds.slice(i, i + batchSize);
+        console.log(`🔍 Processing relationship batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(userIds.length / batchSize)} (${batch.length} users)`);
+        
+        const { data: batchRelationships, error: batchError } = await supabaseAdmin
+          .from('user_applications')
+          .select(`
+            id,
+            application_id,
+            applications!inner(id, name)
+          `)
+          .in('user_id', batch);
 
-    if (relationshipsError) {
-      throw new Error(`Failed to fetch user relationships: ${relationshipsError.message}`);
+        if (batchError) {
+          console.error(`❌ Error fetching relationships for batch ${Math.floor(i / batchSize) + 1}:`, batchError);
+          throw new Error(`Failed to fetch user relationships for batch: ${batchError.message}`);
+        }
+        
+        if (batchRelationships) {
+          relationshipsToRemove.push(...batchRelationships);
+        }
+        
+        // Small delay between batches to avoid overwhelming the database
+        if (i + batchSize < userIds.length) {
+          await sleep(100); // 100ms delay between batches
+        }
+      }
+      
+      console.log(`✅ Successfully fetched all relationships in ${Math.ceil(userIds.length / batchSize)} batches`);
+      
+    } catch (relationshipsError) {
+      console.error(`❌ Error during relationship fetching:`, relationshipsError);
+      throw new Error(`Failed to fetch user relationships: ${(relationshipsError as Error).message}`);
     }
 
     console.log(`📊 Found ${relationshipsToRemove?.length || 0} user-application relationships to remove`);
@@ -346,42 +387,90 @@ async function processOrganization(org: any, dry_run: boolean): Promise<CleanupR
       affectedApplications.get(app.id)!.relationshipsToRemove++;
     }
 
-    // Step 7: Remove user-application relationships (if not dry run)
+    // Step 7: Remove user-application relationships (if not dry run) - in batches to avoid query limits
     if (!dry_run && relationshipsToRemove && relationshipsToRemove.length > 0) {
       console.log(`🗑️ Removing ${relationshipsToRemove.length} user-application relationships...`);
       
       const relationshipIds = relationshipsToRemove.map(r => r.id);
-      const { error: deleteRelError } = await supabaseAdmin
-        .from('user_applications')
-        .delete()
-        .in('id', relationshipIds);
+      let totalRemovedRelationships = 0;
+      const relationshipDeletionBatchSize = 100; // Batch size for relationship deletions
+      
+      try {
+        for (let i = 0; i < relationshipIds.length; i += relationshipDeletionBatchSize) {
+          const batch = relationshipIds.slice(i, i + relationshipDeletionBatchSize);
+          console.log(`🗑️ Deleting relationship batch ${Math.floor(i / relationshipDeletionBatchSize) + 1}/${Math.ceil(relationshipIds.length / relationshipDeletionBatchSize)} (${batch.length} relationships)`);
+          
+          const { error: deleteRelError } = await supabaseAdmin
+            .from('user_applications')
+            .delete()
+            .in('id', batch);
 
-      if (deleteRelError) {
-        throw new Error(`Failed to remove user relationships: ${deleteRelError.message}`);
-      }
-      
-      result.removedRelationships = relationshipsToRemove.length;
-      
-      // Track relationships by app for logging
-      for (const [appId, appInfo] of affectedApplications.entries()) {
-        result.details.relationshipsByApp[appInfo.name] = appInfo.relationshipsToRemove;
+          if (deleteRelError) {
+            console.error(`❌ Error deleting relationship batch ${Math.floor(i / relationshipDeletionBatchSize) + 1}:`, deleteRelError);
+            throw new Error(`Failed to remove user relationships in batch: ${deleteRelError.message}`);
+          }
+          
+          totalRemovedRelationships += batch.length;
+          console.log(`✅ Deleted ${batch.length} relationships, total so far: ${totalRemovedRelationships}`);
+          
+          // Small delay between relationship deletion batches
+          if (i + relationshipDeletionBatchSize < relationshipIds.length) {
+            await sleep(100); // 100ms delay between relationship deletion batches
+          }
+        }
+        
+        result.removedRelationships = totalRemovedRelationships;
+        console.log(`✅ Successfully removed all ${totalRemovedRelationships} relationships in ${Math.ceil(relationshipIds.length / relationshipDeletionBatchSize)} batches`);
+        
+        // Track relationships by app for logging
+        for (const [appId, appInfo] of affectedApplications.entries()) {
+          result.details.relationshipsByApp[appInfo.name] = appInfo.relationshipsToRemove;
+        }
+        
+      } catch (relationshipDeletionError) {
+        console.error(`❌ Error during relationship deletion:`, relationshipDeletionError);
+        throw new Error(`Failed to remove user relationships: ${(relationshipDeletionError as Error).message}`);
       }
     }
 
-    // Step 8: Remove users (if not dry run)
+    // Step 8: Remove users (if not dry run) - in batches to avoid query limits
     if (!dry_run) {
       console.log(`🗑️ Removing ${usersToRemove.length} users (hard-deleted/suspended/archived)...`);
       
-      const { error: deleteUsersError } = await supabaseAdmin
-        .from('users')
-        .delete()
-        .in('id', userIds);
-
-      if (deleteUsersError) {
-        throw new Error(`Failed to remove users: ${deleteUsersError.message}`);
-      }
+      let totalRemovedUsers = 0;
+      const userDeletionBatchSize = 50; // Smaller batch size for deletions
       
-      result.removedUsers = usersToRemove.length;
+      try {
+        for (let i = 0; i < userIds.length; i += userDeletionBatchSize) {
+          const batch = userIds.slice(i, i + userDeletionBatchSize);
+          console.log(`🗑️ Deleting user batch ${Math.floor(i / userDeletionBatchSize) + 1}/${Math.ceil(userIds.length / userDeletionBatchSize)} (${batch.length} users)`);
+          
+          const { error: deleteUsersError } = await supabaseAdmin
+            .from('users')
+            .delete()
+            .in('id', batch);
+
+          if (deleteUsersError) {
+            console.error(`❌ Error deleting user batch ${Math.floor(i / userDeletionBatchSize) + 1}:`, deleteUsersError);
+            throw new Error(`Failed to remove users in batch: ${deleteUsersError.message}`);
+          }
+          
+          totalRemovedUsers += batch.length;
+          console.log(`✅ Deleted ${batch.length} users, total so far: ${totalRemovedUsers}`);
+          
+          // Small delay between deletion batches
+          if (i + userDeletionBatchSize < userIds.length) {
+            await sleep(200); // 200ms delay between deletion batches
+          }
+        }
+        
+        result.removedUsers = totalRemovedUsers;
+        console.log(`✅ Successfully removed all ${totalRemovedUsers} users in ${Math.ceil(userIds.length / userDeletionBatchSize)} batches`);
+        
+      } catch (userDeletionError) {
+        console.error(`❌ Error during user deletion:`, userDeletionError);
+        throw new Error(`Failed to remove users: ${(userDeletionError as Error).message}`);
+      }
     }
 
     // Step 9: Check for applications that became empty and remove them

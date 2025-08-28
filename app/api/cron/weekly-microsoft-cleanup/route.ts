@@ -65,11 +65,14 @@ async function runBackgroundCleanup(baseUrl: string, jobId: string) {
   console.log(`🔄 [WeeklyCron-${jobId}] Starting background cleanup process...`);
   
   try {
-    // Microsoft cleanup
-    console.log(`🔄 [WeeklyCron-${jobId}] Starting Microsoft cleanup...`);
+    // Start both cleanup processes in parallel without waiting for completion
+    // This prevents internal fetch timeouts since cleanup endpoints run in background
+    
+    console.log(`🚀 [WeeklyCron-${jobId}] Triggering Microsoft cleanup (fire-and-forget)...`);
     const microsoftCleanupUrl = `${baseUrl}/api/admin/cleanup-guest-disabled-users`;
     
-    const microsoftResponse = await fetch(microsoftCleanupUrl, {
+    // Fire-and-forget: Don't await the response to avoid timeout
+    fetch(microsoftCleanupUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -77,23 +80,30 @@ async function runBackgroundCleanup(baseUrl: string, jobId: string) {
       body: JSON.stringify({
         dry_run: false // Set to false for actual cleanup
       }),
+    }).then(async (response) => {
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`✅ [WeeklyCron-${jobId}] Microsoft cleanup completed successfully`);
+        console.log(`📊 [WeeklyCron-${jobId}] Microsoft Summary:`, result.summary);
+      } else {
+        const errorData = await response.text();
+        console.error(`❌ [WeeklyCron-${jobId}] Microsoft cleanup failed: ${response.status} - ${errorData}`);
+      }
+    }).catch((error) => {
+      // This is expected for long-running operations that timeout
+      if (error.code === 'UND_ERR_HEADERS_TIMEOUT' || error.message.includes('timeout')) {
+        console.log(`⏰ [WeeklyCron-${jobId}] Microsoft cleanup fetch timed out (expected for long operations)`);
+        console.log(`🔄 [WeeklyCron-${jobId}] Microsoft cleanup is still running in the background`);
+      } else {
+        console.error(`❌ [WeeklyCron-${jobId}] Microsoft cleanup fetch error:`, error);
+      }
     });
-
-    let microsoftResult = null;
-    if (microsoftResponse.ok) {
-      microsoftResult = await microsoftResponse.json();
-      console.log(`✅ [WeeklyCron-${jobId}] Microsoft cleanup completed successfully`);
-      console.log(`📊 [WeeklyCron-${jobId}] Microsoft Summary:`, microsoftResult.summary);
-    } else {
-      const errorData = await microsoftResponse.text();
-      console.error(`❌ [WeeklyCron-${jobId}] Microsoft cleanup failed: ${microsoftResponse.status} - ${errorData}`);
-    }
     
-    // Google cleanup
-    console.log(`🔄 [WeeklyCron-${jobId}] Starting Google cleanup...`);
+    console.log(`🚀 [WeeklyCron-${jobId}] Triggering Google cleanup (fire-and-forget)...`);
     const googleCleanupUrl = `${baseUrl}/api/admin/cleanup-google-suspended-archived-users`;
     
-    const googleResponse = await fetch(googleCleanupUrl, {
+    // Fire-and-forget: Don't await the response to avoid timeout
+    fetch(googleCleanupUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -101,35 +111,32 @@ async function runBackgroundCleanup(baseUrl: string, jobId: string) {
       body: JSON.stringify({
         dry_run: false // Set to false for actual cleanup
       }),
+    }).then(async (response) => {
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`✅ [WeeklyCron-${jobId}] Google cleanup completed successfully`);
+        console.log(`📊 [WeeklyCron-${jobId}] Google Summary:`, result.summary);
+      } else {
+        const errorData = await response.text();
+        console.error(`❌ [WeeklyCron-${jobId}] Google cleanup failed: ${response.status} - ${errorData}`);
+      }
+    }).catch((error) => {
+      // This is expected for long-running operations that timeout
+      if (error.code === 'UND_ERR_HEADERS_TIMEOUT' || error.message.includes('timeout')) {
+        console.log(`⏰ [WeeklyCron-${jobId}] Google cleanup fetch timed out (expected for long operations)`);
+        console.log(`🔄 [WeeklyCron-${jobId}] Google cleanup is still running in the background`);
+      } else {
+        console.error(`❌ [WeeklyCron-${jobId}] Google cleanup fetch error:`, error);
+      }
     });
-
-    let googleResult = null;
-    if (googleResponse.ok) {
-      googleResult = await googleResponse.json();
-      console.log(`✅ [WeeklyCron-${jobId}] Google cleanup completed successfully`);
-      console.log(`📊 [WeeklyCron-${jobId}] Google Summary:`, googleResult.summary);
-    } else {
-      const errorData = await googleResponse.text();
-      console.error(`❌ [WeeklyCron-${jobId}] Google cleanup failed: ${googleResponse.status} - ${errorData}`);
-    }
     
-    // Final summary
-    const combinedSummary = {
-      microsoft: microsoftResult?.summary || { error: 'Microsoft cleanup failed' },
-      google: googleResult?.summary || { error: 'Google cleanup failed' },
-      totalOrganizations: (microsoftResult?.summary?.totalOrganizations || 0) + (googleResult?.summary?.totalOrganizations || 0),
-      totalSuccessfulOrganizations: (microsoftResult?.summary?.successfulOrganizations || 0) + (googleResult?.summary?.successfulOrganizations || 0),
-      totalRemovedUsers: (microsoftResult?.summary?.totalRemovedUsers || 0) + (googleResult?.summary?.totalRemovedUsers || 0),
-      totalRemovedRelationships: (microsoftResult?.summary?.totalRemovedRelationships || 0) + (googleResult?.summary?.totalRemovedRelationships || 0),
-      totalRemovedApplications: (microsoftResult?.summary?.totalRemovedApplications || 0) + (googleResult?.summary?.totalRemovedApplications || 0)
-    };
-    
-    console.log(`🎉 [WeeklyCron-${jobId}] All background cleanups completed!`);
-    console.log(`📊 [WeeklyCron-${jobId}] Final Combined Summary:`, combinedSummary);
-    console.log(`⏰ [WeeklyCron-${jobId}] Background cleanup finished at: ${new Date().toISOString()}`);
+    console.log(`🎉 [WeeklyCron-${jobId}] Background cleanup triggers completed!`);
+    console.log(`📝 [WeeklyCron-${jobId}] Note: Both cleanup processes are now running independently`);
+    console.log(`📊 [WeeklyCron-${jobId}] Check individual cleanup logs for detailed progress and results`);
+    console.log(`⏰ [WeeklyCron-${jobId}] Background trigger finished at: ${new Date().toISOString()}`);
     
   } catch (error) {
-    console.error(`❌ [WeeklyCron-${jobId}] Background cleanup process failed:`, error);
+    console.error(`❌ [WeeklyCron-${jobId}] Background cleanup trigger failed:`, error);
   }
 }
 

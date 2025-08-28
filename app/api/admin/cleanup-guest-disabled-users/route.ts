@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
       
       // Add delay between organizations (except for the last one)
       if (i < organizations.length - 1) {
-        console.log(`⏳ Waiting 1 minute before processing next organization...`);
-        await sleep(60000); // 1 minute delay
+        console.log(`⏳ Waiting 10 seconds before processing next organization...`);
+        await sleep(10000); // 10 second delay
       }
     }
     
