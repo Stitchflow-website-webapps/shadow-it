@@ -39,6 +39,68 @@ async function getIntegrations(): Promise<AppIntegration[]> {
   }
 }
 
+// Function to sync managed status to all other Shadow IT orgs that share the same managed app list
+async function syncStatusToOtherShadowOrgs(appName: string, managementStatus: string, allShadowOrgIds: string[], currentShadowOrgId: string) {
+  try {
+    console.log(`Syncing status ${managementStatus} for app ${appName} to other Shadow IT orgs`);
+    
+    // Get the current shadow org ID (the one that initiated the change)
+    const currentShadowOrgIds = currentShadowOrgId.split(',').map((id: string) => id.trim());
+    
+    // Find other shadow org IDs that need to be synced (exclude the current one)
+    const otherShadowOrgIds = allShadowOrgIds.filter(id => !currentShadowOrgIds.includes(id));
+    
+    if (otherShadowOrgIds.length === 0) {
+      console.log(`No other Shadow IT orgs to sync for app ${appName}`);
+      return;
+    }
+    
+    console.log(`Found ${otherShadowOrgIds.length} other Shadow IT orgs to sync: ${otherShadowOrgIds.join(', ')}`);
+    
+    // Update the managed status in all other Shadow IT orgs
+    for (const shadowOrgId of otherShadowOrgIds) {
+      try {
+        // Find apps with this name in the other Shadow IT org
+        const { data: appsToUpdate, error: findAppsError } = await supabaseAdmin
+          .from('applications')
+          .select('id, name, organization_id')
+          .eq('organization_id', shadowOrgId)
+          .ilike('name', appName); // Use ilike for case-insensitive matching
+        
+        if (findAppsError) {
+          console.error(`Error finding apps in Shadow IT org ${shadowOrgId}:`, findAppsError);
+          continue;
+        }
+        
+        if (!appsToUpdate || appsToUpdate.length === 0) {
+          console.log(`App ${appName} not found in Shadow IT org ${shadowOrgId} - skipping`);
+          continue;
+        }
+        
+        // Update each matching app
+        for (const appToUpdate of appsToUpdate) {
+          const { error: updateError } = await supabaseAdmin
+            .from('applications')
+            .update({ management_status: managementStatus })
+            .eq('id', appToUpdate.id);
+          
+          if (updateError) {
+            console.error(`Error updating app ${appToUpdate.name} in Shadow IT org ${shadowOrgId}:`, updateError);
+          } else {
+            console.log(`Successfully synced status ${managementStatus} for app ${appToUpdate.name} in Shadow IT org ${shadowOrgId}`);
+          }
+        }
+        
+      } catch (error) {
+        console.error(`Error syncing to Shadow IT org ${shadowOrgId}:`, error);
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error syncing status to other Shadow IT orgs:', error);
+  }
+}
+
 export async function PATCH(request: NextRequest) {
   const organizeDb = organizeSupabaseAdmin;
   try {
@@ -86,13 +148,14 @@ export async function PATCH(request: NextRequest) {
       }
 
       let organization = null
+      let allShadowOrgIds: string[] = [];
 
       // Try each shadow org ID to find which one contains the shadow org ID
       for (const singleShadowOrgId of shadowOrgIds) {
         // First try exact match
         let { data: org, error: orgError } = await organizeDb
           .from('organizations')
-          .select('id')
+          .select('id, shadow_org_id')
           .eq('shadow_org_id', singleShadowOrgId)
           .single();
 
@@ -112,7 +175,7 @@ export async function PATCH(request: NextRequest) {
             })
             
             if (foundOrg) {
-              org = { id: foundOrg.id }
+              org = { id: foundOrg.id, shadow_org_id: foundOrg.shadow_org_id }
               orgError = null // Clear the error since we found a match
             }
           }
@@ -120,6 +183,10 @@ export async function PATCH(request: NextRequest) {
 
         if (!orgError && org) {
           organization = org
+          // Get all shadow org IDs from the managed app list organization
+          if (org.shadow_org_id) {
+            allShadowOrgIds = org.shadow_org_id.split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0);
+          }
           break
         }
       }
@@ -155,6 +222,9 @@ export async function PATCH(request: NextRequest) {
           console.error('Error updating app in App Inbox:', updateError);
         } else {
           console.log(`Successfully updated app ${app.name} in App Inbox`);
+          
+          // NEW: Sync status back to all other Shadow IT orgs that share this managed app list
+          await syncStatusToOtherShadowOrgs(app.name, managementStatus, allShadowOrgIds, app.organization_id);
         }
       } else {
         // If app does not exist, only create it if status is "Managed"
@@ -176,9 +246,15 @@ export async function PATCH(request: NextRequest) {
             console.error('Error creating app in App Inbox:', createError);
           } else {
             console.log(`Successfully created app ${app.name} in App Inbox`);
+            
+            // NEW: Sync status back to all other Shadow IT orgs that share this managed app list
+            await syncStatusToOtherShadowOrgs(app.name, managementStatus, allShadowOrgIds, app.organization_id);
           }
         } else {
           console.log(`App ${app.name} not found in App Inbox and status is ${managementStatus} - skipping creation`);
+          
+          // NEW: Even if app doesn't exist in managed list, sync status to other shadow orgs if they have the app
+          await syncStatusToOtherShadowOrgs(app.name, managementStatus, allShadowOrgIds, app.organization_id);
         }
       }
     }
