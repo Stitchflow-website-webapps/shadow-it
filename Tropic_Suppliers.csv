@@ -1,0 +1,573 @@
+Supplier,Data Sources,Status,Number of Active Contracts,Department,Industry,Diversity Classification,Purchase Category Name,Risk Level,Next Risk Assessment Date,URL,Overall Sentiment,Business Criticality,Contract Owners,Employees with Access,Active Employees
+1Password,NetSuite; Contracts,Active,1,IT,Security,,,,,1password.com,,,Alex Ianus; Jaime Mc Mullin,,
+2Checkout,Okta,No Contract,0,,,,,,,2checkout.com,,,,4,3
+Abstract,NetSuite,No Contract,0,,,,,,,abstract.com,,,,,
+ActiveCampaign,NetSuite,No Contract,0,,,,,,,activecampaign.com,,,,,
+Actuary,Requests,No Contract,0,,,,Software,,,actuary.aero,,,,,
+Ada,Okta; Contracts; Requests,Active,1,Operations,Customer Service,,Infrastructure & Software Pilot; Software,,,ada.cx,,,William Cheng,31,24
+Ada Support,NetSuite,No Contract,0,,,,,,,ada.support,,,,,
+AdAction,NetSuite,No Contract,0,,,,,,,adaction.com,,,,,
+AdGem,Okta; Contracts,Active,1,Management - Super+,,,,,,adgem.com,,,Sebastian Cosentino,27,6
+Adobe,NetSuite; Contracts,Active,1,IT,Operations,,,,,adobe.com,,,Jaime Mc Mullin,,
+ADP,Okta; Contracts; Requests,Active,1,People & Talent,HR,,Software,,,adp.com,,,Rhona Miclat,287,225
+Adrenaline,Okta,No Contract,0,,,,,,,adrenaline.com,,,,9,0
+Adweek LLC,NetSuite,No Contract,0,,,,,,,adweek.com,,,,,
+Adyen,Okta,No Contract,0,,,,,,,adyen.com,,,,10,9
+Aeropay,Contracts; Requests,Inactive,0,,,,Software; Terminating Supplier,,,aeropay.com,,,Sarah Boehmer,,
+Affluent,NetSuite,No Contract,0,,,,,,,affluent.io,,,,,
+AfterShip,NetSuite; Contracts,Inactive,0,,Operations,,,,,aftership.com,,,,,
+Air,NetSuite,No Contract,0,,,,,,,air.inc,,,,,
+"Air, Inc. ",Contracts,Active,1,Growth/Marketing,Operations,,,,,air.inc,,,Trevor Hacker,,
+Airbase,NetSuite; Contracts,Inactive,0,,Operations,,,,,airbase.com,,,Heidi Meyer,,
+Aircall,NetSuite; Okta; Contracts,Inactive,0,,Customer Service,,,,,aircall.io,,,,37,0
+Alchemer,NetSuite; Contracts; Requests,Active,1,Product & Design,Marketing,,Software,,,alchemer.com,,,Laura Goodyear; Mona Hakky,,
+Amazon,NetSuite; Okta; Contracts,Inactive,0,,IT Infrastructure,,,,,amazon.com,,,,286,125
+Amazon Web Services (AWS),NetSuite; Okta; Contracts,Active,1,Engineering,,,,,,aws.amazon.com,,,Alex Ianus,124,9
+Amplitude,NetSuite; Okta; Contracts; Requests,Active,3,Data & Analytics,Analytics,,Software,,,amplitude.com,,,Gage Sonntag,286,245
+AngelList,NetSuite,No Contract,0,,,,,,,angel.co,,,,,
+Anthropic,NetSuite,No Contract,0,,,,,,,anthropic.com,,,,,
+Apache,Okta,No Contract,0,,,,,,,apache.org,,,,128,54
+Apilayer,NetSuite,No Contract,0,,,,,,,apilayer.com,,,,,
+Apple,NetSuite,No Contract,0,,,,,,,apple.com,,,,,
+AppsFlyer,NetSuite; Okta,No Contract,0,,,,,,,appsflyer.com,,,,13,0
+AppTweak,NetSuite; Okta; Contracts; Requests,Active,1,Growth/Marketing,,,Non-Software,,,apptweak.com,,,Divya Ramaswamy,15,1
+Aquera,NetSuite; Contracts; Requests,Active,1,IT,Security,,Software,,,aquera.com,,,Jaime Mc Mullin,,
+Aragon Advertising,NetSuite; Contracts; Requests,Inactive,0,,,,Non-Software,,,aragon-advertising.com,,,Jeremy Cone; Sebastian Cosentino,,
+Aria Systems,Contracts,Inactive,0,,,,,,,ariasystems.com,,,,,
+Armanino,NetSuite,No Contract,0,,,,,,,armanino.com,,,,,
+Array,NetSuite; Contracts; Requests,Active,1,Management - Super+,Operations,,Software,,,array.com,,,Joanna Moroz,,
+Astra,Requests,No Contract,0,,,,F&E Partners,,,astrafi.com,,,,,
+Astronomer,NetSuite,No Contract,0,,,,,,,astronomer.io,,,,,
+Atlan,NetSuite; Contracts,Inactive,0,,IT Infrastructure,,,,,atlan.com,,,,,
+Atlassian,NetSuite; Contracts; Requests,Active,1,IT,Collaboration; IT Infrastructure,,Software,,,atlassian.com,,,Esther Ay; Jaime Mc Mullin; Matt Culver,,
+Attentive,NetSuite; Contracts,Inactive,0,,Marketing,,,,,attentivemobile.com,,,,,
+Automat,Contracts; Requests,Inactive,0,,,,New RPA Request; Non-Software; Software,,,runautomat.com,,,Dan Heber,,
+Avalara,NetSuite; Okta; Contracts; Requests,Active,1,Finance,Finance,,Software,,,avalara.com,,,Ryan Gertzbein,4,0
+Avibra,Requests,No Contract,0,,,,Infrastructure & Software Pilot,,,avibra.com,,,,,
+Avuxi,NetSuite; Okta,No Contract,0,,,,,,,avuxi.com,,,,62,0
+Axiom,NetSuite,No Contract,0,,,,,,,axiom.com,,,,,
+B&H Photo,NetSuite,No Contract,0,,,,,,,bhphotovideo.com,,,,,
+Bacca.AI,NetSuite; Contracts; Requests,Inactive,0,,,,Software,,,bacca.ai,,,Alex Ianus,,
+Bai,Okta; Contracts; Requests,Active,2,Management,,,Software,,,bai.org,,,Allison Elder; Fabio Sanchez Del Rio,314,32
+BAI,NetSuite,No Contract,0,,,,,,,bai.org,,,,,
+BambooHR,NetSuite; Contracts,Inactive,0,,HR,,,,,bamboohr.com,,,Noelle Nicholas,,
+Baremetrics,Okta,No Contract,0,,,,,,,baremetrics.com,,,,54,2
+basistheory,Requests,No Contract,0,,,,Software,,,basistheory.com,,,,,
+BDroppy,NetSuite,No Contract,0,,,,,,,bdroppy.com,,,,,
+Ben,NetSuite,No Contract,0,,,,,,,thanksben.com,,,,,
+Best Buy,NetSuite,No Contract,0,,,,,,,bestbuy.com,,,,,
+Better Business Bureau,NetSuite; Okta; Contracts; Requests,Active,1,Operations,,,Software,,,bbb.org,,,Andrea Ramos; Meredith Callahan,37,0
+BigCommerce,NetSuite; Contracts,Inactive,0,,Other,,,,,bigcommerce.com,,,,,
+Bigeye,NetSuite; Contracts; Requests,Active,1,Data & Analytics,IT Infrastructure,,Software,,,bigeye.com,,,Chris Boden,,
+Birdeye,NetSuite,No Contract,0,,,,,,,birdeye.com,,,,,
+BlackBerry,NetSuite,No Contract,0,,,,,,,blackberry.com,,,,,
+Bloom Consulting Agency,NetSuite; Contracts; Requests,Active,1,Product & Design,,,Non-Software,,,bloomconsulting.agency,,,Michael Abramovich,,
+Bloomberg,NetSuite,No Contract,0,,,,,,,bloomberg.com,,,,,
+Bluebeam,Okta,No Contract,0,,,,,,,bluebeam.com,,,,28,2
+BlueTally,Okta,No Contract,0,,,,,,,bluetallyapp.com,,,,286,0
+Boast,NetSuite,No Contract,0,,,,,,,boast.ai,,,,,
+BPO - AXI - OTS-MTS,,No Contract,0,,,,,,,faa.gov,,,,,
+BPO - HTR2 - Hotel Trader,,No Contract,0,,,,,,,ebsco.com,,,,,
+Braintree,NetSuite; Okta; Contracts,Active,1,Management,Finance,,,,,braintreepayments.com,,,Steven Swanson,219,100
+Brand24,NetSuite; Contracts,Active,1,Supply,,,,,,brand24.com,,,Esther Ay; Lauren Beatty; Meredith Callahan,,
+Brandmovers,Okta,No Contract,0,,,,,,,brandmovers.com,,,,106,0
+Brandverity,Contracts; Requests,Active,1,Growth/Marketing,Security,,Software,,,brandverity.com,,,Tina Chong,,
+Bravely,Okta; Contracts; Requests,Active,1,People & Talent,Operations,,Software,,,workbravely.com,,,Alyssa Cheung; Rhona Miclat,286,13
+Brex,NetSuite,No Contract,0,,,,,,,brex.com,,,,,
+Brown Boots,NetSuite; Contracts,Active,1,Management - Super+,,,,,,brownboots.co,,,Hassan Waheed,,
+Bugcrowd,NetSuite; Contracts; Requests,Active,1,Engineering,Security,,Software,,,bugcrowd.com,,,Aaron Krause,,
+Builder.io,Okta,No Contract,0,,,,,,,builder.io,,,,100,0
+Burp Suite,Contracts; Requests,Active,2,Engineering,,,Software,,,portswigger.net,,,Aaron Krause,,
+Burst Agency,NetSuite; Contracts; Requests,Active,1,Growth/Marketing,,,Non-Software,,,megfluence.com,,,Darina Voloshina,,
+Butter Payments,Contracts; Requests,Active,1,Management - Super+,,,Software,,,butterpayments.com,,,Sarah Boehmer,,
+Calendly,NetSuite,No Contract,0,,,,,,,calendly.com,,,,,
+Canopy,Contracts,Inactive,0,,,,,,,getcanopy.com,,,,,
+Canva,NetSuite; Okta; Contracts,Inactive,0,,Design and Development,,,,,canva.com,,,,8,0
+CarTrawler,Okta,No Contract,0,,,,,,,corporate.cartrawler.com,,,,65,0
+CDW,NetSuite; Contracts,Active,1,IT,Reseller,,,,,cdw.com,,,Jaime Mc Mullin,,
+Celential.ai,NetSuite; Contracts,Inactive,0,,HR,,,,,celential.ai,,,,,
+Centiment,NetSuite,No Contract,0,,,,,,,centiment.co,,,,,
+Certn,NetSuite; Contracts,Active,1,People & Talent,HR,,,,,certn.co,,,Natasha Lakhani; Rhona Miclat,,
+ChannelAdvisor,NetSuite; Contracts,Inactive,0,,,,,,,channeladvisor.com,,,,,
+Chargebee,Requests,No Contract,0,,,,Software,,,chargebee.com,,,,,
+Chargeblast,Contracts; Requests,Active,1,Finance,,,Software,,,chargeblast.com,,,Sarah Boehmer,,
+ChatGPT,NetSuite; Okta,No Contract,0,,,,,,,chatgpt.com,,,,18,10
+Checkflo,Requests,No Contract,0,,,,Non-Software,,,checkflo.com,,,,,
+Checkly,Requests,No Contract,0,,,,Infrastructure & Software Pilot,,,checklyhq.com,,,,,
+Chromatic,NetSuite; Contracts; Requests,Active,1,Engineering,Design and Development,,Software,,,chromatic.com,,,Dan Heber,,
+Cinebody,NetSuite; Requests,No Contract,0,,,,Non-Software,,,cinebody.com,,,,,
+CJ,NetSuite,No Contract,0,,,,,,,cj.com,,,,,
+Clear Channel Outdoor,NetSuite; Contracts; Requests,Inactive,0,,,,Non-Software,,,clearchanneloutdoor.com,,,Miranda Thomas,,
+Clever,Okta,No Contract,0,,,,,,,clever.com,,,,5,1
+Cleverbridge,NetSuite,No Contract,0,,,,,,,grow.cleverbridge.com,,,,,
+Clicktripz,Okta,No Contract,0,,,,,,,site.clicktripz.com,,,,13,0
+Clockwise,NetSuite; Okta; Contracts; Requests,Inactive,0,,Operations,,Non-Software; Terminating Supplier,,,getclockwise.com,,,Jaime Mc Mullin,1,0
+Cloudflare,NetSuite; Okta; Contracts,Active,1,Engineering,IT Infrastructure,,,,,cloudflare.com,,,Alex Ianus; Esther Ay,10,5
+Cloudinary,NetSuite; Okta,No Contract,0,,,,,,,cloudinary.com,,,,60,1
+Codeium,Requests,No Contract,0,,,,AI Copilot,,,codeium.com,,,,,
+Coder,Okta,No Contract,0,,,,,,,coder.com,,,,286,153
+Coderbyte,NetSuite; Okta; Contracts,Active,1,People & Talent,,,,,,coderbyte.com,,,Jonathan Lau,134,5
+CoderPad,NetSuite; Contracts,Active,1,People & Talent,DevOps,,,,,coderpad.io,,,Jonathan Lau,,
+CodesWholesale,Okta,No Contract,0,,,,,,,codeswholesale.com,,,,16,0
+Cognition,NetSuite; Contracts; Requests,Inactive,0,,,,Software,,,cognition.ai,,,Shannon Sprock,,
+Comcast Business,NetSuite,No Contract,0,,,,,,,business.comcast.com,,,,,
+Concentrix,NetSuite; Contracts; Requests,Active,1,Operations,,,Non-Software,,,concentrix.com,,,Khadijah Carlton,,
+Concord,Requests,Prospective,0,,,,Software,,,concord.tech,,,,,
+Confetti,NetSuite,No Contract,0,,,,,,,withconfetti.com,,,,,
+ConnexPay - Simply Connecting Payments,Okta,No Contract,0,,,,,,,connexpay.com,,,,18,2
+Consumer Technology Association,NetSuite,No Contract,0,,,,,,,cta.tech,,,,,
+ContactOut,NetSuite; Contracts; Requests,Active,1,Engineering,Sales,,Software,,,contactout.com,,,Kevin Godfrey,,
+ContentJet,NetSuite; Contracts; Requests,Active,1,Growth/Marketing,,,Non-Software,,,contentjet.com,,,Darina Voloshina; Sebastian Cosentino,,
+Continu,NetSuite,No Contract,0,,,,,,,continu.com,,,,,
+Cooley,NetSuite,No Contract,0,,,,,,,cooley.com,,,,,
+Copsey Murray,NetSuite; Contracts; Requests,Active,1,Finance,,,Non-Software,,,copseymurray.ie,,,Ryan Gertzbein,,
+Coresignal,NetSuite; Contracts; Requests,Active,1,Management,,,Infrastructure & Software Amendment; Software,,,coresignal.com,,,Heidi Meyer; Kevin Godfrey,,
+Costco,NetSuite,No Contract,0,,,,,,,costco.com,,,,,
+Coursera,NetSuite,No Contract,0,,,,,,,coursera.org,,,,,
+Crazy Egg,NetSuite,No Contract,0,,,,,,,crazyegg.com,,,,,
+Criteo,NetSuite,No Contract,0,,,,,,,criteo.com,,,,,
+Crowdin,NetSuite; Okta; Contracts,Active,1,Product & Design,Operations,,,,,crowdin.com,,,Rick Galasieski,128,10
+Crunchbase,NetSuite; Okta; Contracts; Requests,Active,1,Corporate Development,Sales,,Software,,,crunchbase.com,,,Alexandre Tang,59,1
+CSC,NetSuite; Contracts,Inactive,0,,Security,,,,,cscglobal.com,,,,,
+Cube Software,NetSuite; Okta; Contracts; Requests,Active,1,Finance,,,Software,,,cubesoftware.com,,,Alex Hoffman,9,4
+Cursor,NetSuite,No Contract,0,,,,,,,cursor.com,,,,,
+Customer.io,NetSuite; Okta; Contracts; Requests,Active,1,Growth/Marketing,Marketing,,Software,,,customer.io,,,Dan Heber; Matt Culver; Michael Abramovich,92,45
+CustomerGlu,Requests,Prospective,0,,,,Software,,,customerglu.com,,,,,
+Darwinium,Okta; Requests,Prospective,0,,,,Infrastructure & Software Pilot,,,darwinium.com,,,,10,7
+DataCamp,NetSuite; Okta,No Contract,0,,,,,,,datacamp.com,,,,289,8
+Datadog,NetSuite; Okta; Contracts; Requests,Active,1,Engineering,IT Infrastructure,,Cloud/Infrastructure; Software,,,datadoghq.com,,,Alex Ianus,287,120
+Datadome,NetSuite; Okta; Contracts; Requests,Active,1,Engineering,,,Software,,,datadome.co,,,Kyle Pericak,12,5
+DataDome,Okta; Requests,Prospective,0,,,,Software,,,datadome.com,,,,136,17
+Datafold,NetSuite,No Contract,0,,,,,,,datafold.com,,,,,
+dbt Cloud,Okta,No Contract,0,,,,,,,getdbt.com,,,,34,5
+Death to Stock,NetSuite,No Contract,0,,,,,,,deathtothestockphoto.com,,,,,
+decagon.ai,Requests,Prospective,0,,,,Software,,,decagon.ai,,,,,
+Degree,NetSuite,No Contract,0,,,,,,,degree.com,,,,,
+Deloitte,NetSuite,No Contract,0,,,,,,,deloitte.com,,,,,
+DigitalBrain,NetSuite,No Contract,0,,,,,,,digitalbrain.app,,,,,
+DISCO,NetSuite,No Contract,0,,,,,,,csdisco.com,,,,,
+Discord,NetSuite,No Contract,0,,,,,,,discord.com,,,,,
+Discuss,Contracts; Requests,Inactive,0,,,,Software,,,discuss.io,,,Mona Hakky,,
+Discuss,NetSuite,No Contract,0,,,,,,,discuss.io,,,,,
+Displayr,NetSuite; Contracts; Requests,Inactive,0,,,,Software,,,displayr.com,,,Ally Bashir; Mona Hakky,,
+Dizionariu Sardu-Italianu,,No Contract,0,,,,,,,archive.org,,,,,
+DocHub,NetSuite,No Contract,0,,,,,,,dochub.com,,,,,
+DocSend,NetSuite; Okta; Contracts; Requests,Active,1,Corporate Development,Operations; Sales,,Software,,,docsend.com,,,Alexandre Tang,13,1
+DocuSign,NetSuite,No Contract,0,,,,,,,docusign.com,,,,,
+Donut,NetSuite; Contracts,Inactive,0,,HR,,,,,donut.com,,,,,
+DoorDash,NetSuite,No Contract,0,,,,,,,doordash.com,,,,,
+Dropbox,Okta; Contracts,Inactive,0,,Operations,,,,,dropbox.com,,,Jaime Mc Mullin,16,7
+Duoplane,NetSuite; Contracts,Inactive,0,,,,,,,duoplane.com,,,,,
+Dwolla,Requests,No Contract,0,,,,Software,,,dwolla.com,,,,,
+eBay,NetSuite,No Contract,0,,,,,,,ebay.com,,,,,
+Ekata,Contracts,Active,1,Finance,,,,,,ekata.com,,,Sarah Boehmer,,
+Elasticsearch,Okta,No Contract,0,,,,,,,elastic.co,,,,8,4
+ElevenLabs,NetSuite,No Contract,0,,,,,,,elevenlabs.io,,,,,
+Embroker,Okta,No Contract,0,,,,,,,embroker.com,,,,1,0
+Envato,NetSuite,No Contract,0,,,,,,,envato.com,,,,,
+Epidemic Sound,NetSuite; Contracts,Inactive,0,,Sales,,,,,epidemicsound.com,,,Trevor Hacker,,
+EPS Portal,Okta,No Contract,0,,,,,,,portal.expediapartnersolutions.com,,,,7,0
+Estuary,NetSuite; Requests,Prospective,0,,,,Software,,,estuary.dev,,,,,
+Ethoca,Contracts,Active,1,Finance,,,,,,ethoca.com,,,Sarah Boehmer,,
+Ethyca,NetSuite; Contracts; Requests,Inactive,0,,Security,,Software,,,ethyca.com,,,Elissa Port; Fabio Sanchez Del Rio,,
+Experian,NetSuite,No Contract,0,,,,,,,experian.com,,,,,
+ExpressVPN,NetSuite,No Contract,0,,,,,,,expressvpn.com,,,,,
+Facebook,NetSuite,No Contract,0,,,,,,,facebook.com,,,,,
+Fahd Husain,Contracts; Requests,Active,1,Engineering,,,Non-Software,,,,,,Ryan Fox,,
+Fasken,NetSuite,No Contract,0,,,,,,,fasken.com,,,,,
+FedEx,NetSuite,No Contract,0,,,,,,,fedex.com,,,,,
+Feedonomics,NetSuite; Contracts,Inactive,0,,,,,,,feedonomics.com,,,,,
+Fellow,NetSuite,No Contract,0,,,,,,,fellowproducts.com,,,,,
+Fenwick & West,NetSuite,No Contract,0,,,,,,,fenwick.com,,,,,
+Figma,NetSuite; Okta; Contracts; Requests,Active,1,Product & Design,Collaboration; Design and Development,,Software,,,figma.com,,,Mona Hakky; Trevor Hacker,190,134
+Finicity,NetSuite; Okta; Contracts; Requests,Inactive,0,,Finance,,Software,,,finicity.com,,,Joanna Moroz; Sarah Boehmer,4,0
+Finicity,Okta,No Contract,0,,,,,,,developer.mastercard.com,,,,5,0
+Fireflies.ai,NetSuite,No Contract,0,,,,,,,fireflies.ai,,,,,
+Fiserv,NetSuite,No Contract,0,,,,,,,fiserv.com,,,,,
+Fiverr International Ltd.,NetSuite,No Contract,0,,,,,,,fiverr.com,,,,,
+Fivetran,NetSuite; Okta; Contracts; Requests,Active,2,Data & Analytics,IT Infrastructure,,Software,,,fivetran.com,,,Chris Boden; Gage Sonntag,39,18
+Flatfile,NetSuite; Okta; Contracts; Requests,Active,2,Finance,IT Infrastructure,,Software,,,flatfile.com,,,Heidi Meyer,11,0
+FloQast,NetSuite; Okta; Contracts; Requests,Inactive,0,,Finance,,Software,,,floqast.com,,,Sola Okuboyejo,9,7
+Fluent,NetSuite; Okta,No Contract,0,,,,,,,fluentco.com,,,,27,0
+Flxpoint,NetSuite; Okta,No Contract,0,,,,,,,flxpoint.com,,,,5,0
+Foundation Marketing,Contracts; Requests,Active,1,Management,,,Non-Software,,,foundationinc.co,,,Miranda Thomas,,
+Foxly,Okta,No Contract,0,,,,,,,marketplace.atlassian.com,,,,286,57
+Freepik,Contracts,Inactive,0,,,,,,,freepikcompany.com,,,Trevor Hacker,,
+Freshdesk,Okta,No Contract,0,,,,,,,freshdesk.com,,,,3,0
+Freshworks,NetSuite; Okta; Contracts; Requests,Inactive,0,,Customer Service,,Terminating Supplier,,,freshworks.com,,,Meredith Callahan,252,17
+Front,NetSuite,No Contract,0,,,,,,,front.com,,,,,
+G2,Okta,No Contract,0,,,,,,,g2.com,,,,338,46
+Gamma,NetSuite,No Contract,0,,,,,,,gamma.app,,,,,
+Gem,NetSuite; Contracts; Requests,Active,1,People & Talent,HR,,Software,,,gem.com,,,Jonathan Lau,,
+GitHub,NetSuite; Okta; Contracts,Active,1,Engineering,DevOps,,,,,github.com,,,Alex Ianus; Chelsea Akiwumi,62,8
+GitLab,NetSuite; Okta; Contracts; Requests,Active,1,Engineering,DevOps,,Software,,,about.gitlab.com,,,Kyle Pericak,287,175
+Gladly,NetSuite; Okta; Contracts; Requests,Active,1,Supply,Customer Service,,Non-Software,,,gladly.com,,,Dennis Byrd; Dennis Coyne; Khadijah Carlton; Meredith Callahan,570,230
+Glean ,NetSuite; Okta; Contracts; Requests,Active,1,IT,Operations,,Software,,,glean.com,,,Dave Rodriguez; Jaime Mc Mullin,289,281
+GoDaddy,NetSuite; Okta,No Contract,0,,,,,,,godaddy.com,,,,7,0
+Google,NetSuite,No Contract,0,,,,,,,voice.google.com,,,,,
+Google Cloud,NetSuite; Okta; Contracts,Active,1,Engineering,IT Infrastructure,,,,,cloud.google.com,,,Alex Ianus; Esther Ay,217,55
+Google Social,Okta,No Contract,0,,,,,,,google.com,,,,149,42
+Google Suite,NetSuite; Okta,No Contract,0,,,,,,,workspace.google.com,,,,303,285
+Google Workspace,Contracts; Requests,Active,1,IT,Operations,,Software,,,workspace.google.com,,,Jaime Mc Mullin,,
+GoRetro,NetSuite; Okta,No Contract,0,,,,,,,goretro.ai,,,,286,11
+Grafana,Okta,No Contract,0,,,,,,,grafana.com,,,,19,0
+Grammarly,NetSuite; Contracts,Inactive,0,,Operations,,,,,grammarly.com,,,,,
+Grant Thornton,NetSuite,No Contract,0,,,,,,,grantthornton.com,,,,,
+Grasshopper,Okta,No Contract,0,,,,,,,grasshopper.com,,,,341,11
+Great Place to Work,NetSuite,No Contract,0,,,,,,,greatplacetowork.com,,,,,
+GRN Connect,,No Contract,0,,,,,,,hybrid-analysis.com,,,,,
+Groupgreeting,NetSuite,No Contract,0,,,,,,,groupgreeting.com,,,,,
+Growthspace,Contracts; Requests,Inactive,0,,,,Software,,,growthspace.com,,,Noelle Nicholas,,
+GumCo,NetSuite,No Contract,0,,,,,,,gumco.com,,,,,
+Guru,NetSuite; Okta; Contracts; Requests,Active,2,Operations,Operations,,Software,,,getguru.com,,,Dennis Coyne; Khadijah Carlton,521,495
+Halp,Okta,No Contract,0,,,,,,,atlassian.com,,,,126,14
+Harvest,Contracts,Inactive,0,,Operations,,,,,getharvest.com,,,,,
+HashiCorp,Okta,No Contract,0,,,,,,,hashicorp.com,,,,287,86
+HelloSign,NetSuite; Okta,No Contract,0,,,,,,,hellosign.com,,,,8,6
+Heroku,NetSuite; Contracts,Inactive,0,,IT Infrastructure,,,,,heroku.com,,,,,
+Hetzner,NetSuite,No Contract,0,,,,,,,hetzner.com,,,,,
+Hightouch,Okta; Contracts; Requests,Active,1,Data & Analytics,IT Infrastructure,,Software,,,hightouch.com,,,Chris Boden; Gage Sonntag,1,0
+Hootsuite,NetSuite; Okta; Contracts; Requests,Inactive,0,,IT Infrastructure; Marketing,,Software,,,hootsuite.com,,,Andrea Ramos,29,0
+Hotel Beds,,No Contract,0,,,,,,,hotelbeds.com,,,,,
+HotelPlanner,NetSuite; Okta,No Contract,0,,,,,,,hotelplanner.com,,,,402,7
+Hotjar,NetSuite; Okta; Contracts,Active,1,Engineering,Analytics,,,,,hotjar.com,,,Mona Hakky,290,29
+Hotusa Hotels,Okta,No Contract,0,,,,,,,hotusa.es,,,,334,1
+HubSpot,NetSuite; Contracts,Inactive,0,,Sales,,,,,hubspot.com,,,Esther Ay; Jeremy Cone,,
+Human Predictions,NetSuite,No Contract,0,,,,,,,humanpredictions.io,,,,,
+Hummingbird Digital,Okta,No Contract,0,,,,,,,hummingbirdindia.com,,,,334,121
+Hunter,NetSuite,No Contract,0,,,,,,,hunter.io,,,,,
+Hydrogen,Okta,No Contract,0,,,,,,,hydrogenplatform.com,,,,2,0
+IBM,NetSuite,No Contract,0,,,,,,,ibm.com,,,,,
+iconik,NetSuite,No Contract,0,,,,,,,iconik.io,,,,,
+iconik.io,Contracts,Active,1,Growth/Marketing,,,,,,iconik.io,,,Darina Voloshina,,
+Impact,Okta; Contracts; Requests,Active,1,Growth/Marketing,Sales,,Software,,,impact.com,,,Divya Ramaswamy; Ian Delaplaine,26,6
+Impact Tech,NetSuite,No Contract,0,,,,,,,impact.tech,,,,,
+inai,Requests,No Contract,0,,,,Infrastructure & Software Pilot,,,inai.io,,,,,
+incident.io,NetSuite; Okta; Contracts; Requests,Active,1,Engineering,,,Infrastructure & Software Pilot; Software,,,incident.io,,,Kyle Pericak,129,11
+Indeed,NetSuite,No Contract,0,,,,,,,indeed.com,,,,,
+Independent Contractor,Contracts; Requests,Inactive,0,,,,Non-Software,,,,,,Divya Ramaswamy,,
+Inference.ai,Contracts; Requests,Active,1,Management,,,Non-Software,,,inference.ai,,,Miranda Thomas,,
+Influencer,Contracts; Requests,Active,1,Growth/Marketing,,,Non-Software,,,,,,Darina Voloshina,,
+Ink Global,Contracts; Requests,Inactive,0,,,,Non-Software,,,ink-advertising.com,,,Ryan Kirkbride,,
+InMarket,Okta,No Contract,0,,,,,,,inmarket.com,,,,29,1
+Instacart,NetSuite,No Contract,0,,,,,,,instacart.com,,,,,
+Instapage,NetSuite; Contracts,Inactive,0,,Analytics,,,,,instapage.com,,,,,
+Intuit,NetSuite; Contracts,Inactive,0,,Finance,,,,,intuit.com,,,Esther Ay; Michelle Marcotte; Sola Okuboyejo,,
+Invicti,Contracts; Requests,Inactive,0,,,,Software,,,invicti.com,,,Kyle Pericak,,
+Invicti Security,NetSuite,No Contract,0,,,,,,,invicti.com,,,,,
+InVision,NetSuite,No Contract,0,,,,,,,invisionapp.com,,,,,
+IPQualityScore,NetSuite; Okta; Contracts; Requests,Active,2,Data & Analytics,,,Software,,,ipqualityscore.com,,,Gage Sonntag; Mohammad Raza,112,11
+ironSource,NetSuite,No Contract,0,,,,,,,is.com,,,,,
+ISG (Independent Suppliers Group),Okta,No Contract,0,,,,,,,isg.coop,,,,16,2
+iStock,NetSuite; Contracts,Active,1,Growth/Marketing,Design and Development,,,,,istockphoto.com,,,Trevor Hacker,,
+JAMF,NetSuite; Okta; Contracts; Requests,Inactive,0,,Security,,Software,,,jamf.com,,,Jaime Mc Mullin,287,52
+JetBrains,NetSuite,No Contract,0,,,,,,,jetbrains.com,,,,,
+Jotform,NetSuite; Okta; Contracts; Requests,Active,1,Supply,Operations,,Infrastructure & Software Pilot,,,jotform.com,,,Dennis Byrd,17,7
+JumpPlus,NetSuite,No Contract,0,,,,,,,jumpplus.com,,,,,
+Juniper Networks,Okta,No Contract,0,,,,,,,juniper.net,,,,16,0
+Justt,Contracts; Requests,Active,1,Finance,,,Software,,,justt.ai,,,Sarah Boehmer,,
+Kahoot!,NetSuite,No Contract,0,,,,,,,kahoot.com,,,,,
+Kaseya,NetSuite,No Contract,0,,,,,,,kaseya.com,,,,,
+KashKick,Okta,No Contract,0,,,,,,,kashkick.com,,,,27,2
+KAYAK,NetSuite,No Contract,0,,,,,,,kayak.com,,,,,
+Kiali,Okta,No Contract,0,,,,,,,kiali.io,,,,7,0
+Klaviyo,NetSuite; Contracts,Inactive,0,,Marketing,,,,,klaviyo.com,,,,,
+KnowBe4,Requests,No Contract,0,,,,Software,,,knowbe4.com,,,,,
+KPMG,NetSuite,No Contract,0,,,,,,,home.kpmg,,,,,
+Lambda Test,Okta; Contracts; Requests,Active,2,Engineering,DevOps,,Infrastructure & Software Amendment; Software,,,lambdatest.com,,,Shannon Sprock,10,7
+LambdaTest,NetSuite; Contracts; Requests,Active,1,Engineering,,,Infrastructure & Software Amendment; Non-Software,,,lambdatest.com,,,Shannon Sprock,,
+LastPass,NetSuite,No Contract,0,,,,,,,lastpass.com,,,,,
+Lattice,Contracts; Requests,Inactive,0,,HR,,Software,,,lattice.com,,,Rhona Miclat,,
+LeanData,Okta,No Contract,0,,,,,,,leandata.com,,,,29,1
+Lenovo,NetSuite,No Contract,0,,,,,,,lenovo.com,,,,,
+Lever,NetSuite; Contracts; Requests,Active,1,People & Talent,HR,,Software,,,lever.co,,,Jonathan Lau,,
+"Liberty Capital Group, Inc",NetSuite,No Contract,0,,,,,,,libertycapitalgroup.com,,,,,
+LifeLabs Learning,Contracts; Requests,Active,2,People & Talent,,,Non-Software,,,lifelabslearning.com,,,Noelle Nicholas,,
+LinearB,NetSuite; Okta; Contracts; Requests,Active,1,Engineering,DevOps,,Software,,,linearb.io,,,Matt Culver,19,12
+LinkedIn,NetSuite; Okta; Contracts,Active,1,People & Talent,HR; Sales,,,,,linkedin.com,,,Jonathan Lau,332,15
+LinkedIn Ads,NetSuite,No Contract,0,,,,,,,business.linkedin.com,,,,,
+Linktree,NetSuite; Contracts,Active,1,Growth/Marketing,,,,,,linktr.ee,,,Darina Voloshina; Esther Ay,,
+LivePerson,NetSuite; Contracts,Inactive,0,,Customer Service,,,,,liveperson.com,,,,,
+Local SEO Guide,NetSuite,No Contract,0,,,,,,,localseoguide.com,,,,,
+LogRocket,NetSuite; Okta; Contracts,Inactive,0,,IT Infrastructure,,,,,logrocket.com,,,,100,0
+Looker,NetSuite; Contracts; Requests,Active,2,Data & Analytics,Analytics,,Software,,,looker.com,,,Gage Sonntag,,
+Loom,NetSuite,No Contract,0,,,,,,,loom.com,,,,,
+Loops,Requests,No Contract,0,,,,Software,,,getloops.ai,,,,,
+Loris,NetSuite; Okta; Contracts; Requests,Active,1,Operations,Customer Service,,Software,,,loris.ai,,,Dennis Coyne; Khadijah Carlton,38,23
+Los Angeles County Sheriff's Department,Okta,No Contract,0,,,,,,,lasd.org,,,,58,2
+Loxo,NetSuite,No Contract,0,,,,,,,loxo.co,,,,,
+Lucid,NetSuite; Okta; Contracts; Requests,Inactive,0,,Design and Development,,Software,,,lucid.co,,,Jaime Mc Mullin,289,47
+Luminai,Contracts; Requests,Inactive,0,,Analytics,,New RPA Request; Software,,,luminai.com,,,Dan Heber; Sarah Boehmer,,
+MailReach,NetSuite,No Contract,0,,,,,,,mailreach.co,,,,,
+MakCorps,NetSuite; Contracts; Requests,Active,1,Management,,,Non-Software,,,makcorps.co,,,Ally Bashir,,
+ManyChat,NetSuite,No Contract,0,,,,,,,manychat.com,,,,,
+Marker.io,NetSuite; Okta,No Contract,0,,,,,,,marker.io,,,,288,1
+Marriott International,NetSuite,No Contract,0,,,,,,,marriott.com,,,,,
+MasterClass,NetSuite; Contracts; Requests,Inactive,0,,Design and Development,,Software,,,masterclass.com,,,Noelle Nicholas; Rhona Miclat,,
+Meld,Contracts; Requests,Inactive,0,,,,Software,,,meld.io,,,Akshay Kohli,,
+MELD Manufacturing,Okta,No Contract,0,,,,,,,meldmanufacturing.com,,,,13,0
+Microelectronics Data Catalog,,No Contract,0,,,,,,,deramp.com,,,,,
+Microsoft,NetSuite; Okta; Contracts,Active,1,IT,Operations,,,,,microsoft.com,,,Jaime Mc Mullin; Ryan Kirkbride,122,38
+Microsoft Advertising,NetSuite,No Contract,0,,,,,,,ads.microsoft.com,,,,,
+Midjourney,NetSuite; Contracts,Inactive,0,,,,,,,midjourney.com,,,Esther Ay; Trevor Hacker,,
+Miro,NetSuite; Contracts,Inactive,0,,Collaboration,,,,,miro.com,,,Jaime Mc Mullin; Matt Culver,,
+Mistplay,Requests,Prospective,0,,,,Non-Software,,,mistplay.com,,,,,
+Mixmax,Contracts,Inactive,0,,Sales,,,,,mixmax.com,,,,,
+MNTN DIgital,NetSuite; Contracts,Active,1,Growth/Marketing,,,,,,mountain.com,,,Darina Voloshina,,
+mobbin.com,NetSuite,No Contract,0,,,,,,,mobbin.com,,,,,
+Mobileboost,Contracts; Requests,Active,1,Engineering,,,AI Copilot; Software,,,mobileboost.io,,,Shannon Sprock,,
+Modern Loop,Contracts,Active,1,People & Talent,HR; Operations,,,,,modernloop.io,,,Jonathan Lau,,
+ModernLoop,NetSuite; Contracts; Requests,Active,1,People & Talent,,,Software,,,modernloop.io,,,Jonathan Lau,,
+Moloco,NetSuite; Okta,No Contract,0,,,,,,,moloco.com,,,,46,1
+Monday.com,NetSuite; Okta; Contracts; Requests,Active,2,IT,Collaboration,,Software,,,monday.com,,,Jaime Mc Mullin,19,4
+Moneris Merchant Direct,Okta,No Contract,0,,,,,,,moneris.com,,,,4,1
+MongoDB,NetSuite; Okta; Contracts,Active,1,Data & Analytics,IT Infrastructure,,,,,mongodb.com,,,Alex Ianus; Esther Ay,5,2
+MOO,NetSuite; Contracts,Inactive,0,,,,,,,moo.com,,,Trevor Hacker,,
+Motive,NetSuite,No Contract,0,,,,,,,gomotive.com,,,,,
+Motivosity,NetSuite; Okta; Contracts; Requests,Active,2,People & Talent,,,Software,,,motivosity.com,,,Katherine Smith; Rhona Miclat,286,247
+MoveSpring,NetSuite; Contracts; Requests,Active,1,People & Talent,,,Software,,,movespring.com,,,Noelle Nicholas,,
+Moz,NetSuite,No Contract,0,,,,,,,moz.com,,,,,
+MRI-Simmons,Requests,No Contract,0,,,,Software,,,mrisimmons.com,,,,,
+MUI,Okta; Requests,No Contract,0,,,,Software,,,mui.com,,,,5,0
+Namecheap,NetSuite; Okta,No Contract,0,,,,,,,namecheap.com,,,,6,0
+NASPO ValuePoint,,No Contract,0,,,,,,,naspovaluepoint.org,,,,,
+Nextdoor,NetSuite,No Contract,0,,,,,,,nextdoor.com,,,,,
+Nexus Administrators,Okta,No Contract,0,,,,,,,nexus-admin.com,,,,9,0
+Nexus Mods,Okta,No Contract,0,,,,,,,nexusmods.com,,,,124,10
+Ninja Holdings,Contracts; Requests,Inactive,0,,,,Software,,,ninjaholdings.com,,,Gage Sonntag,,
+NinjaOne,Contracts,Inactive,0,,IT Management,,,,,ninjaone.com,,,,,
+NinjaRMM,NetSuite,No Contract,0,,,,,,,ninjarmm.com,,,,,
+Nosto,NetSuite; Contracts,Inactive,0,,,,,,,nosto.com,,,,,
+Notion,NetSuite; Okta; Contracts; Requests,Active,2,Product & Design,Operations,,Software,,,notion.so,,,Dan Heber,288,191
+Nuitee,Okta,No Contract,0,,,,,,,nutmd.com,,,,335,37
+Office Depot,NetSuite,No Contract,0,,,,,,,officedepot.com,,,,,
+Okta,NetSuite; Okta; Contracts; Requests,Active,2,IT,Security,,Infrastructure & Software Amendment; Software,,,okta.com,,,Jaime Mc Mullin,324,182
+OneSignal,Okta,No Contract,0,,,,,,,onesignal.com,,,,132,1
+Onetime,Okta,No Contract,0,,,,,,,onetimesecret.com,,,,289,7
+OpenAI,NetSuite; Okta; Contracts,Inactive,0,,Operations,,,,,openai.com,,,,136,9
+OpenFortune,Requests,Prospective,0,,,,Non-Software,,,openfortune.com,,,,,
+OpsGenie,NetSuite,No Contract,0,,,,,,,atlassian.com,,,,,
+OpsLevel,NetSuite; Okta; Contracts; Requests,Active,1,Engineering,IT Infrastructure,,Software,,,opslevel.com,,,Alex Ianus; Christina Kloet; Heidi Meyer,125,61
+Optimal Workshop,NetSuite; Okta,No Contract,0,,,,,,,optimalworkshop.com,,,,100,4
+Oracle,NetSuite; Contracts; Requests,Active,2,Finance,Finance; HR; IT Infrastructure; Sales,,Software,,,oracle.com,,,Sola Okuboyejo,,
+Oscilar,NetSuite; Contracts; Requests,Active,1,Management - Super+,,,Software,,,oscilar.com,,,Gage Sonntag,,
+"Osler, Hoskin & Harcourt",NetSuite,No Contract,0,,,,,,,osler.com,,,,,
+"Outfront Media,",Contracts; Requests,Inactive,0,,,,Non-Software,,,outfront.com,,,Miranda Thomas,,
+Paddle,Requests,No Contract,0,,,,Infrastructure & Software Pilot,,,paddle.com,,,,,
+Page Flows,NetSuite,No Contract,0,,,,,,,pageflows.com,,,,,
+Pagos.ai,Contracts; Requests,Active,1,Finance,,,Software,,,pagos.ai,,,Sarah Boehmer,,
+Parabellyx Cybersecurity,Contracts; Requests,Active,1,Engineering,,,Non-Software,,,parabellyx.com,,,Christina Kloet; Heidi Meyer; Kyle Pericak,,
+Paragon,NetSuite,No Contract,0,,,,,,,paragonrouting.com,,,,,
+Partnerize,NetSuite,No Contract,0,,,,,,,partnerize.com,,,,,
+Pave,NetSuite; Okta; Contracts; Requests,Active,1,People & Talent,HR,,Software,,,pave.com,,,Courtney Cleary; Noelle Nicholas,287,179
+Pave.dev,Contracts; Requests,Active,1,Data & Analytics,,,Software,,,pave.dev,,,Gage Sonntag,,
+Payment Flo,Contracts,Active,1,,,,,,,paymentflo.io,,,,,
+Paypal,NetSuite; Okta; Contracts,Inactive,0,,Finance,,,,,paypal.com,,,,187,9
+Payscale,NetSuite; Contracts; Requests,Active,1,People & Talent,HR,,Software,,,payscale.com,,,Courtney Cleary; Natasha Lakhani,,
+PCI Pal,NetSuite,No Contract,0,,,,,,,pcipal.com,,,,,
+"PDI Technologies,",NetSuite,No Contract,0,,,,,,,pditechnologies.com,,,,,
+Peak Brewing,Okta,No Contract,0,,,,,,,peakbrewing.com,,,,70,70
+Peak Outsourcing,Contracts; Requests,Active,1,Operations,,,Non-Software,,,peakoutsourcing.com,,,Dennis Coyne; Khadijah Carlton,,
+People Data Labs,NetSuite; Contracts; Requests,Inactive,0,,Sales,,Software,,,peopledatalabs.com,,,Kevin Godfrey; Sarah Boehmer,,
+Perform[cb],NetSuite; Okta,No Contract,0,,,,,,,performcb.com,,,,14,0
+Perplexity,NetSuite,No Contract,0,,,,,,,perplexity.ai,,,,,
+Persona,NetSuite; Okta; Contracts; Requests,Active,1,Management - Super+,Security,,Software,,,withpersona.com,,,Joanna Moroz; Sarah Boehmer,117,64
+Petra Industries,NetSuite; Okta,No Contract,0,,,,,,,petra.com,,,,16,1
+Phished.io,Okta; Requests,Prospective,0,,,,Software,,,phished.io,,,,287,2
+Pipedrive,NetSuite; Okta; Contracts,Inactive,0,,Sales,,,,,pipedrive.com,,,,22,0
+PIPL,NetSuite; Contracts; Requests,Active,1,Management,Marketing,,Software,,,pipl.com,,,Kevin Godfrey,,
+Plaid,NetSuite; Contracts; Requests,Active,1,Management - Super+,Finance,,Infrastructure & Software Amendment; Software,,,plaid.com,,,Sarah Boehmer,,
+Plivo,NetSuite; Contracts; Requests,Active,1,Engineering,IT Infrastructure,,Software,,,plivo.com,,,Ryan Fox,,
+PolyAI,Requests,Prospective,0,,,,Software,,,poly.ai,,,,,
+PopSQL,NetSuite; Contracts; Requests,Active,1,Data & Analytics,,,Software,,,popsql.com,,,Chelsea Akiwumi; Chris Boden,,
+Portable,NetSuite; Contracts; Requests,Active,1,Data & Analytics,,,Software,,,portable.io,,,Gage Sonntag,,
+PortSwigger,NetSuite,No Contract,0,,,,,,,portswigger.net,,,,,
+Postman,NetSuite; Okta; Contracts,Active,1,Engineering,IT Infrastructure,,,,,postman.com,,,Ryan Fox,137,71
+Practising Law Institute,NetSuite,No Contract,0,,,,,,,pli.edu,,,,,
+Priceline,NetSuite; Okta,No Contract,0,,,,,,,priceline.com,,,,43,1
+Pritunl,NetSuite; Okta,No Contract,0,,,,,,,pritunl.com,,,,15,7
+ProductBoard,NetSuite; Contracts,Inactive,0,,Design and Development,,,,,productboard.com,,,,,
+ProfitWell,Okta,No Contract,0,,,,,,,profitwell.com,,,,54,0
+Proven IT,NetSuite,No Contract,0,,,,,,,provenit.com,,,,,
+Purolator,NetSuite,No Contract,0,,,,,,,purolator.com,,,,,
+PwC,NetSuite,No Contract,0,,,,,,,pwc.com,,,,,
+Qolo,NetSuite; Okta; Contracts,Active,1,Management,,,,,,qolo.io,,,Joanna Moroz,2,1
+Qualys,NetSuite; Contracts; Requests,Active,1,Engineering,Security,,Software,,,qualys.com,,,Kyle Pericak,,
+QuickFrame,Contracts; Requests,Active,1,Growth/Marketing,,,Non-Software,,,quickframe.com,,,Darina Voloshina; Divya Ramaswamy,,
+Quizlet,NetSuite,No Contract,0,,,,,,,quizlet.com,,,,,
+Radar,Contracts; Requests,Inactive,0,,,,Software,,,radar.com,,,Kevin Godfrey,,
+Raise,NetSuite,No Contract,0,,,,,,,raise.com,,,,,
+Rakuten,NetSuite,No Contract,0,,,,,,,rakuten.com,,,,,
+Ramp,NetSuite; Okta; Contracts; Requests,Active,1,Finance,Finance,,Software,,,ramp.com,,,Heidi Meyer,286,219
+Ramp Network,Okta,No Contract,0,,,,,,,ramp.network,,,,259,149
+Recurly,Requests,No Contract,0,,,,Software,,,recurly.com,,,,,
+Reddit,Okta,No Contract,0,,,,,,,reddit.com,,,,13,0
+Reforge Inc.,NetSuite,No Contract,0,,,,,,,reforge.com,,,,,
+Regus,NetSuite,No Contract,0,,,,,,,regus.com,,,,,
+Relay Platform,NetSuite,No Contract,0,,,,,,,relayplatform.com,,,,,
+RemoteWoman,NetSuite,No Contract,0,,,,,,,remotewoman.com,,,,,
+Report It,NetSuite; Contracts; Requests,Active,2,Management; People & Talent,,,Software,,,reportit.com,,,Noelle Nicholas,,
+ReportPortal,Okta,No Contract,0,,,,,,,reportportal.io,,,,125,39
+Rev.com,NetSuite; Contracts,Inactive,0,,,,,,,rev.com,,,,,
+ReviewBot,NetSuite; Contracts; Requests,Inactive,0,,,,Software,,,reviewbot.io,,,Andrea Ramos,,
+RevU,Requests,No Contract,0,,,,F&E Partners,,,revu.co,,,,,
+RingCentral,NetSuite; Contracts; Requests,Inactive,0,,IT Infrastructure,,Software,,,ringcentral.com,,,Jaime Mc Mullin,,
+Riskified,Okta; Contracts; Requests,Active,2,Finance,,,Infrastructure & Software Amendment; Software,,,riskified.com,,,Mary Zhang; Sarah Boehmer,151,36
+RocketReach,NetSuite; Contracts,Inactive,0,,Sales,,,,,rocketreach.co,,,Alexandre Tang,,
+Rokt,NetSuite; Okta,No Contract,0,,,,,,,rokt.com,,,,17,2
+Rootly,Okta; Requests,No Contract,0,,,,Infrastructure & Software Pilot,,,rootly.com,,,,27,6
+Ropes & Gray,NetSuite,No Contract,0,,,,,,,ropesgray.com,,,,,
+RTS - Business & Finance,,No Contract,0,,,,,,,acronymfinder.com,,,,,
+Runway,NetSuite,No Contract,0,,,,,,,runwayml.com,,,,,
+SADA,Okta,No Contract,0,,,,,,,sada.com,,,,31,16
+Salesforce,NetSuite,No Contract,0,,,,,,,salesforce.com,,,,,
+Saltours International,Okta,No Contract,0,,,,,,,saltours.com,,,,336,6
+Sauce Labs,NetSuite; Okta; Contracts; Requests,Inactive,0,,DevOps,,Software,,,saucelabs.com,,,Kyle Pericak,135,3
+Scalar,NetSuite,No Contract,0,,,,,,,scalar.ca,,,,,
+Screaming Frog,NetSuite; Okta; Contracts; Requests,Inactive,0,,IT Infrastructure,,Software,,,screamingfrog.co.uk,,,Ryan Kirkbride,8,0
+Scribe,NetSuite,No Contract,0,,,,,,,scribenet.com,,,,,
+ScribeUp,Contracts; Requests,Inactive,0,,,,Software,,,scribeup.io,,,Akshay Kohli,,
+Secoda,NetSuite; Okta; Contracts; Requests,Active,1,Data & Analytics,IT Infrastructure,,Software,,,secoda.co,,,Chris Boden,286,57
+Security Metrics,Okta,No Contract,0,,,,,,,securitymetrics.com,,,,3,2
+Segway GoKart,Okta,No Contract,0,,,,,,,segway.com,,,,11,3
+SELECT,Contracts; Requests,Active,1,Data & Analytics,,,Software,,,select.dev,,,Gage Sonntag,,
+SEMrush,NetSuite; Okta; Contracts; Requests,Active,1,Growth/Marketing,Marketing,,Software,,,semrush.com,,,Ryan Kirkbride,10,3
+SentiLink ,Requests,No Contract,0,,,,Infrastructure & Software Pilot,,,sentilink.com,,,,,
+SentinelOne,Contracts; Requests,Active,1,IT,Security,,Software,,,sentinelone.com,,,Jaime Mc Mullin,,
+ShareASale,NetSuite,No Contract,0,,,,,,,shareasale.com,,,,,
+Shareworks,Contracts; Requests,Active,1,Management,Finance,,Software,,,shareworks.com,,,Daniel Weisenfeld,,
+Shipstation,NetSuite; Contracts,Inactive,0,,Operations,,,,,shipstation.com,,,,,
+Shopify,NetSuite,No Contract,0,,,,,,,shopify.com,,,,,
+Shoppable,Okta,No Contract,0,,,,,,,about.shoppable.com,,,,15,0
+signNow,NetSuite,No Contract,0,,,,,,,signnow.com,,,,,
+Silicon Valley Bank,Okta,No Contract,0,,,,,,,svb.com,,,,3,0
+SimilarWeb,NetSuite; Okta; Contracts; Requests,Inactive,0,,Marketing,,Software,,,similarweb.com,,,Heidi Meyer,288,9
+simplesat,NetSuite; Okta; Contracts; Requests,Active,1,Operations,,,Software,,,simplesat.io,,,Andrea Ramos,43,6
+Singular,NetSuite; Okta; Contracts; Requests,Active,1,Data & Analytics,Analytics,,Non-Software; Software,,,singular.net,,,Divya Ramaswamy; Gage Sonntag,38,7
+"Singular Engineering Co.,Ltd.",Okta,No Contract,0,,,,,,,singular-engineering.com,,,,84,6
+Sisense,NetSuite; Okta; Contracts; Requests,Inactive,0,,Analytics,,Software,,,sisense.com,,,Gage Sonntag,49,12
+Sitejabber,NetSuite; Contracts; Requests,Active,1,Operations,,,Software,,,sitejabber.com,,,Andrea Ramos; Meredith Callahan,,
+Situational Leadership® Management and Leadership Training,Contracts; Requests,Inactive,0,,,,Non-Software,,,situational.com,,,Noelle Nicholas,,
+Six Eastern PR,Contracts; Requests,Active,1,Management,,,Non-Software,,,sixeastern.com,,,Miranda Thomas,,
+"Skadden, Arps, Slate, Meagher & Flom",NetSuite,No Contract,0,,,,,,,skadden.com,,,,,
+Skype,NetSuite,No Contract,0,,,,,,,skype.com,,,,,
+Slack,NetSuite; Okta; Contracts; Requests,Active,1,IT,Collaboration,,Software,,,slack.com,,,Jaime Mc Mullin,288,152
+Sleek,Contracts; Requests,Inactive,0,,,,Software,,,onsleek.com,,,Jennifer Wang,,
+Sleek Technologies,NetSuite; Requests,No Contract,0,,,,Non-Software,,,sleek-technologies.com,,,,,
+Smartsheet,NetSuite; Okta; Contracts; Requests,Active,1,Operations,Collaboration,,Software,,,smartsheet.com,,,Dennis Coyne; Rohan Sawkar,43,23
+Snapchat,,No Contract,0,,,,,,,businesshelp.snapchat.com,,,,,
+SnapTravel,NetSuite; Okta,No Contract,0,,,,,,,snaptravel.com,,,,75,0
+Snowflake,NetSuite; Okta; Contracts; Requests,Active,1,Data & Analytics,IT Infrastructure,,Software,,,snowflake.com,,,Gage Sonntag,288,160
+Snyk,Requests,No Contract,0,,,,Software,,,snyk.io,,,,,
+Socratix AI,Requests,Prospective,0,,,,Software,,,getsocratix.ai,,,,,
+Southwest Airlines,Okta,No Contract,0,,,,,,,southwest.com,,,,183,1
+Speechify,NetSuite,No Contract,0,,,,,,,speechify.com,,,,,
+Spline,Contracts,Inactive,0,,,,,,,spline.design,,,Trevor Hacker,,
+Sprout Social,NetSuite; Contracts; Requests,Active,1,Operations,Marketing,,Infrastructure & Software Amendment; Software,,,sproutsocial.com,,,Andrea Ramos; Darina Voloshina,,
+SPSS,NetSuite,No Contract,0,,,,,,,sunthonphu.ac.th,,,,,
+SquareSpace,NetSuite,No Contract,0,,,,,,,squarespace.com,,,,,
+StackBlitz,NetSuite,No Contract,0,,,,,,,stackblitz.com,,,,,
+Stape,NetSuite; Contracts; Requests,Active,1,Data & Analytics,,,Software,,,stape.io,,,Gage Sonntag,,
+Staples,NetSuite,No Contract,0,,,,,,,staples.com,,,,,
+Statista,Contracts,Inactive,0,,Analytics,,,,,statista.com,,,,,
+Stay22,Requests,No Contract,0,,,,Software,,,stay22.com,,,,,
+Sticker Mule,NetSuite,No Contract,0,,,,,,,stickermule.com,,,,,
+Stitchflow,Requests,Prospective,0,,,,Software,,,stitchflow.com,,,,,
+Storybook,Okta,No Contract,0,,,,,,,storybook.js.org,,,,163,27
+Strata Prime,NetSuite,No Contract,0,,,,,,,strataprime.com,,,,,
+Streak,NetSuite; Contracts; Requests,Active,1,Finance,,,Software,,,streak.com,,,Alexandre Tang; Christina Kloet; Heidi Meyer,,
+Streamline,Okta,No Contract,0,,,,,,,streamlinevrs.com,,,,39,1
+Streamline,NetSuite,No Contract,0,,,,,,,streamlinehq.com,,,,,
+Streamline AI,NetSuite; Contracts; Requests,Active,1,Legal,,,Software; Terminating Supplier,,,streamline.ai,,,Fabio Sanchez Del Rio,,
+Substack,NetSuite,No Contract,0,,,,,,,substack.com,,,,,
+Super,NetSuite,No Contract,0,,,,,,,,,,,,
+Superblocks,NetSuite; Okta; Contracts; Requests,Active,1,Engineering,,,Software,,,superblocks.com,,,Kyle Pericak,133,76
+SuperPay,,No Contract,0,,,,,,,producthunt.com,,,,,
+SurveyMonkey,NetSuite; Contracts,Inactive,0,,Marketing,,,,,surveymonkey.com,,,Noelle Nicholas,,
+SWA,Okta,No Contract,0,,,,,,,swaonline.co.uk,,,,33,0
+Taboola,NetSuite; Okta,No Contract,0,,,,,,,taboola.com,,,,9,0
+Tagger,NetSuite; Contracts,Inactive,0,,,,,,,taggermedia.com,,,Darina Voloshina,,
+Talon.One,NetSuite; Okta; Contracts; Requests,Active,1,Engineering,Marketing,,Software,,,talon.one,,,Hassan Waheed; Jennifer Wang,18,2
+Tango Card,NetSuite; Contracts,Inactive,0,,,,,,,tangocard.com,,,,,
+Tapjoy,Contracts,Inactive,0,,Marketing,,,,,tapjoy.com,,,Sebastian Cosentino,,
+Tapjoy,NetSuite,No Contract,0,,,,,,,is.com,,,,,
+Tatari,NetSuite; Contracts; Requests,Active,1,Growth/Marketing,,,Non-Software,,,tatari.tv,,,Divya Ramaswamy,,
+Tax1099,NetSuite; Contracts; Requests,Active,1,Finance,,,Non-Software,,,tax1099.com,,,Ryan Gertzbein,,
+TD Commercial Banking,Okta,No Contract,0,,,,,,,td.com,,,,3,0
+TD Correspondent Web,Okta,No Contract,0,,,,,,,correspondentweb.td.com,,,,1,0
+TD EasyWeb,Okta,No Contract,0,,,,,,,easyweb.td.com,,,,2,0
+TDFX,Okta,No Contract,0,,,,,,,tdsecurities.com,,,,2,0
+Tegus,NetSuite; Okta; Contracts; Requests,Active,1,Management,Collaboration,,Software,,,tegus.com,,,Alexandre Tang; Michael Abramovich,18,8
+Teleperformance,NetSuite,No Contract,0,,,,,,,teleperformance.com,,,,,
+Tenable,Requests,No Contract,0,,,,Software,,,tenable.com,,,,,
+Terminal ,NetSuite,No Contract,0,,,,,,,terminal.io,,,,,
+Test,Requests,No Contract,0,,,,F&E Partners; Software,,,test.com,,,,,
+test,Requests,No Contract,0,,,,AI Copilot,,,,,,,,
+TestGorilla,Contracts,Inactive,0,,,,,,,testgorilla.com,,,Rhona Miclat,,
+testing if felicity can see this,Requests,No Contract,0,,,,Software,,,,,,,,
+TestingXperts,Contracts; Requests,Active,1,Engineering,,,Non-Software,,,testingxperts.com,,,Shannon Sprock,,
+TESTMO,NetSuite; Okta,No Contract,0,,,,,,,testmo.com,,,,71,5
+Thrive,NetSuite,No Contract,0,,,,,,,thrivetech.co,,,,,
+Thrive Business Marketing,,No Contract,0,,,,,,,thrivesearch.com,,,,,
+TikTok,NetSuite,No Contract,0,,,,,,,tiktok.com,,,,,
+Tokenex,NetSuite; Contracts; Requests,Active,2,Finance,Security,,Infrastructure & Software Amendment; Software,,,tokenex.com,,,Sarah Boehmer,,
+TrackJS,NetSuite; Okta; Contracts,Active,1,Engineering,IT Infrastructure,,,,,trackjs.com,,,Ryan Fox,128,60
+"Travel, & Everyday Savings', 'Super.com",Okta; Contracts; Requests,Inactive,0,,,,Software,,,super.com,,,Divya Ramaswamy,828,712
+TravelgateX,NetSuite; Okta,No Contract,0,,,,,,,travelgate.com,,,,22,2
+TravelPerk,,No Contract,0,,,,,,,travelperk.com,,,,,
+Travolutionary,Okta,No Contract,0,,,,,,,travolutionary.com,,,,138,1
+Trello,NetSuite; Contracts,Inactive,0,,Collaboration,,,,,trello.com,,,Fabio Sanchez Del Rio,,
+Trip Flex,,No Contract,0,,,,,,,allegiantair.com,,,,,
+Trip.com,Okta,No Contract,0,,,,,,,trip.com,,,,344,31
+Tripadvisor,NetSuite,No Contract,0,,,,,,,tripadvisor.com,,,,,
+trivago,NetSuite,No Contract,0,,,,,,,trivago.com,,,,,
+Tropic,NetSuite; Okta; Contracts,Active,1,,Operations,,,,,tropicapp.io,,,Christina Kloet; Heidi Meyer,286,58
+Trustpilot,NetSuite; Okta; Contracts,Active,1,Operations,Marketing,,,,,trustpilot.com,,,Andrea Ramos; Meredith Callahan,29,1
+Truv,NetSuite,No Contract,0,,,,,,,truv.com,,,,,
+Tusk,NetSuite; Contracts; Requests,Active,1,Engineering,,,Infrastructure & Software Pilot; Software,,,usetusk.ai,,,Ryan Fox,,
+Twilio,NetSuite; Okta; Contracts; Requests,Inactive,0,,Marketing,,Software,,,twilio.com,,,Dan Heber; Heidi Meyer; Matt Culver; Ryan Fox,167,6
+Twilio SendGrid,NetSuite; Okta; Contracts,Inactive,0,,Marketing,,,,,sendgrid.com,,,,143,6
+Twitter,NetSuite,No Contract,0,,,,,,,twitter.com,,,,,
+Typeform,NetSuite; Contracts,Inactive,0,,Collaboration,,,,,typeform.com,,,,,
+Uber,NetSuite,No Contract,0,,,,,,,uber.com,,,,,
+Ubiquiti,NetSuite,No Contract,0,,,,,,,ui.com,,,,,
+Uline,NetSuite,No Contract,0,,,,,,,uline.com,,,,,
+Unfold,NetSuite,No Contract,0,,,,,,,unfold.com,,,,,
+United States Postal Service,Okta,No Contract,0,,,,,,,usps.com,,,,32,0
+Unito,NetSuite; Contracts; Requests,Active,1,Product & Design,,,Software,,,unito.io,,,Dan Heber,,
+Unity,NetSuite,No Contract,0,,,,,,,unity.com,,,,,
+Unwrap.ai,NetSuite; Contracts; Requests,Active,2,Management; Product & Design,,,Infrastructure & Software Amendment; Terminating Supplier,,,unwrap.ai,,,Andrea Ramos; Paul Smith,,
+UPS,NetSuite,No Contract,0,,,,,,,ups.com,,,,,
+Upwork,NetSuite,No Contract,0,,,,,,,upwork.com,,,,,
+UserTesting,Okta; Contracts; Requests,Active,1,Product & Design,Design and Development,,Software,,,usertesting.com,,,Kyle Pericak; Laura Goodyear; Mona Hakky,39,4
+Vault by HashiCorp,Okta,No Contract,0,,,,,,,vaultproject.io,,,,286,111
+Vendr,NetSuite,No Contract,0,,,,,,,vendr.com,,,,,
+Ventask,,No Contract,0,,,,,,,ventask.pt,,,,,
+Verisoul,Requests,No Contract,0,,,,Infrastructure & Software Pilot,,,verisoul.ai,,,,,
+Vervotech,NetSuite; Okta; Contracts; Requests,Active,1,Engineering,,,Infrastructure & Software Amendment; Software,,,vervotech.com,,,Kevin Lyles; Zach Mc Naney,31,6
+Viator,Okta,No Contract,0,,,,,,,viator.com,,,,6,0
+Vindicia,Okta; Requests,No Contract,0,,,,Infrastructure & Software Pilot,,,vindicia.com,,,,42,0
+Visual Studio App Center,Okta,No Contract,0,,,,,,,appcenter.ms,,,,6,0
+VoiceBase,NetSuite; Contracts; Requests,Inactive,0,,Customer Service,,Software,,,voicebase.com,,,Dennis Coyne; Meredith Callahan,,
+Wall Street Journal,NetSuite,No Contract,0,,,,,,,wsj.com,,,,,
+Walmart I/O,Okta,No Contract,0,,,,,,,walmart.io,,,,69,1
+WebBeds,,No Contract,0,,,,,,,webbeds.com,,,,,
+Webflow,NetSuite; Okta; Contracts; Requests,Active,1,Product & Design,Design and Development,,Software; Terminating Supplier,,,webflow.com,,,Divya Ramaswamy; Trevor Hacker,19,10
+WellsFargo,NetSuite,No Contract,0,,,,,,,wellsfargo.com,,,,,
+Westjet,NetSuite,No Contract,0,,,,,,,westjet.com,,,,,
+WeWork,NetSuite,No Contract,0,,,,,,,wework.com,,,,,
+Winning Ads Media Agency,NetSuite; Contracts; Requests,Active,1,Growth/Marketing,,,Non-Software,,,winningadsmedia.agency,,,Darina Voloshina,,
+Wiza,NetSuite; Contracts,Inactive,0,,,,,,,wiza.co,,,,,
+Wondershare,NetSuite,No Contract,0,,,,,,,wondershare.com,,,,,
+Wordpress,NetSuite,No Contract,0,,,,,,,wordpress.com,,,,,
+Workiva,NetSuite; Contracts,Active,1,Finance,Finance,,,,,workiva.com,,,Sola Okuboyejo,,
+Worktango,Okta; Contracts; Requests,Active,1,People & Talent,,,Software,,,worktango.com,,,Noelle Nicholas,62,14
+WorkTango,NetSuite,No Contract,0,,,,,,,worktango.com,,,,,
+Workwize,NetSuite; Okta,No Contract,0,,,,,,,goworkwize.com,,,,6,3
+Xero,NetSuite; Contracts,Active,1,Finance,,,,,,xero.com,,,Sola Okuboyejo,,
+Yesware,NetSuite; Contracts,Inactive,0,,Sales,,,,,yesware.com,,,Sarah Boehmer,,
+Zapier,NetSuite; Okta; Contracts; Requests,Active,2,Data & Analytics,IT Infrastructure,,Software,,,zapier.com,,,Dan Heber; Gage Sonntag,192,16
+Zendesk,NetSuite; Okta,No Contract,0,,,,,,,zendesk.com,,,,7,2
+ZentrumHub,Contracts; Requests,Inactive,0,,,,Non-Software; Software,,,zentrumhub.com,,,Dennis Byrd,,
+Zinc,NetSuite,No Contract,0,,,,,,,zinc.com,,,,,
+Zoom,NetSuite,No Contract,0,,,,,,,zoom.us,,,,,
