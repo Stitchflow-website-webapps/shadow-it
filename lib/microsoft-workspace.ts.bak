@@ -6,13 +6,22 @@ import { supabaseAdmin } from '@/lib/supabase';
 // Define interfaces for Microsoft API responses
 interface Token {
   clientId: string;
-  displayText: string;
+  displayText?: string;
+  scopes?: string[];
   userKey: string;
-  userEmail: string;
-  scopes: string[];
-  appRoleScopes: string[];
-  adminScopes: string[];
-  userScopes: string[];
+  userEmail?: string;
+  lastTimeUsed?: string;
+  assignedDate?: string;    // When the user was assigned to the application
+  lastSignInDateTime?: string; // When the user last signed in
+  assignmentType?: string;  // Direct or inherited assignment
+  // Fields for risk assessment
+  adminScopes?: string[];   // Admin-consented permissions
+  userScopes?: string[];    // User-consented permissions
+  appRoleScopes?: string[]; // App role permissions
+  permissionCount?: number; // Total number of unique permissions
+  highRiskPermissions?: string[]; // Permissions that are considered high risk
+  mediumRiskPermissions?: string[]; // Permissions that are considered medium risk
+  [key: string]: any;
 }
 
 interface MicrosoftGraphUser {
@@ -25,24 +34,16 @@ interface MicrosoftGraphUser {
   accountEnabled?: boolean; // Whether the account is enabled
 }
 
-interface ServicePrincipalResponse {
-  value: Array<{
-    id: string;
-    appId: string;
-    displayName: string;
-    appRoles?: Array<{
-      id: string;
-      value: string;
-      displayName: string;
-      description: string;
-    }>;
-    oauth2PermissionScopes?: Array<{
-      id: string;
-      value: string;
-      adminConsentDisplayName: string;
-      adminConsentDescription: string;
-    }>;
-  }>;
+interface ServicePrincipal {
+  id: string;
+  appId: string;
+  displayName: string;
+  appRoles: { id: string; value: string; displayName: string }[];
+}
+
+interface AppRoleAssignment {
+  principalId: string; // User ID
+  resourceId: string; // Service Principal ID
 }
 
 interface OAuth2Grant {
@@ -52,7 +53,6 @@ interface OAuth2Grant {
   scope?: string;
   startTime?: string;
   createdTime?: string;
-  consentType: 'AllPrincipals' | 'Principal';
 }
 
 export class MicrosoftWorkspaceService {
@@ -90,49 +90,6 @@ export class MicrosoftWorkspaceService {
     this.client = Client.initWithMiddleware({
       authProvider: authProvider
     });
-  }
-
-  private async batchExecutor(requests: { id: string; url: string }[]): Promise<Map<string, any>> {
-    const responses = new Map<string, any>();
-    const batchChunks = [];
-    // Microsoft Graph API allows up to 20 requests per batch
-    for (let i = 0; i < requests.length; i += 20) {
-      batchChunks.push(requests.slice(i, i + 20));
-    }
-
-    // Process all chunks in parallel for maximum speed
-    const allBatchPromises = batchChunks.map(chunk =>
-      this.client.api('/$batch').post({
-        requests: chunk.map(req => ({
-          id: req.id,
-          method: 'GET',
-          url: req.url,
-        })),
-      })
-    );
-
-    const allBatchResults = await Promise.allSettled(allBatchPromises);
-
-    for (const result of allBatchResults) {
-      if (result.status === 'fulfilled') {
-        const batchResponse = result.value;
-        if (!batchResponse.responses) {
-          console.error('[BatchExecutor] Batch response is missing "responses" property:', batchResponse);
-          continue;
-        }
-        for (const res of batchResponse.responses) {
-          if (res.status >= 200 && res.status < 300) {
-            responses.set(res.id, res.body);
-          } else {
-            console.error(`[BatchExecutor] Request for ID ${res.id} failed with status ${res.status}`);
-            console.error(`[BatchExecutor] Error body for ID ${res.id}:`, JSON.stringify(res.body, null, 2));
-          }
-        }
-      } else {
-        console.error('[BatchExecutor] A batch request failed:', result.reason);
-      }
-    }
-    return responses;
   }
 
   async setCredentials(tokens: any) {
@@ -425,11 +382,11 @@ export class MicrosoftWorkspaceService {
    * Fetches all service principals (applications) from the tenant.
    * @returns A promise that resolves to an array of service principal objects.
    */
-  async getServicePrincipals(): Promise<any[]> {
+  async getServicePrincipals(): Promise<ServicePrincipal[]> {
     console.log('Fetching all service principals from Microsoft Graph API...');
     // We select only the necessary fields to reduce payload size.
-    const endpoint = '/servicePrincipals?$select=id,appId,displayName,appRoles,oauth2PermissionScopes,servicePrincipalType';
-    const servicePrincipals = await this.getAllPages(endpoint);
+    const endpoint = '/servicePrincipals?$select=id,appId,displayName,appRoles,servicePrincipalType';
+    const servicePrincipals = await this.getAllPages<ServicePrincipal>(endpoint);
     console.log(`Successfully fetched ${servicePrincipals.length} service principals.`);
     return servicePrincipals;
   }
@@ -439,216 +396,122 @@ export class MicrosoftWorkspaceService {
    * This represents the permissions (scopes) that users have granted to applications.
    * @returns A promise that resolves to an array of OAuth2 permission grant objects.
    */
-  async getAllOAuth2PermissionGrants(): Promise<any[]> {
+  async getAllOAuth2PermissionGrants(): Promise<OAuth2Grant[]> {
     console.log('Fetching all OAuth2 permission grants from Microsoft Graph API...');
     const endpoint = '/oauth2PermissionGrants';
-    const grants = await this.getAllPages(endpoint);
+    const grants = await this.getAllPages<OAuth2Grant>(endpoint);
     console.log(`Successfully fetched ${grants.length} OAuth2 permission grants.`);
     return grants;
   }
 
+  /**
+   * Fetches all app role assignments for the entire tenant.
+   * This represents direct user assignments to applications.
+   * @returns A promise that resolves to an array of app role assignment objects.
+   */
+  async getAllAppRoleAssignments(): Promise<AppRoleAssignment[]> {
+    console.log('Fetching all App Role Assignments from Microsoft Graph API...');
+    const endpoint = '/appRoleAssignments?$select=principalId,resourceId';
+    const assignments = await this.getAllPages<AppRoleAssignment>(endpoint);
+    console.log(`Successfully fetched ${assignments.length} app role assignments.`);
+    return assignments;
+  }
+
   async getOAuthTokens(specificUsers?: any[]): Promise<Token[]> {
-    console.log(`
-    ======================================================================
-    [MicrosoftWorkspaceService] ENTERING getOAuthTokens (v3 - Full Logic)
-    ======================================================================
-    `);
     try {
-      // 1. Fetch all tenant-level data in parallel for maximum efficiency
-      console.log('🔄 Fetching all tenant-level data (users, apps, admin grants)...');
-      const [users, servicePrincipals, allAdminGrants] = await Promise.all([
-        this.getUsersList(process.env.MICROSOFT_INCLUDE_GUESTS === 'true', process.env.MICROSOFT_INCLUDE_DISABLED === 'true'),
+      console.log('🚀 [ULTRA-FAST] Starting bulk OAuth token fetch from Microsoft Entra ID...');
+
+      // 1. Fetch all data in parallel using bulk endpoints
+      console.log('🔄 Fetching all users, service principals, grants, and assignments in parallel...');
+      const includeGuests = process.env.MICROSOFT_INCLUDE_GUESTS === 'true';
+      const includeDisabled = process.env.MICROSOFT_INCLUDE_DISABLED === 'true';
+
+      const [
+        allUsers,
+        allServicePrincipals,
+        allOAuth2Grants,
+        allAppRoleAssignments
+      ] = await Promise.all([
+        this.getUsersList(includeGuests, includeDisabled),
         this.getServicePrincipals(),
-        this.getAllPages(`/oauth2PermissionGrants?$filter=consentType eq 'AllPrincipals'`)
+        this.getAllOAuth2PermissionGrants(),
+        this.getAllAppRoleAssignments()
       ]);
-      console.log(`✅ Fetched ${users.length} users, ${servicePrincipals.length} service principals, and ${allAdminGrants.length} admin-consented grants.`);
 
-      // 2. Create lookup maps and pre-process admin grants
-      const spMap = new Map(servicePrincipals.map((sp: any) => [sp.id, sp]));
-      const adminConsentedScopesMap = new Map<string, Set<string>>();
-      for (const grant of allAdminGrants as any[]) {
-        if (!grant.scope || !grant.clientId) continue;
-        const scopes = grant.scope.split(' ').filter(Boolean);
-        const spId = grant.clientId; // In an oauth grant, clientId is the Service Principal ID
-        const existing = adminConsentedScopesMap.get(spId) || new Set<string>();
-        scopes.forEach((s: string) => existing.add(s));
-        adminConsentedScopesMap.set(spId, existing);
+      console.log('✅ All data fetched successfully.');
+      console.log(`   - Users: ${allUsers.length}`);
+      console.log(`   - Service Principals: ${allServicePrincipals.length}`);
+      console.log(`   - OAuth2 Grants: ${allOAuth2Grants.length}`);
+      console.log(`   - App Role Assignments: ${allAppRoleAssignments.length}`);
+
+      // 2. Create lookup maps for efficient processing
+      const userMap = new Map<string, MicrosoftGraphUser>(allUsers.map(u => [u.id, u]));
+      const spMap = new Map<string, ServicePrincipal>(allServicePrincipals.map(sp => [sp.id, sp]));
+      const spAppIdMap = new Map<string, ServicePrincipal>(allServicePrincipals.map(sp => [sp.appId, sp]));
+
+
+      // 3. Process data in memory to build user-app relationships and scopes
+      console.log('🧠 Processing data in-memory to construct tokens...');
+      const userAppScopes = new Map<string, { app: ServicePrincipal; scopes: Set<string> }>();
+
+      // Process App Role Assignments (direct assignments)
+      for (const assignment of allAppRoleAssignments) {
+        if (userMap.has(assignment.principalId) && spMap.has(assignment.resourceId)) {
+          const user = userMap.get(assignment.principalId)!;
+          const app = spMap.get(assignment.resourceId)!;
+          const key = `${user.id}:${app.id}`;
+
+          if (!userAppScopes.has(key)) {
+            userAppScopes.set(key, { app, scopes: new Set() });
+          }
+          userAppScopes.get(key)!.scopes.add('UserAssignment'); // Generic scope for direct assignment
+        }
       }
-      console.log(`✅ Pre-processed admin grants for ${adminConsentedScopesMap.size} applications.`);
 
-      // 3. Prepare and execute batch requests for all per-user data
-      console.log('🔄 Batch fetching per-user data (assignments and user grants)...');
-      const assignmentRequests = users.map(user => ({
-        id: user.id,
-        url: `/users/${user.id}/appRoleAssignments`,
-      }));
-      const userGrantRequests = users.map(user => ({
-        id: user.id,
-        url: `/oauth2PermissionGrants?$filter=principalId eq '${user.id}'`,
-      }));
-
-      const [assignmentsByUser, userGrantsByUser] = await Promise.all([
-        this.batchExecutor(assignmentRequests),
-        this.batchExecutor(userGrantRequests),
-      ]);
-      console.log('✅ Completed batch fetch for all per-user data.');
-
-      // 4. Process all data in memory, combining all scope types correctly (mirroring old logic)
-      console.log('⚙️ Processing and combining all permissions...');
-      const userAppMap = new Map<string, {
-        clientId: string;
-        displayText: string;
-        userKey: string;
-        userEmail: string;
-        scopes: Set<string>;
-        appRoleScopes: Set<string>;
-        adminScopes: Set<string>;
-        userScopes: Set<string>;
-      }>();
-
-      const getOrCreateUserApp = (userId: string, sp: any, userEmail: string) => {
-        const userAppKey = `${userId}:${sp.appId}`;
-        if (!userAppMap.has(userAppKey)) {
-          userAppMap.set(userAppKey, {
-            clientId: sp.appId,
-            displayText: sp.displayName,
-            userKey: userId,
-            userEmail: userEmail,
-            scopes: new Set<string>(),
-            appRoleScopes: new Set<string>(),
-            adminScopes: new Set<string>(),
-            userScopes: new Set<string>()
-          });
-        }
-        return userAppMap.get(userAppKey)!;
-      };
-      
-      for (const user of users) {
-        const userId = user.id;
-        const userEmail = user.mail || user.userPrincipalName;
-        if (!userEmail) continue;
-
-        const assignments = assignmentsByUser.get(userId)?.value || [];
-        const userGrants = userGrantsByUser.get(userId)?.value || [];
-        const processedAppsForUser = new Set<string>();
-
-        // NEW: Detailed logging for each user
-        console.log(`[ScopeFetcher] 🔍 Processing ${userEmail}: Found ${assignments.length} AppRoleAssignments and ${userGrants.length} OAuth2PermissionGrants.`);
-        
-        if (assignments.length > 0) {
-          console.log(`[ScopeFetcher] 📋 ${userEmail} AppRoleAssignments:`, assignments.slice(0, 3).map(a => ({ resourceId: a.resourceId, appRoleId: a.appRoleId })));
-        }
-        if (userGrants.length > 0) {
-          console.log(`[ScopeFetcher] 🎫 ${userEmail} OAuth2PermissionGrants:`, userGrants.slice(0, 3).map(g => ({ clientId: g.clientId, scope: g.scope })));
-        }
-
-        // First pass: Process direct app assignments
-        for (const assignment of assignments) {
-          const sp = spMap.get(assignment.resourceId);
-          if (!sp) {
-            console.log(`[ScopeFetcher] ⚠️ ${userEmail}: Could not find service principal for resourceId ${assignment.resourceId}`);
-              continue;
+      // Process OAuth2 Grants (delegated permissions)
+      for (const grant of allOAuth2Grants) {
+        // A grant links a user (principalId) to a client app (clientId) that has permissions to a resource app (resourceId)
+        if (grant.principalId && userMap.has(grant.principalId)) {
+          const user = userMap.get(grant.principalId)!;
+          // The app the user is interacting with is the client app
+          const app = spMap.get(grant.clientId) || spAppIdMap.get(grant.clientId);
+          
+          if (app) {
+            const key = `${user.id}:${app.id}`;
+            
+            if (!userAppScopes.has(key)) {
+              userAppScopes.set(key, { app, scopes: new Set() });
             }
             
-          const userApp = getOrCreateUserApp(userId, sp, userEmail);
-          processedAppsForUser.add(sp.appId);
-
-          const role = sp.appRoles.find((r: any) => r.id === assignment.appRoleId);
-          if (role && role.isEnabled) {
-            const scope = role.value || 'default_access';
-            console.log(`[ScopeFetcher] ✅ ${userEmail} -> ${sp.displayName}: Added AppRole scope '${scope}'`);
-            userApp.appRoleScopes.add(scope);
-            userApp.scopes.add(scope);
-          } else {
-            console.log(`[ScopeFetcher] ⚠️ ${userEmail} -> ${sp.displayName}: No valid role found for appRoleId ${assignment.appRoleId}`);
+            const scopes = grant.scope ? grant.scope.split(' ').filter(s => s) : [];
+            scopes.forEach(s => userAppScopes.get(key)!.scopes.add(s));
           }
         }
-        
-        // Second pass: Process all grants (user and admin) and apply them
-        for (const grant of userGrants) {
-            if (!grant.scope) {
-              console.log(`[ScopeFetcher] ⚠️ ${userEmail}: Grant has no scope - ${JSON.stringify(grant)}`);
-              continue;
-            }
-            const sp = spMap.get(grant.clientId);
-            if (!sp) {
-              console.log(`[ScopeFetcher] ⚠️ ${userEmail}: Could not find service principal for clientId ${grant.clientId}`);
-              continue;
-            }
-            
-            const userApp = getOrCreateUserApp(userId, sp, userEmail);
-            const scopes = grant.scope.split(' ').filter(Boolean);
-            
-            console.log(`[ScopeFetcher] ✅ ${userEmail} -> ${sp.displayName}: Added UserGrant scopes '${scopes.join(', ')}'`);
-            scopes.forEach((s: string) => {
-                userApp.userScopes.add(s);
-                userApp.scopes.add(s);
+      }
+
+      // 4. Transform the processed data into the final token format
+      const tokens: Token[] = [];
+      for (const [key, value] of userAppScopes.entries()) {
+        const [userId, appId] = key.split(':');
+        const user = userMap.get(userId)!;
+        const app = spMap.get(appId)!;
+
+        if (user && app) {
+            tokens.push({
+                clientId: app.appId,
+                displayText: app.displayName,
+                userKey: user.id,
+                userEmail: user.mail,
+                scopes: Array.from(value.scopes),
             });
         }
-        
-        // Third pass: Apply tenant-wide admin grants to any app the user has a connection to
-        for(const userApp of userAppMap.values()){
-            if(userApp.userKey === userId){
-                const sp = servicePrincipals.find((sp: any) => sp.appId === userApp.clientId);
-                if(sp){
-                    const adminScopes = adminConsentedScopesMap.get(sp.id);
-                    if (adminScopes && adminScopes.size > 0) {
-                        console.log(`[ScopeFetcher] ✅ ${userEmail} -> ${userApp.displayText}: Added AdminGrant scopes '${Array.from(adminScopes).join(', ')}'`);
-                        adminScopes.forEach(s => {
-                            userApp.adminScopes.add(s);
-                            userApp.scopes.add(s);
-                        });
-                    } else {
-                        console.log(`[ScopeFetcher] ℹ️ ${userEmail} -> ${userApp.displayText}: No admin scopes available`);
-                    }
-                } else {
-                    console.log(`[ScopeFetcher] ⚠️ ${userEmail}: Could not find service principal for clientId ${userApp.clientId}`);
-                }
-            }
-        }
       }
 
-      console.log(`✅ Processed permissions for ${userAppMap.size} user-app relationships.`);
-
-      // Log summary of what we found
-      let totalWithScopes = 0;
-      let totalWithoutScopes = 0;
-      for (const userApp of userAppMap.values()) {
-        if (userApp.scopes.size > 0) {
-          totalWithScopes++;
-        } else {
-          totalWithoutScopes++;
-        }
-      }
-      console.log(`[ScopeFetcher] 📊 SUMMARY: ${totalWithScopes} user-apps have scopes, ${totalWithoutScopes} have NO scopes`);
-
-      // 5. Format results
-      const results: Token[] = Array.from(userAppMap.values()).map(app => ({
-        clientId: app.clientId,
-        displayText: app.displayText,
-        userKey: app.userKey,
-        userEmail: app.userEmail,
-        scopes: Array.from(app.scopes),
-        appRoleScopes: Array.from(app.appRoleScopes),
-        adminScopes: Array.from(app.adminScopes),
-        userScopes: Array.from(app.userScopes),
-      }));
-
-      console.log('✅ OAuth token fetch complete.');
-      console.log(`
-      ======================================================================
-      [MicrosoftWorkspaceService] EXITING getOAuthTokens at ${new Date().toISOString()}
-      ======================================================================
-      `);
-      return results;
+      console.log(`🎉 [ULTRA-FAST] Processing complete. Found ${tokens.length} user-app relationships.`);
+      return tokens;
 
     } catch (error) {
-      console.error('❌ Error in getOAuthTokens:', error);
-      console.log(`
-      ======================================================================
-      [MicrosoftWorkspaceService] EXITING getOAuthTokens WITH ERROR
-      ======================================================================
-      `);
+      console.error('❌ Error in [ULTRA-FAST] getOAuthTokens:', error);
       throw error;
     }
   }
@@ -752,4 +615,60 @@ export class MicrosoftWorkspaceService {
       console.error('❌ Error in createUserAppRelationship:', error);
     }
   }
+}
+
+// Helper function to classify Microsoft Graph permissions by risk level
+function classifyPermissionRisk(permission: string): 'high' | 'medium' | 'low' {
+  // High risk permissions - full admin access or write permissions
+  const highRiskPatterns = [
+    'ReadWrite.All',
+    'Write.All',
+    '.ReadWrite',
+    '.Write',
+    'FullControl.All',
+    'AccessAsUser.All',
+    'Directory.ReadWrite',
+    'Files.ReadWrite',
+    'Mail.ReadWrite',
+    'Mail.Send',
+    'Group.ReadWrite',
+    'User.ReadWrite',
+    'Application.ReadWrite',
+    'Sites.FullControl',
+    'User.Export',
+    'User.Invite',
+    'User.ManageIdentities',
+    'User.EnableDisableAccount',
+    'DelegatedPermissionGrant.ReadWrite'
+  ];
+
+  // Medium risk permissions - read access to sensitive data
+  const mediumRiskPatterns = [
+    'Read.All',
+    '.Read',
+    'Directory.Read',
+    'Files.Read',
+    'User.Read.All',
+    'Mail.Read',
+    'AuditLog.Read',
+    'Reports.Read',
+    'Sites.Read'
+  ];
+
+  // Check for high risk first
+  for (const pattern of highRiskPatterns) {
+    if (permission.includes(pattern)) {
+      return 'high';
+    }
+  }
+
+  // Then check for medium risk
+  for (const pattern of mediumRiskPatterns) {
+    if (permission.includes(pattern)) {
+      return 'medium';
+    }
+  }
+
+  // Default to low risk
+  return 'low';
 } 

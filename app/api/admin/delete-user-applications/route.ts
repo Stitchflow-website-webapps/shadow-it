@@ -52,18 +52,28 @@ export async function POST(request: Request) {
     // Extract user IDs
     const userIds = users.map(user => user.id);
     
-    // Delete user_applications for these users
-    const { error: deleteError } = await supabaseAdmin
-      .from('user_applications')
-      .delete()
-      .in('user_id', userIds);
+    // Delete user_applications in batches to avoid URI length limits
+    const BATCH_SIZE = 100; // Process 100 users at a time
+    let totalDeleted = 0;
     
-    if (deleteError) {
-      console.error('Error deleting user applications:', deleteError);
-      return NextResponse.json(
-        { error: 'Failed to delete user applications' },
-        { status: 500 }
-      );
+    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+      const batch = userIds.slice(i, i + BATCH_SIZE);
+      
+      const { error: deleteError } = await supabaseAdmin
+        .from('user_applications')
+        .delete()
+        .in('user_id', batch);
+      
+      if (deleteError) {
+        console.error(`Error deleting user applications batch ${i}-${i + batch.length}:`, deleteError);
+        return NextResponse.json(
+          { error: `Failed to delete user applications at batch ${i}-${i + batch.length}` },
+          { status: 500 }
+        );
+      }
+      
+      totalDeleted += batch.length;
+      console.log(`Processed batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(userIds.length/BATCH_SIZE)}: ${batch.length} users`);
     }
     
     return NextResponse.json({ 
