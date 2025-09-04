@@ -281,9 +281,146 @@ export const RiskScoringTab: React.FC<RiskScoringTabProps> = ({ app, allApps, or
     
   const appsWithoutScopeRisk = [ '3CX', 'Aha!', 'Atlassian Cloud', 'Employment Hero', 'Employment Law Practical Handbook', 'Keeper Password Manager', 'Monday OneDrive', 'MyFiles (Entra)', 'Salesforce', 'Shop.app' ];
   const hasScopeRisk = !appsWithoutScopeRisk.includes(app["Tool Name"] || "");
+
+  // Calculate action bucket for this app
+  const calculateActionBucket = (riskScore: number, users: number = 0, category: string = ""): string => {
+    // Simple thresholds for demonstration - in production, these would come from org metrics
+    const isHighAdoption = users >= 18; // High adoption threshold
+    const isMediumAdoption = users >= 8; // Medium adoption threshold
+    const isHighRisk = riskScore > 5.0;
+    const isMediumRisk = riskScore > 2.0;
+    const isGenAINative = category === 'GenAI native';
+
+    // Decision matrix
+    if (isHighAdoption && isHighRisk) {
+      return "Enable & Protect";
+    }
+
+    if ((!isMediumAdoption && isHighRisk) || (isGenAINative && riskScore > 3.0)) {
+      return "Strategic Watchlist";
+    }
+
+    if (isHighAdoption && (isMediumRisk || (category === 'GenAI partial' && riskScore > 2.0))) {
+      return "Scale Safely";
+    }
+
+    if (isMediumRisk || (users >= 3 && riskScore > 1.5)) {
+      return "Monitor (Moderate)";
+    }
+
+    return "Monitor (Low Priority)";
+  };
+
+  // Get bucket explanation
+  const getBucketExplanation = (bucket: string): string => {
+    const explanations: Record<string, string> = {
+      "Enable & Protect": "Business-critical, huge blast-radius",
+      "Strategic Watchlist": "Risky fringe, must watch",
+      "Scale Safely": "Workhorse apps, need guardrails",
+      "Monitor (Moderate)": "Niche tools, track quietly",
+      "Monitor (Low Priority)": "Harmless long-tail apps"
+    };
+    return explanations[bucket] || "Standard monitoring required";
+  };
+
+  // Get action suggestions
+  const getActionSuggestions = (bucket: string): string[] => {
+    const suggestions: Record<string, string[]> = {
+      "Enable & Protect": [
+        "Enforce SSO/SCIM everywhere",
+        "Add usage guard-rails",
+        "Continuous monitoring"
+      ],
+      "Strategic Watchlist": [
+        "Isolate data if needed",
+        "Auto-expire inactive accounts",
+        "Keep with controls or deprecate"
+      ],
+      "Scale Safely": [
+        "Add governance before growth",
+        "Training for new users",
+        "Usage guidelines & policies"
+      ],
+      "Monitor (Moderate)": [
+        "Regular usage review",
+        "Basic security controls",
+        "Quarterly check-ins"
+      ],
+      "Monitor (Low Priority)": [
+        "Annual review",
+        "Basic monitoring",
+        "No immediate action needed"
+      ]
+    };
+
+    return suggestions[bucket] || suggestions["Monitor (Low Priority)"];
+  };
+
+  // Calculate action bucket for current app
+  const userCount = selectedAppData?.users?.length || 0;
+  const appCategory = app?.["AI-Native status"] || "";
+  const actionBucket = calculateActionBucket(totalAppRiskScore, userCount, appCategory);
     
+  // Action Badge Component (matching AI analysis table styling)
+  const ActionBadge = ({ bucket }: { bucket: string }) => {
+    const colorMap: Record<string, string> = {
+      "Enable & Protect": "text-black bg-white border-red-300",
+      "Strategic Watchlist": "text-black bg-white border-orange-300",
+      "Scale Safely": "text-black bg-white border-blue-300",
+      "Monitor (Moderate)": "text-black bg-white border-yellow-300",
+      "Monitor (Low Priority)": "text-black bg-white border-gray-300"
+    };
+
+    const priorityMap: Record<string, string> = {
+      "Enable & Protect": "🔴",
+      "Strategic Watchlist": "🟡",
+      "Scale Safely": "🟢",
+      "Monitor (Moderate)": "🔵",
+      "Monitor (Low Priority)": "⚪"
+    };
+
+    return (
+      <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-normal border ${colorMap[bucket] || colorMap["Monitor (Low Priority)"]}`}>
+        <span>{priorityMap[bucket] || priorityMap["Monitor (Low Priority)"]}</span>
+        <span>{bucket}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-8">
+      {/* Suggested Actions Section */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Suggested Actions</h3>
+            <p className="text-sm text-gray-500">Recommended next steps based on risk assessment and adoption</p>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <ActionBadge bucket={actionBucket} />
+          </div>
+        </div>
+
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div className="space-y-3">
+            <div className="text-sm text-gray-600 italic">
+              ➡️ {getBucketExplanation(actionBucket)}
+            </div>
+            <div className="space-y-2">
+              <div className="font-medium text-gray-900 text-sm">Recommended Actions:</div>
+              <ul className="space-y-1">
+                {getActionSuggestions(actionBucket).map((action, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm">
+                    <span className="text-gray-400 mt-0.5">•</span>
+                    <span className="text-gray-700">{action}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Total App Risk Score Section */}
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">

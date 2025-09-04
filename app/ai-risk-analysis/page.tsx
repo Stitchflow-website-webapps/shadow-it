@@ -16,6 +16,13 @@ interface AIRiskData {
   rawAppRiskScore: number
   finalAppRiskScore: number
   blastRadius: number
+  actionBucket?: string
+  adoptionPercent?: number
+  orgThresholds?: {
+    high: number
+    medium: number
+    maxUsers: number
+  }
 }
 
 interface UserInfo {

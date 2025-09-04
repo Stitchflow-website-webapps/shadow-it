@@ -1,8 +1,7 @@
 "use client"
 
-import React, { useState, useCallback, useMemo } from "react"
+import React, { useState, useMemo } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { ArrowUpDown, ArrowUp, ArrowDown, CheckCircle, AlertTriangle } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -15,6 +14,13 @@ interface AIRiskData {
   rawAppRiskScore: number
   finalAppRiskScore: number
   blastRadius: number
+  actionBucket?: string
+  adoptionPercent?: number
+  orgThresholds?: {
+    high: number
+    medium: number
+    maxUsers: number
+  }
 }
 
 interface OrgSettings {
@@ -56,30 +62,131 @@ export function AIRiskAnalysisTable({
   const [sortKey, setSortKey] = useState<keyof AIRiskData>("finalAppRiskScore")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
 
-  // Sort data
-  const sortedData = useMemo(() => {
-    if (!sortKey || data.length === 0) return data
+  // Action bucket calculation functions
+  const calculateRiskPercentile = (score: number, riskScores: number[]): number => {
+    const sortedScores = [...riskScores].sort((a, b) => b - a);
+    const p75 = sortedScores[Math.floor(sortedScores.length * 0.25)] || 0;
+    const p50 = sortedScores[Math.floor(sortedScores.length * 0.5)] || 0;
 
-    return [...data].sort((a, b) => {
+    if (score >= p75) return 90;
+    if (score >= p50) return 75;
+    return 25;
+  };
+
+  const calculateActionBucket = (app: AIRiskData, orgMetrics: any): string => {
+    const { finalAppRiskScore, users, category } = app;
+
+    // Calculate risk percentiles
+    const riskPercentile = calculateRiskPercentile(finalAppRiskScore, orgMetrics.allRiskScores);
+
+    // Organization-specific adoption thresholds based on actual user distribution
+    const isHighAdoption = users >= orgMetrics.highAdoptionThreshold;
+    const isMediumAdoption = users >= orgMetrics.mediumAdoptionThreshold;
+
+    // Risk thresholds with minimum absolute scores
+    const isHighRisk = riskPercentile >= 75 && finalAppRiskScore > 5.0;
+    const isMediumRisk = riskPercentile >= 50 && finalAppRiskScore > 2.0;
+
+    // GenAI consideration
+    const isGenAINative = category === 'GenAI native';
+
+    // Decision matrix
+    if (isHighAdoption && isHighRisk) {
+      return "Enable & Protect";
+    }
+
+    if ((!isMediumAdoption && isHighRisk) || (isGenAINative && finalAppRiskScore > 3.0)) {
+      return "Strategic Watchlist";
+    }
+
+    if (isHighAdoption && (isMediumRisk || (category === 'GenAI partial' && finalAppRiskScore > 2.0))) {
+      return "Scale Safely";
+    }
+
+    if (isMediumRisk || (users >= orgMetrics.lowAdoptionThreshold && finalAppRiskScore > 1.5)) {
+      return "Monitor (Moderate)";
+    }
+
+    return "Monitor (Low Priority)";
+  };
+
+  // Enhanced data with action buckets
+  const enhancedData = useMemo(() => {
+    if (data.length === 0) return data;
+
+    // Calculate organization metrics for percentiles and adoption thresholds
+    const totalUsers = data.reduce((sum, app) => sum + app.users, 0);
+    const allRiskScores = data.map(app => app.finalAppRiskScore);
+    const allUserCounts = data.map(app => app.users).sort((a, b) => b - a); // Descending order
+
+    // Calculate organization-specific adoption thresholds based on user distribution
+    const maxUsers = allUserCounts[0] || 0;
+    const appsWithUsers = allUserCounts.filter(count => count > 0);
+    const avgUsers = appsWithUsers.length > 0 ? appsWithUsers.reduce((sum, count) => sum + count, 0) / appsWithUsers.length : 0;
+
+    // Adaptive thresholds based on organization's actual usage patterns
+    const highAdoptionThreshold = Math.max(
+      Math.ceil(maxUsers * 0.6), // Top 60% of highest usage
+      Math.ceil(avgUsers * 1.5),  // 1.5x average usage
+      5 // Minimum threshold of 5 users
+    );
+
+    const mediumAdoptionThreshold = Math.max(
+      Math.ceil(maxUsers * 0.25), // Top 25% of highest usage
+      Math.ceil(avgUsers * 0.75),  // 75% of average usage
+      2 // Minimum threshold of 2 users
+    );
+
+    const lowAdoptionThreshold = Math.max(1, Math.ceil(avgUsers * 0.25)); // 25% of average
+
+    const orgMetrics = {
+      totalUsers,
+      allRiskScores,
+      highAdoptionThreshold,
+      mediumAdoptionThreshold,
+      lowAdoptionThreshold,
+      maxUsers,
+      avgUsers
+    };
+
+    // Add action bucket to each app
+    return data.map(app => ({
+      ...app,
+      actionBucket: calculateActionBucket(app, orgMetrics),
+      adoptionPercent: totalUsers > 0 ? (app.users / totalUsers) * 100 : 0,
+      // Add threshold info for tooltips
+      orgThresholds: {
+        high: orgMetrics.highAdoptionThreshold,
+        medium: orgMetrics.mediumAdoptionThreshold,
+        maxUsers: orgMetrics.maxUsers
+      }
+    }));
+  }, [data]);
+
+  // Sort the enhanced data
+  const sortedData = useMemo(() => {
+    if (!sortKey || enhancedData.length === 0) return enhancedData
+
+    return [...enhancedData].sort((a, b) => {
       const valueA = a[sortKey]
       const valueB = b[sortKey]
-      
+
       // Handle numeric comparison
       if (typeof valueA === 'number' && typeof valueB === 'number') {
         return sortDirection === "asc" ? valueA - valueB : valueB - valueA
       }
-      
+
       // String comparison
       const stringA = String(valueA).toLowerCase()
       const stringB = String(valueB).toLowerCase()
-      
+
       if (sortDirection === "asc") {
         return stringA.localeCompare(stringB)
       } else {
         return stringB.localeCompare(stringA)
       }
     })
-  }, [data, sortKey, sortDirection])
+  }, [enhancedData, sortKey, sortDirection])
 
   // Handle sorting
   const handleSort = (key: keyof AIRiskData) => {
@@ -161,7 +268,7 @@ export function AIRiskAnalysisTable({
   // Risk Badge Component (matching project patterns)
   const RiskBadge = ({ level }: { level: string }) => {
     const normalizedLevel = level.charAt(0).toUpperCase() + level.slice(1).toLowerCase()
-    
+
     const iconMap: Record<string, React.JSX.Element> = {
       Low: <CheckCircle className="h-4 w-4 mr-1 text-green-700" />,
       Medium: <AlertTriangle className="h-4 w-4 mr-1 text-yellow-700" />,
@@ -182,6 +289,77 @@ export function AIRiskAnalysisTable({
     )
   }
 
+  // Action Badge Component
+  const ActionBadge = ({ bucket }: { bucket: string }) => {
+    const colorMap: Record<string, string> = {
+      "Enable & Protect": "text-black bg-white border-red-300",
+      "Strategic Watchlist": "text-black bg-white border-orange-300",
+      "Scale Safely": "text-black bg-white border-blue-300",
+      "Monitor (Moderate)": "text-black bg-white border-yellow-300",
+      "Monitor (Low Priority)": "text-black bg-white border-gray-300"
+    };
+
+    const priorityMap: Record<string, string> = {
+      "Enable & Protect": "🔴",
+      "Strategic Watchlist": "🟡",
+      "Scale Safely": "🟢",
+      "Monitor (Moderate)": "🔵",
+      "Monitor (Low Priority)": "⚪"
+    };
+
+    return (
+      <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-normal border ${colorMap[bucket] || colorMap["Monitor (Low Priority)"]}`}>
+        <span>{priorityMap[bucket]}</span>
+        <span>{bucket}</span>
+      </div>
+    );
+  };
+
+  // Get bucket explanation for tooltip
+  const getBucketExplanation = (bucket: string): string => {
+    const explanations: Record<string, string> = {
+      "Enable & Protect": "Business-critical, huge blast-radius",
+      "Strategic Watchlist": "Risky fringe, must watch",
+      "Scale Safely": "Workhorse apps, need guardrails",
+      "Monitor (Moderate)": "Niche tools, track quietly",
+      "Monitor (Low Priority)": "Harmless long-tail apps"
+    };
+    return explanations[bucket] || "Standard monitoring required";
+  };
+
+  // Get action suggestions for tooltip
+  const getActionSuggestions = (bucket: string): string[] => {
+    const suggestions: Record<string, string[]> = {
+      "Enable & Protect": [
+        "Enforce SSO/SCIM everywhere",
+        "Add usage guard-rails",
+        "Continuous monitoring"
+      ],
+      "Strategic Watchlist": [
+        "Isolate data if needed",
+        "Auto-expire inactive accounts",
+        "Keep with controls or deprecate"
+      ],
+      "Scale Safely": [
+        "Add governance before growth",
+        "Training for new users",
+        "Usage guidelines & policies"
+      ],
+      "Monitor (Moderate)": [
+        "Regular usage review",
+        "Basic security controls",
+        "Quarterly check-ins"
+      ],
+      "Monitor (Low Priority)": [
+        "Annual review",
+        "Basic monitoring",
+        "No immediate action needed"
+      ]
+    };
+
+    return suggestions[bucket] || suggestions["Monitor (Low Priority)"];
+  };
+
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Header section matching project patterns */}
@@ -199,13 +377,14 @@ export function AIRiskAnalysisTable({
           {/* Sort info section */}
           <div className="mb-4">
             <Label className="text-sm font-medium text-gray-700">
-              Sorted by {sortKey === 'blastRadius' ? 'Blast Radius' : 
+              Sorted by {sortKey === 'blastRadius' ? 'Blast Radius' :
                         sortKey === 'appName' ? 'App Name' :
                         sortKey === 'scopeRisk' ? 'Scope Risk' :
                         sortKey === 'rawAppRiskScore' ? 'Raw App Risk Score' :
                         sortKey === 'finalAppRiskScore' ? 'Final App Risk Score' :
                         sortKey === 'users' ? 'Users' :
-                        sortKey === 'category' ? 'Category' : sortKey} 
+                        sortKey === 'category' ? 'Category' :
+                        sortKey === 'actionBucket' ? 'Recommended Action' : sortKey}
               ({sortDirection === 'asc' ? 'ascending' : 'descending'})
             </Label>
           </div>
@@ -223,7 +402,8 @@ export function AIRiskAnalysisTable({
                       {getSortableHeader("Users", "users", "text-center")}
                       {getSortableHeader("Raw App Risk Score", "rawAppRiskScore", "text-center")}
                       {getSortableHeader("Final App Risk Score", "finalAppRiskScore", "text-center")}
-                      {getSortableHeader("Blast Radius", "blastRadius", "text-center rounded-tr-lg font-semibold")}
+                      {getSortableHeader("Blast Radius", "blastRadius", "text-center")}
+                      {getSortableHeader("Recommended Action", "actionBucket", "text-center rounded-tr-lg font-semibold")}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -338,7 +518,7 @@ export function AIRiskAnalysisTable({
                           <TooltipProvider>
                             <Tooltip delayDuration={300}>
                               <TooltipTrigger asChild>
-                                <div 
+                                <div
                                   className="font-normal text-gray-900 cursor-pointer hover:text-primary transition-colors"
                                   onClick={() => onAppClick?.(row.appName)}
                                 >
@@ -350,6 +530,45 @@ export function AIRiskAnalysisTable({
                                   Organizational impact: {row.users} users × {row.finalAppRiskScore.toFixed(1)} final score
                                 </p>
                                 <p className="text-xs text-gray-500 mt-1">Click to view app details</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+
+                        {/* Recommended Action */}
+                        <TableCell className="text-center">
+                          <TooltipProvider>
+                            <Tooltip delayDuration={300}>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-pointer hover:opacity-80 transition-opacity"
+                                     onClick={() => onAppClick?.(row.appName)}>
+                                  <ActionBadge bucket={row.actionBucket || "Monitor (Low Priority)"} />
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="left" className="max-w-sm w-80">
+                                <div className="space-y-3 text-left">
+                                  <div>
+                                    <p className="font-medium text-sm">{row.actionBucket}</p>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                      {row.adoptionPercent?.toFixed(1)}% of org adoption
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-1 italic">
+                                      ➡️ {getBucketExplanation(row.actionBucket || "Monitor (Low Priority)")}
+                                    </p>
+                                  </div>
+
+                                  <div className="text-xs space-y-2">
+                                    <p className="font-medium text-gray-900">Suggested Actions:</p>
+                                    <ul className="space-y-1">
+                                      {getActionSuggestions(row.actionBucket || "Monitor (Low Priority)").map((action, i) => (
+                                        <li key={i} className="flex items-start gap-2">
+                                          <span className="text-gray-400 mt-0.5">•</span>
+                                          <span className="text-gray-700">{action}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </div>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
