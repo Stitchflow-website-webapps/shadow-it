@@ -7,8 +7,16 @@ const { createClient } = require('@supabase/supabase-js');
 // Configuration
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const ORGANIZE_ORG_ID = 'c138581c-ebe0-4584-a436-bcbce459e419'; // organize-app-inbox org ID
-const SHADOW_IT_ORG_ID = '06082830-06bf-4fb2-bfdd-d955ff996abc'; // shadow_it org ID
+
+// Allow overriding org IDs via CLI args or env (backward compatible defaults)
+function getArg(name) {
+  const prefix = `--${name}=`;
+  const match = process.argv.find(arg => arg.startsWith(prefix));
+  return match ? match.slice(prefix.length) : undefined;
+}
+
+const ORGANIZE_ORG_ID = getArg('organize') || process.env.ORGANIZE_ORG_ID ;
+const SHADOW_IT_ORG_ID = getArg('shadow') || process.env.SHADOW_IT_ORG_ID ;
 
 // Create Supabase clients for different schemas
 const organizeClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
