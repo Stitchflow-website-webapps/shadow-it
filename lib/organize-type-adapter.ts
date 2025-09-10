@@ -1,5 +1,5 @@
 import type { OrganizeApp } from '@/lib/supabase/organize-client'
-import type { App } from '@/types/app'
+import type { App, VendorFile } from '@/types/app'
 
 // Convert OrganizeApp to App for compatibility with existing components
 export function organizeAppToApp(organizeApp: OrganizeApp): App {
@@ -16,12 +16,15 @@ export function organizeAppToApp(organizeApp: OrganizeApp): App {
     department: organizeApp.department || '',
     technicalOwner: organizeApp.technical_owner || '',
     comment: organizeApp.comment || '',
+    appPlan: organizeApp.app_plan || '',
     billingFrequency: organizeApp.billing_frequency || '',
     planLimit: organizeApp.plan_limit || '',
     planReference: organizeApp.plan_reference || '',
     costPerUser: organizeApp.cost_per_user || '',
     renewalDate: organizeApp.renewal_date || '',
     contractUrl: organizeApp.contract_url || '',
+    vendorFiles: organizeApp.vendor_files || [],
+    vendorFilesLimit: organizeApp.vendor_files ? organizeApp.vendor_files.length : 0,
     licensesUsed: organizeApp.licenses_used,
     usageDescription: organizeApp.usage_description || '',
     // New fields
@@ -46,6 +49,7 @@ export function appToOrganizeApp(app: App, orgId: string): Partial<OrganizeApp> 
     licenses_used: app.licensesUsed,
     technical_owner: app.technicalOwner || null,
     comment: app.comment || null,
+    app_plan: app.appPlan || null,
     sso_enforced: app.ssoEnforced || null,
     managed_status: app.managedStatus,
     org_id: orgId,
@@ -58,6 +62,8 @@ export function appToOrganizeApp(app: App, orgId: string): Partial<OrganizeApp> 
     cost_per_user: app.costPerUser || null,
     renewal_date: app.renewalDate || null,
     contract_url: app.contractUrl || null,
+    vendor_files: app.vendorFiles || null,
+    vendor_files_limit: app.vendorFiles ? app.vendorFiles.length : 0,
     usage_description: app.usageDescription || null,
     // New fields
     renewal_type: app.renewalType || null,
@@ -70,4 +76,4 @@ export function appToOrganizeApp(app: App, orgId: string): Partial<OrganizeApp> 
     payment_terms: app.paymentTerms || null,
     budget_source: app.budgetSource || null,
   }
-} 
+}

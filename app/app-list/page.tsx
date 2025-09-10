@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Plus, Settings, Search, X, ChevronLeft, ChevronRight, KeyRound, Users, Link, CreditCard, Trash2, Edit2, Check } from "lucide-react"
+import { Plus, Settings, Search, X, ChevronLeft, ChevronRight, KeyRound, Users, Link, CreditCard, FileText, Trash2, Edit2, Check } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { AppTable } from "@/components/app-table"
@@ -22,7 +22,7 @@ import { organizeAppToApp, appToOrganizeApp } from "@/lib/organize-type-adapter"
 import { useAppIntegrations, type AppIntegration } from "@/hooks/use-app-integrations"
 import { cn } from "@/lib/utils"
 import type { OrganizeApp } from "@/lib/supabase/organize-client"
-import type { App } from "@/types/app"
+import type { App, VendorFile } from "@/types/app"
 import Sidebar from "@/app/components/Sidebar"
 
 // Local organization settings interface
@@ -132,6 +132,7 @@ function SimpleAddAppsDialog({ open, onOpenChange, onAddApps, existingApps, orgS
         department: "",
         technicalOwner: "",
         comment: "",
+        appPlan: "",
         billingFrequency: "",
         planLimit: "",
         planReference: "",
@@ -150,6 +151,8 @@ function SimpleAddAppsDialog({ open, onOpenChange, onAddApps, existingApps, orgS
         paymentMethod: "",
         paymentTerms: "",
         budgetSource: "",
+        vendorFiles: [],
+        vendorFilesLimit: 0
       }
     })
 
@@ -325,11 +328,13 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
   const [isEditMode, setIsEditMode] = useState(initialEditMode)
   const [editedFields, setEditedFields] = useState<Partial<App>>({})
   const [showRemoveDialog, setShowRemoveDialog] = useState(false)
-  
+  const [vendorFiles, setVendorFiles] = useState<VendorFile[]>(app.vendorFiles || [])
+
   // Reset edit mode when app changes
   useEffect(() => {
     setIsEditMode(initialEditMode)
     setEditedFields({})
+    setVendorFiles(app.vendorFiles || [])
   }, [app.id, initialEditMode])
 
   const handleEdit = () => {
@@ -343,10 +348,16 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
   }
 
   const handleSave = () => {
-    const updatedApp = { ...app, ...editedFields }
+    const updatedApp = { ...app, ...editedFields, vendorFiles }
     onUpdateApp(updatedApp)
     setIsEditMode(false)
     setEditedFields({})
+  }
+
+  const handleVendorFilesChange = (files: VendorFile[]) => {
+    setVendorFiles(files)
+    // Update the vendorFilesLimit field to reflect the current count
+    handleFieldChange({ vendorFilesLimit: files.length })
   }
 
   const handleRemove = () => {
@@ -458,40 +469,42 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
         </div>
       </div>
 
-      {/* 2x2 Card Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Authentication Card */}
-        <EditableCard
-          title="Authentication"
-          icon={<KeyRound className="h-5 w-5 text-primary-text" />}
-          isEditing={isEditMode}
-          onUpdate={handleFieldChange}
-          appName={app.name}
-          userInfo={userInfo}
-          fields={[
-            {
-              label: "SSO ENFORCED?",
-              value: editedFields.ssoEnforced ?? (app.ssoEnforced || ""),
-              field: "ssoEnforced",
-              type: "select",
-              placeholder: "Select SSO status",
-              options: [
-                { value: "Yes", label: "Yes" },
-                { value: "No", label: "No" },
-              ],
-            },
-            {
-              label: "DEPROVISIONING",
-              value: editedFields.deprovisioning ?? (app.deprovisioning || ""),
-              field: "deprovisioning",
-              type: "select",
-              placeholder: "Select deprovisioning method",
-              options: getDeprovisioningOptions(),
-              disabled: !organization?.identityProvider,
-              disabledText: "Please update your IdP settings to edit this field",
-            },
-          ]}
-        />
+      {/* Card Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Left Column */}
+        <div className="space-y-6">
+          {/* Authentication Card */}
+          <EditableCard
+            title="Authentication"
+            icon={<KeyRound className="h-5 w-5 text-primary-text" />}
+            isEditing={isEditMode}
+            onUpdate={handleFieldChange}
+            appName={app.name}
+            userInfo={userInfo}
+            fields={[
+              {
+                label: "SSO ENFORCED?",
+                value: editedFields.ssoEnforced ?? (app.ssoEnforced || ""),
+                field: "ssoEnforced",
+                type: "select",
+                placeholder: "Select SSO status",
+                options: [
+                  { value: "Yes", label: "Yes" },
+                  { value: "No", label: "No" },
+                ],
+              },
+              {
+                label: "DEPROVISIONING",
+                value: editedFields.deprovisioning ?? (app.deprovisioning || ""),
+                field: "deprovisioning",
+                type: "select",
+                placeholder: "Select deprovisioning method",
+                options: getDeprovisioningOptions(),
+                disabled: !organization?.identityProvider,
+                disabledText: "Please update your IdP settings to edit this field",
+              },
+            ]}
+          />
 
         {/* App Management Card */}
         <EditableCard
@@ -581,6 +594,183 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
           ]}
         />
 
+          {/* Vendor Files & Notes Card */}
+          <EditableCard
+            title="Vendor Files and Notes"
+            icon={<FileText className="h-5 w-5 text-primary-text" />}
+            isEditing={isEditMode}
+            onUpdate={handleFieldChange}
+            appName={app.name}
+            userInfo={userInfo}
+            vendorFiles={vendorFiles}
+            onVendorFilesChange={handleVendorFilesChange}
+            fields={[]}
+          />
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-6">
+          {/* License & Renewal Card */}
+          <EditableCard
+            title="License & Renewal"
+            icon={<CreditCard className="h-5 w-5 text-primary-text" />}
+            isEditing={isEditMode}
+            onUpdate={(updates) => handleFieldChange(updates)}
+            appName={app.name}
+            userInfo={userInfo}
+            fields={[
+              {
+                label: "BILLING FREQUENCY/CYCLE",
+                value: editedFields.billingFrequency ?? (app.billingFrequency || ""),
+                field: "billingFrequency",
+                type: "select",
+                placeholder: "Select billing frequency",
+                options: [
+                  { value: "Annual Plan", label: "Annual Plan" },
+                  { value: "Monthly Plan", label: "Monthly Plan" },
+                  { value: "Quarterly", label: "Quarterly" },
+                  { value: "Usage Based", label: "Usage Based" },
+                  { value: "Other", label: "Other" },
+                ],
+              },
+              {
+                label: "RENEWAL TYPE",
+                value: editedFields.renewalType ?? (app.renewalType || ""),
+                field: "renewalType",
+                type: "select",
+                placeholder: "Select renewal type",
+                options: [
+                  { value: "Auto Renewal", label: "Auto Renewal" },
+                  { value: "Manual Renewal", label: "Manual Renewal" },
+                  { value: "Perpetual Renewal", label: "Perpetual Renewal" },
+                ],
+              },
+              {
+                label: "BILLING OWNER",
+                value: editedFields.billingOwner ?? (app.billingOwner || ""),
+                field: "billingOwner",
+                type: "input",
+                placeholder: "Enter billing owner name",
+              },
+              {
+                label: "PURCHASE CATEGORY",
+                value: editedFields.purchaseCategory ?? (app.purchaseCategory || ""),
+                field: "purchaseCategory",
+                type: "select",
+                placeholder: "Select purchase category",
+                options: [
+                  { value: "Software", label: "Software" },
+                  { value: "Services", label: "Services" },
+                  { value: "Add-on", label: "Add-on" },
+                  { value: "Infrastructure", label: "Infrastructure" },
+                  { value: "Hardware", label: "Hardware" },
+                  { value: "Others", label: "Others" },
+                ],
+              },
+              {
+                label: "OPT-OUT DATE",
+                value: editedFields.optOutDate ?? (app.optOutDate || ""),
+                field: "optOutDate",
+                type: "date",
+                placeholder: "Select opt-out deadline date",
+              },
+              {
+                label: "OPT-OUT PERIOD (DAYS)",
+                value: editedFields.optOutPeriod !== undefined ? String(editedFields.optOutPeriod || "") : String(app.optOutPeriod || ""),
+                field: "optOutPeriod",
+                type: "input",
+                placeholder: "Enter number of days for opt-out period",
+              },
+              {
+                label: "VENDOR/CONTRACT STATUS",
+                value: editedFields.vendorContractStatus ?? (app.vendorContractStatus || ""),
+                field: "vendorContractStatus",
+                type: "select",
+                placeholder: "Select vendor/contract status",
+                options: [
+                  { value: "Active", label: "Active" },
+                  { value: "Inactive", label: "Inactive" },
+                ],
+              },
+              {
+                label: "PAYMENT METHOD",
+                value: editedFields.paymentMethod ?? (app.paymentMethod || ""),
+                field: "paymentMethod",
+                type: "select",
+                placeholder: "Select payment method",
+                options: [
+                  { value: "Company Credit Card", label: "Company Credit Card" },
+                  { value: "E-Check", label: "E-Check" },
+                  { value: "Wire", label: "Wire" },
+                  { value: "Accounts Payable", label: "Accounts Payable" },
+                ],
+              },
+              {
+                label: "PAYMENT TERMS",
+                value: editedFields.paymentTerms ?? (app.paymentTerms || ""),
+                field: "paymentTerms",
+                type: "select",
+                placeholder: "Select payment terms",
+                options: [
+                  { value: "Net 30", label: "Net 30" },
+                  { value: "Due Upon Receipt", label: "Due Upon Receipt" },
+                  { value: "2/10 Net 30", label: "2/10 Net 30" },
+                  { value: "Partial Payment", label: "Partial Payment" },
+                ],
+              },
+              {
+                label: "BUDGET SOURCE",
+                value: editedFields.budgetSource ?? (app.budgetSource || ""),
+                field: "budgetSource",
+                type: "input",
+                placeholder: "Enter budget source (e.g., Legal, Finance, Tech)",
+              },
+              {
+                label: "RENEWAL DATE",
+                value: editedFields.renewalDate ?? (app.renewalDate || ""),
+                field: "renewalDate",
+                type: "date",
+                placeholder: "Select renewal date",
+              },
+              {
+                label: "PLAN LIMIT",
+                value: editedFields.planLimit ?? (app.planLimit || ""),
+                field: "planLimit",
+                type: "input",
+                placeholder: "Enter plan limit",
+              },
+              {
+                label: "LICENSES USED",
+                value: editedFields.licensesUsed !== undefined ? String(editedFields.licensesUsed || "") : String(app.licensesUsed || ""),
+                field: "licensesUsed",
+                type: "input",
+                placeholder: "Enter number of licenses used",
+              },
+              {
+                label: "PLAN REFERENCE",
+                value: editedFields.planReference ?? (app.planReference || ""),
+                field: "planReference",
+                type: "input",
+                placeholder: "Enter plan reference",
+              },
+              {
+                label: "COST PER USER (PER MONTH)",
+                value: editedFields.costPerUser ?? (app.costPerUser || ""),
+                field: "costPerUser",
+                type: "currency",
+                placeholder: "Enter cost per user",
+              },
+              {
+                label: "CONTRACT URL",
+                value: editedFields.contractUrl ?? (app.contractUrl || ""),
+                field: "contractUrl",
+                type: "file-url",
+                placeholder: "Upload contract or enter URL",
+              },
+            ]}
+          />
+        </div>
+=======
         {/* License & Renewal Card */}
         <EditableCard
           title="License & Renewal"

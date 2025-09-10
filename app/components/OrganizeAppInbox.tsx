@@ -123,7 +123,9 @@ function SimpleAddAppsDialog({ open, onOpenChange, onAddApps, existingApps, orgS
         planLimit: "",
         planReference: "",
         licensesUsed: null,
-        renewalDate: ""
+        renewalDate: "",
+        vendorFiles: [],
+        vendorFilesLimit: 0
       }
     })
 

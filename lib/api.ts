@@ -159,11 +159,12 @@ export const appsApi = {
 
 // File upload API
 export const uploadApi = {
-  uploadFile: async (file: File, orgId: string, appName: string): Promise<{ url: string; filePath: string; fileName: string; storagePath?: string }> => {
+  uploadFile: async (file: File, orgId: string, appName: string, fileType: 'contract' | 'vendor' = 'contract'): Promise<{ url: string; filePath: string; fileName: string; storagePath?: string }> => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('orgId', orgId)
     formData.append('appName', appName)
+    formData.append('fileType', fileType)
 
     const response = await fetch('/api/upload', {
       method: 'POST',
@@ -212,9 +213,73 @@ export const uploadApi = {
     })
 
     const data = await response.json()
-    
+
     if (!response.ok) {
       throw new Error(data.error || 'Failed to delete file')
     }
   }
-} 
+}
+
+// Vendor files API
+export const vendorFilesApi = {
+  getVendorFiles: async (appId: string) => {
+    const response = await fetch(`/api/organize/apps/${appId}/vendor-files`)
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to fetch vendor files')
+    }
+
+    return data.vendorFiles
+  },
+
+  addVendorFile: async (appId: string, vendorFile: any) => {
+    const response = await fetch(`/api/organize/apps/${appId}/vendor-files`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ vendorFile }),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to add vendor file')
+    }
+
+    return data.vendorFiles
+  },
+
+  removeVendorFile: async (appId: string, fileId: string) => {
+    const response = await fetch(`/api/organize/apps/${appId}/vendor-files?fileId=${fileId}`, {
+      method: 'DELETE',
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to remove vendor file')
+    }
+
+    return data.vendorFiles
+  },
+
+  updateFileLabel: async (appId: string, fileId: string, label: string) => {
+    const response = await fetch(`/api/organize/apps/${appId}/vendor-files/${fileId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ label }),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to update file label')
+    }
+
+    return data.vendorFiles
+  }
+}

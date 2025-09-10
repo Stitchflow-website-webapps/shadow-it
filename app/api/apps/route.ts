@@ -180,10 +180,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'App ID and organization ID are required' }, { status: 400 })
     }
 
-    // First, get the app to check for uploaded contract files
+    // First, get the app to check for uploaded files (contract and vendor files)
     const { data: appData, error: fetchError } = await supabaseServer
       .from('apps')
-      .select('contract_url')
+      .select('contract_url, vendor_files')
       .eq('id', id)
       .eq('org_id', orgId)
       .single()
@@ -193,7 +193,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch app for deletion' }, { status: 500 })
     }
 
-    // Check if the app has an uploaded contract file that needs to be deleted
+    // Clean up contract file if it exists
     if (appData?.contract_url) {
       try {
         // Check if it's an uploaded file with metadata
@@ -211,7 +211,28 @@ export async function DELETE(request: NextRequest) {
         }
       } catch {
         // If parsing fails, it might be a legacy URL - skip file deletion
-        console.log('Skipping file deletion for legacy URL or invalid metadata')
+        console.log('Skipping contract file deletion for legacy URL or invalid metadata')
+      }
+    }
+
+    // Clean up vendor files if they exist
+    if (appData?.vendor_files && Array.isArray(appData.vendor_files)) {
+      const filePaths = appData.vendor_files.map((file: any) => file.filePath).filter(Boolean)
+
+      if (filePaths.length > 0) {
+        try {
+          const { error: deleteVendorFilesError } = await supabaseServer.storage
+            .from('organize-app-inbox-contracts')
+            .remove(filePaths)
+
+          if (deleteVendorFilesError) {
+            console.error('Error deleting vendor files:', deleteVendorFilesError)
+            // Continue with app deletion even if file deletion fails
+          }
+        } catch (error) {
+          console.error('Error during vendor files cleanup:', error)
+          // Continue with app deletion even if file deletion fails
+        }
       }
     }
 
