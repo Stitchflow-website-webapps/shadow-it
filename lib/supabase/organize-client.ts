@@ -32,14 +32,24 @@ export interface OrganizeApp {
   stitchflow_status: string | null
   app_tier: string | null
   department: string | null
-  owner: string | null
+  technical_owner: string | null // renamed from owner
   comment: string | null
-  app_plan: string | null
+  billing_frequency: string | null // renamed from app_plan
   plan_limit: string | null
   plan_reference: string | null
   cost_per_user: string | null
   renewal_date: string | null
   contract_url: string | null
+  // New fields for License & Renewal
+  renewal_type: string | null
+  billing_owner: string | null
+  purchase_category: string | null
+  opt_out_date: string | null
+  opt_out_period: number | null
+  vendor_contract_status: string | null
+  payment_method: string | null
+  payment_terms: string | null
+  budget_source: string | null
   org_id: string
   created_at: string
   updated_at: string
