@@ -3,8 +3,8 @@ import { useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { KeyRound, Users, Link, CreditCard, Trash2, Edit2, Check, X, Save } from "lucide-react"
-import type { App } from "@/types/app"
+import { KeyRound, Users, Link, CreditCard, FileText, Trash2, Edit2, Check, X, Save } from "lucide-react"
+import type { App, VendorFile } from "@/types/app"
 import { EditableCard } from "@/components/editable-card"
 interface OrganizationSettings {
   identityProvider: string
@@ -28,11 +28,13 @@ export function AppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fal
   const [isEditMode, setIsEditMode] = useState(initialEditMode)
   const [editedFields, setEditedFields] = useState<Partial<App>>({})
   const [showRemoveDialog, setShowRemoveDialog] = useState(false)
+  const [vendorFiles, setVendorFiles] = useState<VendorFile[]>(app.vendorFiles || [])
   
   // Reset edit mode when app changes
   useEffect(() => {
     setIsEditMode(initialEditMode)
     setEditedFields({})
+    setVendorFiles(app.vendorFiles || [])
   }, [app.id, initialEditMode])
 
   const handleEdit = () => {
@@ -46,10 +48,14 @@ export function AppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fal
   }
 
   const handleSave = () => {
-    const updatedApp = { ...app, ...editedFields }
+    const updatedApp = { ...app, ...editedFields, vendorFiles }
     onUpdateApp(updatedApp)
     setIsEditMode(false)
     setEditedFields({})
+  }
+
+  const handleVendorFilesChange = (files: VendorFile[]) => {
+    setVendorFiles(files)
   }
 
   const handleRemove = () => {
@@ -349,6 +355,21 @@ export function AppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fal
               placeholder: "Upload contract or enter URL",
             },
           ]}
+        />
+      </div>
+
+      {/* Vendor Files & Notes Card */}
+      <div className="mt-6">
+        <EditableCard
+          title="Vendor Files and Notes"
+          icon={<FileText className="h-5 w-5 text-primary-text" />}
+          isEditing={isEditMode}
+          onUpdate={handleFieldChange}
+          appName={app.name}
+          userInfo={userInfo}
+          vendorFiles={vendorFiles}
+          onVendorFilesChange={handleVendorFilesChange}
+          fields={[]}
         />
       </div>
     </div>

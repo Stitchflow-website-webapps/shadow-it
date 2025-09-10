@@ -1,5 +1,5 @@
 import type { OrganizeApp } from '@/lib/supabase/organize-client'
-import type { App } from '@/types/app'
+import type { App, VendorFile } from '@/types/app'
 
 // Convert OrganizeApp to App for compatibility with existing components
 export function organizeAppToApp(organizeApp: OrganizeApp): App {
@@ -22,6 +22,8 @@ export function organizeAppToApp(organizeApp: OrganizeApp): App {
     costPerUser: organizeApp.cost_per_user || '',
     renewalDate: organizeApp.renewal_date || '',
     contractUrl: organizeApp.contract_url || '',
+    vendorFiles: organizeApp.vendor_files || [],
+    vendorFilesLimit: organizeApp.vendor_files ? organizeApp.vendor_files.length : 0,
     licensesUsed: organizeApp.licenses_used,
     usageDescription: organizeApp.usage_description || '',
   }
@@ -48,6 +50,8 @@ export function appToOrganizeApp(app: App, orgId: string): Partial<OrganizeApp> 
     cost_per_user: app.costPerUser || null,
     renewal_date: app.renewalDate || null,
     contract_url: app.contractUrl || null,
+    vendor_files: app.vendorFiles || null,
+    vendor_files_limit: app.vendorFiles ? app.vendorFiles.length : 0,
     usage_description: app.usageDescription || null,
   }
-} 
+}

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Plus, Settings, Search, X, ChevronLeft, ChevronRight, KeyRound, Users, Link, CreditCard, Trash2, Edit2, Check } from "lucide-react"
+import { Plus, Settings, Search, X, ChevronLeft, ChevronRight, KeyRound, Users, Link, CreditCard, FileText, Trash2, Edit2, Check } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { AppTable } from "@/components/app-table"
@@ -22,7 +22,7 @@ import { organizeAppToApp, appToOrganizeApp } from "@/lib/organize-type-adapter"
 import { useAppIntegrations, type AppIntegration } from "@/hooks/use-app-integrations"
 import { cn } from "@/lib/utils"
 import type { OrganizeApp } from "@/lib/supabase/organize-client"
-import type { App } from "@/types/app"
+import type { App, VendorFile } from "@/types/app"
 import Sidebar from "@/app/components/Sidebar"
 
 // Local organization settings interface
@@ -139,6 +139,8 @@ function SimpleAddAppsDialog({ open, onOpenChange, onAddApps, existingApps, orgS
         renewalDate: "",
         contractUrl: "",
         licensesUsed: null,
+        vendorFiles: [],
+        vendorFilesLimit: 0
       }
     })
 
@@ -314,11 +316,13 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
   const [isEditMode, setIsEditMode] = useState(initialEditMode)
   const [editedFields, setEditedFields] = useState<Partial<App>>({})
   const [showRemoveDialog, setShowRemoveDialog] = useState(false)
-  
+  const [vendorFiles, setVendorFiles] = useState<VendorFile[]>(app.vendorFiles || [])
+
   // Reset edit mode when app changes
   useEffect(() => {
     setIsEditMode(initialEditMode)
     setEditedFields({})
+    setVendorFiles(app.vendorFiles || [])
   }, [app.id, initialEditMode])
 
   const handleEdit = () => {
@@ -332,10 +336,16 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
   }
 
   const handleSave = () => {
-    const updatedApp = { ...app, ...editedFields }
+    const updatedApp = { ...app, ...editedFields, vendorFiles }
     onUpdateApp(updatedApp)
     setIsEditMode(false)
     setEditedFields({})
+  }
+
+  const handleVendorFilesChange = (files: VendorFile[]) => {
+    setVendorFiles(files)
+    // Update the vendorFilesLimit field to reflect the current count
+    handleFieldChange({ vendorFilesLimit: files.length })
   }
 
   const handleRemove = () => {
@@ -447,130 +457,148 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
         </div>
       </div>
 
-      {/* 2x2 Card Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Authentication Card */}
-        <EditableCard
-          title="Authentication"
-          icon={<KeyRound className="h-5 w-5 text-primary-text" />}
-          isEditing={isEditMode}
-          onUpdate={handleFieldChange}
-          appName={app.name}
-          userInfo={userInfo}
-          fields={[
-            {
-              label: "SSO ENFORCED?",
-              value: editedFields.ssoEnforced ?? (app.ssoEnforced || ""),
-              field: "ssoEnforced",
-              type: "select",
-              placeholder: "Select SSO status",
-              options: [
-                { value: "Yes", label: "Yes" },
-                { value: "No", label: "No" },
-              ],
-            },
-            {
-              label: "DEPROVISIONING",
-              value: editedFields.deprovisioning ?? (app.deprovisioning || ""),
-              field: "deprovisioning",
-              type: "select",
-              placeholder: "Select deprovisioning method",
-              options: getDeprovisioningOptions(),
-              disabled: !organization?.identityProvider,
-              disabledText: "Please update your IdP settings to edit this field",
-            },
-          ]}
-        />
+      {/* Card Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Left Column */}
+        <div className="space-y-6">
+          {/* Authentication Card */}
+          <EditableCard
+            title="Authentication"
+            icon={<KeyRound className="h-5 w-5 text-primary-text" />}
+            isEditing={isEditMode}
+            onUpdate={handleFieldChange}
+            appName={app.name}
+            userInfo={userInfo}
+            fields={[
+              {
+                label: "SSO ENFORCED?",
+                value: editedFields.ssoEnforced ?? (app.ssoEnforced || ""),
+                field: "ssoEnforced",
+                type: "select",
+                placeholder: "Select SSO status",
+                options: [
+                  { value: "Yes", label: "Yes" },
+                  { value: "No", label: "No" },
+                ],
+              },
+              {
+                label: "DEPROVISIONING",
+                value: editedFields.deprovisioning ?? (app.deprovisioning || ""),
+                field: "deprovisioning",
+                type: "select",
+                placeholder: "Select deprovisioning method",
+                options: getDeprovisioningOptions(),
+                disabled: !organization?.identityProvider,
+                disabledText: "Please update your IdP settings to edit this field",
+              },
+            ]}
+          />
 
-        {/* App Management Card */}
-        <EditableCard
-          title="App Management"
-          icon={<Link className="h-5 w-5 text-primary-text" />}
-          isEditing={isEditMode}
-          onUpdate={(updates) => handleFieldChange(updates)}
-          appName={app.name}
-          userInfo={userInfo}
-          fields={[
-            {
-              label: "STITCHFLOW CONNECTION STATUS",
-              value: editedFields.stitchflowStatus ?? (app.stitchflowStatus || ""),
-              field: "stitchflowStatus",
-              type: "select",
-              placeholder: "Select connection status",
-              options: [
-                { value: "Yes - API", label: "Yes - API" },
-                { value: "Yes - CSV Sync", label: "Yes - CSV Sync" },
-                { value: "Not connected", label: "Not connected" },
-              ],
-            },
-            {
-              label: "APP TIER",
-              value: editedFields.appTier ?? (app.appTier || ""),
-              field: "appTier",
-              type: "select",
-              placeholder: "Select app tier",
-              options: [
-                { value: "Tier 1", label: "Tier 1" },
-                { value: "Tier 2", label: "Tier 2" },
-                { value: "Tier 3", label: "Tier 3" },
-              ],
-            },
-            {
-              label: "MANAGED STATUS",
-              value: editedFields.managedStatus ?? (app.managedStatus || ""),
-              field: "managedStatus",
-              type: "select",
-              placeholder: "Select managed status",
-              options: [
-                { value: "Managed", label: "Managed" },
-                { value: "Unmanaged", label: "Unmanaged" },
-                { value: "Newly discovered", label: "Newly discovered" }
-              ],
-            }
-          ]}
-        />
+          {/* App Usage & Ownership Card */}
+          <EditableCard
+            title="App Usage & Ownership"
+            icon={<Users className="h-5 w-5 text-primary-text" />}
+            isEditing={isEditMode}
+            onUpdate={(updates) => handleFieldChange(updates)}
+            appName={app.name}
+            userInfo={userInfo}
+            fields={[
+              {
+                label: "DEPARTMENT",
+                value: editedFields.department ?? (app.department || ""),
+                field: "department",
+                type: "input",
+                placeholder: "Enter department",
+              },
+              {
+                label: "OWNER",
+                value: editedFields.owner ?? (app.owner || ""),
+                field: "owner",
+                type: "input",
+                placeholder: "Enter owner name",
+              },
+              {
+                label: "ACCESS POLICY & NOTES",
+                value: editedFields.comment ?? (app.comment || ""),
+                field: "comment",
+                type: "textarea",
+                placeholder: "Add access policy and notes",
+              },
+              {
+                label: "WHAT'S THE APP USED FOR",
+                value: editedFields.usageDescription ?? (app.usageDescription || ""),
+                field: "usageDescription",
+                type: "textarea",
+                placeholder: "Enter usage description",
+              },
+            ]}
+          />
 
-        {/* App Usage & Ownership Card */}
-        <EditableCard
-          title="App Usage & Ownership"
-          icon={<Users className="h-5 w-5 text-primary-text" />}
-          isEditing={isEditMode}
-          onUpdate={(updates) => handleFieldChange(updates)}
-          appName={app.name}
-          userInfo={userInfo}
-          fields={[
-            {
-              label: "DEPARTMENT",
-              value: editedFields.department ?? (app.department || ""),
-              field: "department",
-              type: "input",
-              placeholder: "Enter department",
-            },
-            {
-              label: "OWNER",
-              value: editedFields.owner ?? (app.owner || ""),
-              field: "owner",
-              type: "input",
-              placeholder: "Enter owner name",
-            },
-            {
-              label: "ACCESS POLICY & NOTES",
-              value: editedFields.comment ?? (app.comment || ""),
-              field: "comment",
-              type: "textarea",
-              placeholder: "Add access policy and notes",
-            },
-            {
-              label: "WHAT'S THE APP USED FOR",
-              value: editedFields.usageDescription ?? (app.usageDescription || ""),
-              field: "usageDescription",
-              type: "textarea",
-              placeholder: "Enter usage description",
-            },
-          ]}
-        />
+          {/* Vendor Files & Notes Card */}
+          <EditableCard
+            title="Vendor Files and Notes"
+            icon={<FileText className="h-5 w-5 text-primary-text" />}
+            isEditing={isEditMode}
+            onUpdate={handleFieldChange}
+            appName={app.name}
+            userInfo={userInfo}
+            vendorFiles={vendorFiles}
+            onVendorFilesChange={handleVendorFilesChange}
+            fields={[]}
+          />
+        </div>
 
-        {/* License & Renewal Card */}
+        {/* Right Column */}
+        <div className="space-y-6">
+          {/* App Management Card */}
+          <EditableCard
+            title="App Management"
+            icon={<Link className="h-5 w-5 text-primary-text" />}
+            isEditing={isEditMode}
+            onUpdate={(updates) => handleFieldChange(updates)}
+            appName={app.name}
+            userInfo={userInfo}
+            fields={[
+              {
+                label: "STITCHFLOW CONNECTION STATUS",
+                value: editedFields.stitchflowStatus ?? (app.stitchflowStatus || ""),
+                field: "stitchflowStatus",
+                type: "select",
+                placeholder: "Select connection status",
+                options: [
+                  { value: "Yes - API", label: "Yes - API" },
+                  { value: "Yes - CSV Sync", label: "Yes - CSV Sync" },
+                  { value: "Not connected", label: "Not connected" },
+                ],
+              },
+              {
+                label: "APP TIER",
+                value: editedFields.appTier ?? (app.appTier || ""),
+                field: "appTier",
+                type: "select",
+                placeholder: "Select app tier",
+                options: [
+                  { value: "Tier 1", label: "Tier 1" },
+                  { value: "Tier 2", label: "Tier 2" },
+                  { value: "Tier 3", label: "Tier 3" },
+                ],
+              },
+              {
+                label: "MANAGED STATUS",
+                value: editedFields.managedStatus ?? (app.managedStatus || ""),
+                field: "managedStatus",
+                type: "select",
+                placeholder: "Select managed status",
+                options: [
+                  { value: "Managed", label: "Managed" },
+                  { value: "Unmanaged", label: "Unmanaged" },
+                  { value: "Newly discovered", label: "Newly discovered" }
+                ],
+              }
+            ]}
+          />
+
+          {/* License & Renewal Card */}
         <EditableCard
           title="License & Renewal"
           icon={<CreditCard className="h-5 w-5 text-primary-text" />}
@@ -637,6 +665,7 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
             },
           ]}
         />
+        </div>
       </div>
     </div>
   )

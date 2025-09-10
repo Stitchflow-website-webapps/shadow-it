@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { organizeSupabaseAdmin, type OrganizeApp } from '@/lib/supabase/organize-client'
+import { supabaseServer } from '@/lib/supabase-server'
 
 export async function GET(request: NextRequest) {
   try {
@@ -146,12 +147,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No valid organization found for provided shadow org IDs' }, { status: 404 })
     }
 
-    // Create the app
+    // Create the app with default vendor files values
     const { data: newApp, error: createError } = await organizeSupabaseAdmin
       .from('apps')
       .insert({
         ...app,
         org_id: organizeOrg.id,
+        vendor_files: app.vendor_files || [],
+        vendor_files_limit: app.vendor_files ? app.vendor_files.length : 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -255,13 +258,15 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update the app
+    const updateData = {
+      ...app,
+      org_id: organizeOrg.id,
+      updated_at: new Date().toISOString()
+    }
+
     const { data: updatedApp, error: updateError } = await organizeSupabaseAdmin
       .from('apps')
-      .update({
-        ...app,
-        org_id: organizeOrg.id,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', app.id)
       .eq('org_id', organizeOrg.id) // Ensure app belongs to the org
       .select()
@@ -357,6 +362,60 @@ export async function DELETE(request: NextRequest) {
 
     if (!organizeOrg) {
       return NextResponse.json({ error: 'App not found in any of the provided organizations' }, { status: 404 })
+    }
+
+    // Get app data to check for files that need to be deleted
+    const { data: appData, error: fetchError } = await organizeSupabaseAdmin
+      .from('apps')
+      .select('contract_url, vendor_files')
+      .eq('id', appId)
+      .eq('org_id', organizeOrg.id)
+      .single()
+
+    if (fetchError) {
+      console.error('Error fetching app data for deletion:', fetchError)
+      return NextResponse.json({ error: 'Failed to fetch app data' }, { status: 500 })
+    }
+
+    // Clean up contract file if it exists
+    if (appData?.contract_url) {
+      try {
+        const fileMetadata = JSON.parse(appData.contract_url)
+        if (fileMetadata.type === 'uploaded_file' && fileMetadata.filePath) {
+          const { error: deleteFileError } = await supabaseServer.storage
+            .from('organize-app-inbox-contracts')
+            .remove([fileMetadata.filePath])
+
+          if (deleteFileError) {
+            console.error('Error deleting contract file:', deleteFileError)
+            // Continue with deletion even if file cleanup fails
+          }
+        }
+      } catch {
+        // If parsing fails, it might be a legacy URL - skip file deletion
+        console.log('Skipping contract file deletion for legacy URL or invalid metadata')
+      }
+    }
+
+    // Clean up vendor files if they exist
+    if (appData?.vendor_files && Array.isArray(appData.vendor_files)) {
+      const filePaths = appData.vendor_files.map((file: any) => file.filePath).filter(Boolean)
+
+      if (filePaths.length > 0) {
+        try {
+          const { error: deleteVendorFilesError } = await supabaseServer.storage
+            .from('organize-app-inbox-contracts')
+            .remove(filePaths)
+
+          if (deleteVendorFilesError) {
+            console.error('Error deleting vendor files:', deleteVendorFilesError)
+            // Continue with deletion even if file cleanup fails
+          }
+        } catch (error) {
+          console.error('Error during vendor files cleanup:', error)
+          // Continue with deletion even if file cleanup fails
+        }
+      }
     }
 
     // Delete the app

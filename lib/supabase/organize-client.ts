@@ -24,6 +24,17 @@ export interface OrganizeUser {
   updated_at: string
 }
 
+// Type for individual vendor file metadata
+export interface VendorFile {
+  id: string
+  fileName: string
+  label: string
+  filePath: string
+  uploadedAt: string
+  fileType: string
+  url?: string
+}
+
 export interface OrganizeApp {
   id: string
   name: string
@@ -40,6 +51,8 @@ export interface OrganizeApp {
   cost_per_user: string | null
   renewal_date: string | null
   contract_url: string | null
+  vendor_files: VendorFile[] | null
+  vendor_files_limit: number | null // Count of uploaded vendor files (not the maximum allowed)
   org_id: string
   created_at: string
   updated_at: string

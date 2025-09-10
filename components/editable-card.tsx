@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { format } from "date-fns"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,10 +17,11 @@ import { Edit2, Check, X, Calendar as CalendarIcon, Upload, ExternalLink, FileTe
 import { InfoIcon } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn, formatCurrency, getLicenseUtilizationStatus } from "@/lib/utils"
-import { uploadApi } from "@/lib/api"
+import { uploadApi, vendorFilesApi } from "@/lib/api"
 import { CurrencySelector, getCurrencySymbol, parseCurrencyValue, formatCurrencyValue } from "@/components/currency-selector"
-import type { App } from "@/types/app"
+import type { App, VendorFile } from "@/types/app"
 import { Badge } from "@/components/ui/badge"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 interface FieldConfig {
   label: string
@@ -47,6 +48,8 @@ interface EditableCardProps {
   appName?: string
   isEditing?: boolean
   userInfo?: UserInfo | null
+  vendorFiles?: VendorFile[]
+  onVendorFilesChange?: (files: VendorFile[]) => void
 }
 
 // Helper function to calculate days until renewal
@@ -79,7 +82,355 @@ const getDaysUntilRenewal = (renewalDate: string): number => {
   }
 }
 
-export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing, userInfo }: EditableCardProps) {
+// Vendor Files Content Component
+function VendorFilesContent({
+  vendorFiles,
+  onVendorFilesChange,
+  isEditing,
+  appName,
+  userInfo
+}: {
+  vendorFiles: VendorFile[]
+  onVendorFilesChange?: (files: VendorFile[]) => void
+  isEditing: boolean
+  appName: string
+  userInfo?: UserInfo | null
+}) {
+  const [isUploading, setIsUploading] = useState(false)
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null)
+  const [editingLabel, setEditingLabel] = useState('')
+  const [pendingLabelFiles, setPendingLabelFiles] = useState<VendorFile[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [showRemoveDialog, setShowRemoveDialog] = useState(false)
+  const [fileToRemove, setFileToRemove] = useState<VendorFile | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const maxFilesAllowed = 5
+  const remainingSlots = maxFilesAllowed - vendorFiles.length
+
+  const handleFileUpload = async (files: FileList) => {
+    if (!files.length || !userInfo?.orgId) return
+
+    const filesToUpload = Array.from(files).slice(0, remainingSlots)
+
+    if (filesToUpload.length < files.length) {
+      setError(`Only a maximum of 5 files can be uploaded.`)
+    } else {
+      setError(null)
+    }
+
+    setIsUploading(true)
+
+    try {
+      const uploadPromises = filesToUpload.map(async (file) => {
+        const uploadResult = await uploadApi.uploadFile(file, userInfo.orgId, appName, 'vendor')
+
+        const vendorFile: VendorFile = {
+          id: crypto.randomUUID(),
+          fileName: file.name,
+          label: "", // Start with empty label - user will be prompted to add one
+          filePath: uploadResult.filePath,
+          uploadedAt: new Date().toISOString(),
+          fileType: file.type,
+          url: uploadResult.url
+        }
+
+        return vendorFile
+      })
+
+      const newFiles = await Promise.all(uploadPromises)
+      const updatedFiles = [...vendorFiles, ...newFiles]
+      onVendorFilesChange?.(updatedFiles)
+
+      // Auto-prompt for label on the first uploaded file
+      if (newFiles.length > 0) {
+        setPendingLabelFiles(newFiles)
+        setEditingLabelId(newFiles[0].id)
+        setEditingLabel("")
+      }
+
+    } catch (error) {
+      console.error('Error uploading files:', error)
+      setError(error instanceof Error ? error.message : 'Failed to upload files')
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const handleRemoveFile = (fileId: string) => {
+    const file = vendorFiles.find(f => f.id === fileId)
+    if (!file) return
+
+    setFileToRemove(file)
+    setShowRemoveDialog(true)
+  }
+
+  const confirmRemoveFile = async () => {
+    if (!fileToRemove) return
+
+    try {
+      // Delete file from storage using the file path
+      await uploadApi.deleteFile(fileToRemove.filePath)
+    } catch (error) {
+      console.error('Error deleting file from storage:', error)
+      // Continue with UI removal even if storage deletion fails
+      setError('File removed from list, but may still exist in storage')
+    }
+
+    // Remove file from local state
+    const updatedFiles = vendorFiles.filter(f => f.id !== fileToRemove.id)
+    onVendorFilesChange?.(updatedFiles)
+
+    // Reset dialog state
+    setShowRemoveDialog(false)
+    setFileToRemove(null)
+  }
+
+  const handleStartEditLabel = (file: VendorFile) => {
+    setEditingLabelId(file.id)
+    setEditingLabel(file.label)
+  }
+
+  const handleSaveLabel = (fileId: string) => {
+    if (!editingLabel.trim()) {
+      setError('Label/note cannot be empty')
+      return
+    }
+
+    const updatedFiles = vendorFiles.map(f =>
+      f.id === fileId ? { ...f, label: editingLabel.trim() } : f
+    )
+    onVendorFilesChange?.(updatedFiles)
+
+    // Check if there are more pending files that need labels
+    const remainingPendingFiles = pendingLabelFiles.filter(f => f.id !== fileId && !f.label)
+    if (remainingPendingFiles.length > 0) {
+      // Move to next file that needs a label
+      setEditingLabelId(remainingPendingFiles[0].id)
+      setEditingLabel("")
+      setPendingLabelFiles(remainingPendingFiles)
+    } else {
+      // All files have labels, clear editing state
+      setEditingLabelId(null)
+      setEditingLabel('')
+      setPendingLabelFiles([])
+    }
+    setError(null)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingLabelId(null)
+    setEditingLabel('')
+    setPendingLabelFiles([])
+  }
+
+  const getFileTypeLabel = (fileType: string) => {
+    const typeMap: { [key: string]: string } = {
+      'application/pdf': 'PDF',
+      'text/csv': 'CSV',
+      'application/vnd.ms-excel': 'Excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel',
+      'application/msword': 'Word',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word'
+    }
+    return typeMap[fileType] || 'File'
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-600">
+        Upload and manage vendor-related documents ({vendorFiles.length}/{maxFilesAllowed} files)
+      </p>
+
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <span className="text-sm text-red-700">{error}</span>
+        </div>
+      )}
+
+      {/* Upload Area */}
+      {isEditing && remainingSlots > 0 && (
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+          <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-600 mb-2">
+            Drag and drop files here, or click to browse
+          </p>
+          <p className="text-xs text-gray-500 mb-4">
+            Supports PDF, CSV, Excel (.xlsx, .xls), and Word (.docx, .doc) files
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="h-9"
+          >
+            {isUploading ? 'Uploading...' : 'Choose Files'}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".pdf,.csv,.xlsx,.xls,.docx,.doc"
+            onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+            className="hidden"
+            disabled={isUploading}
+          />
+        </div>
+      )}
+
+      {/* Files List */}
+      {vendorFiles.length > 0 && (
+        <div className="space-y-3">
+          {vendorFiles.map((file) => (
+            <div key={file.id} className="p-3 border border-gray-100 rounded-lg bg-gray-50 space-y-3">
+              {/* File Info Row */}
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-gray-600" />
+                <span className="text-sm text-gray-700 flex-1">
+                  {file.fileName}
+                </span>
+                <span className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded">
+                  {getFileTypeLabel(file.fileType)}
+                </span>
+              </div>
+
+              {/* Label/Note Row */}
+              {editingLabelId === file.id ? (
+                <div className="space-y-2">
+                  <Input
+                    value={editingLabel}
+                    onChange={(e) => setEditingLabel(e.target.value)}
+                    placeholder="Enter label/note for this file"
+                    className="h-8 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSaveLabel(file.id)
+                      } else if (e.key === 'Escape') {
+                        handleCancelEdit()
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleSaveLabel(file.id)}
+                      className="h-8 px-3 text-xs"
+                    >
+                      <Check className="h-3 w-3 mr-1" />
+                      Save
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleCancelEdit}
+                      className="h-8 px-3 text-xs"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Label Display */}
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">Label: </span>
+                    {file.label || 'No label added'}
+                  </div>
+
+                  {/* Action Buttons Row */}
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={async () => {
+                        try {
+                          // Get a fresh signed URL for the file
+                          const signedUrl = await uploadApi.getSignedUrl(file.filePath)
+                          window.open(signedUrl, '_blank')
+                        } catch (error) {
+                          console.error('Error getting signed URL:', error)
+                          alert('Failed to open file. Please try again.')
+                        }
+                      }}
+                      className="h-8 px-3 text-xs"
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      View Details
+                    </Button>
+                    {isEditing && (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleStartEditLabel(file)}
+                          className="h-8 px-3 text-xs"
+                        >
+                          <Edit2 className="h-3 w-3 mr-1" />
+                          Edit Label
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRemoveFile(file.id)}
+                          className="h-8 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <X className="h-3 w-3 mr-1" />
+                          Remove
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {vendorFiles.length === 0 && !isEditing && (
+        <div className="text-center py-8 text-gray-500">
+          <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+          <p className="text-sm">No vendor files uploaded</p>
+        </div>
+      )}
+
+      {/* Remove File Confirmation Dialog */}
+      <AlertDialog open={showRemoveDialog} onOpenChange={setShowRemoveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove File</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove "{fileToRemove?.fileName}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRemoveFile}
+              className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
+            >
+              Remove File
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
+export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing, userInfo, vendorFiles, onVendorFilesChange }: EditableCardProps) {
   const [internalIsEditing, setInternalIsEditing] = useState(false)
   
   // Use external isEditing prop when provided, otherwise use internal state
@@ -91,6 +442,8 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
   const [fileUploadStates, setFileUploadStates] = useState<Record<string, boolean>>({})
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, File>>({})
   const [isUploading, setIsUploading] = useState<Record<string, boolean>>({})
+  const [showContractRemoveDialog, setShowContractRemoveDialog] = useState(false)
+  const [contractFileToRemove, setContractFileToRemove] = useState<{field: string, fileName: string} | null>(null)
   // User info is now passed as prop instead of using useAuth
 
   // Initialize date picker states based on field values
@@ -221,10 +574,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
       alert('Please upload only PDF files.')
       return
     }
-    if (file.size > 10 * 1024 * 1024) { // 10MB in bytes
-      alert('File size must be less than 10MB.')
-      return
-    }
+    // File size limit removed as requested
 
     if (!userInfo?.orgId || !appName) {
       alert('Unable to upload file. Please try again.')
@@ -289,9 +639,39 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
     }
   }
 
-  const handleRemoveFile = async (field: string) => {
+  const handleRemoveFile = (field: string) => {
     const currentValue = fields.find(f => f.field === field)?.value
-    
+    let fileName = 'this file'
+
+    // Try to get the file name
+    try {
+      if (currentValue && currentValue !== "Not specified") {
+        try {
+          const fileMetadata = JSON.parse(currentValue)
+          if (fileMetadata.type === 'uploaded_file' && fileMetadata.fileName) {
+            fileName = fileMetadata.fileName
+          }
+        } catch {
+          // If parsing fails, might be a URL
+          if (currentValue.startsWith('http')) {
+            fileName = currentValue.split('/').pop() || 'this file'
+          }
+        }
+      }
+    } catch {
+      // Use default name
+    }
+
+    setContractFileToRemove({ field, fileName })
+    setShowContractRemoveDialog(true)
+  }
+
+  const confirmRemoveContractFile = async () => {
+    if (!contractFileToRemove) return
+
+    const { field } = contractFileToRemove
+    const currentValue = fields.find(f => f.field === field)?.value
+
     try {
       if (currentValue && currentValue !== "Not specified") {
         try {
@@ -309,13 +689,13 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
           }
         }
       }
-      
+
       setUploadedFiles((prev) => {
         const newFiles = { ...prev }
         delete newFiles[field]
         return newFiles
       })
-      
+
       // Reset the field value and update the parent component immediately
       const updates: Record<string, any> = {}
       updates[field] = ""
@@ -328,11 +708,15 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
         delete newFiles[field]
         return newFiles
       })
-      
+
       const updates: Record<string, any> = {}
       updates[field] = ""
       onUpdate(updates as Partial<App>)
     }
+
+    // Reset dialog state
+    setShowContractRemoveDialog(false)
+    setContractFileToRemove(null)
   }
 
   const renderField = (field: FieldConfig) => {
@@ -494,7 +878,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
                                 Drop PDF here or click to upload
                               </div>
                               <div className="text-xs text-gray-400">
-                                Max 10MB, PDF only
+                                PDF files only
                               </div>
                               <input
                                 type="file"
@@ -777,7 +1161,7 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
               type="button"
               size="sm"
               variant="ghost"
-              onClick={() => window.open(currentValue, '_blank')}
+              onClick={() => handleViewFile(field.field)}
               className="h-6 px-2 text-xs"
             >
               <ExternalLink className="h-3 w-3 mr-1" />
@@ -862,7 +1246,16 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-7 px-6 pb-6">
-        {fields.map((field) => (
+        {title === "Vendor Files and Notes" ? (
+          <VendorFilesContent
+            vendorFiles={vendorFiles || []}
+            onVendorFilesChange={onVendorFilesChange}
+            isEditing={editMode}
+            appName={appName || ''}
+            userInfo={userInfo}
+          />
+        ) : (
+          fields.map((field) => (
           <div key={field.field} className="space-y-2">
             <Label className="text-xs font-medium text-gray-600 uppercase tracking-wider flex items-center gap-2">
               {field.label}
@@ -881,7 +1274,8 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
             </Label>
             {renderField(field)}
           </div>
-        ))}
+          ))
+        )}
 
         {editMode && isEditing == null && (
           <div className="flex gap-3 pt-6 border-t border-gray-100">
@@ -906,6 +1300,27 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
           </div>
         )}
       </CardContent>
+
+      {/* Remove Contract File Confirmation Dialog */}
+      <AlertDialog open={showContractRemoveDialog} onOpenChange={setShowContractRemoveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove File</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove "{contractFileToRemove?.fileName}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRemoveContractFile}
+              className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
+            >
+              Remove File
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

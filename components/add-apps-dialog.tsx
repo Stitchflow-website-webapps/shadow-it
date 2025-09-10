@@ -112,6 +112,8 @@ export function AddAppsDialog({ open, onOpenChange, onAddApps, existingApps, org
         contractUrl: "",
         licensesUsed: null,
         usageDescription: "",
+        vendorFiles: [],
+        vendorFilesLimit: 0
       }
     })
 
