@@ -20,7 +20,7 @@ export interface App {
   stitchflowStatus: string
   appTier: string
   department: string
-  owner: string
+  technicalOwner: string
   comment?: string
   appPlan: string
   planLimit: string
@@ -32,4 +32,15 @@ export interface App {
   vendorFilesLimit?: number // Count of uploaded vendor files (not the maximum allowed)
   licensesUsed: number | null
   usageDescription?: string
+  // New fields
+  renewalType?: string
+  billingOwner?: string
+  purchaseCategory?: string
+  optOutDate?: string
+  optOutPeriod?: number | null
+  vendorContractStatus?: string
+  paymentMethod?: string
+  paymentTerms?: string
+  budgetSource?: string
+  billingFrequency?: string
 }

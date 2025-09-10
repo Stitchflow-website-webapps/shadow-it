@@ -132,6 +132,7 @@ function SimpleAddAppsDialog({ open, onOpenChange, onAddApps, existingApps, orgS
         department: "",
         technicalOwner: "",
         comment: "",
+        appPlan: "",
         billingFrequency: "",
         planLimit: "",
         planReference: "",
@@ -139,19 +140,6 @@ function SimpleAddAppsDialog({ open, onOpenChange, onAddApps, existingApps, orgS
         renewalDate: "",
         contractUrl: "",
         licensesUsed: null,
-        usageDescription: "",
-        // New fields
-        renewalType: "",
-        billingOwner: "",
-        purchaseCategory: "",
-        optOutDate: "",
-        optOutPeriod: null,
-        vendorContractStatus: "",
-        paymentMethod: "",
-        paymentTerms: "",
-        budgetSource: "",
-        vendorFiles: [],
-        vendorFilesLimit: 0
         usageDescription: "",
         // New fields
         renewalType: "",
@@ -605,45 +593,6 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
             },
           ]}
         />
-          {/* App Usage & Ownership Card */}
-          <EditableCard
-            title="App Usage & Ownership"
-            icon={<Users className="h-5 w-5 text-primary-text" />}
-            isEditing={isEditMode}
-            onUpdate={(updates) => handleFieldChange(updates)}
-            appName={app.name}
-            userInfo={userInfo}
-            fields={[
-              {
-                label: "DEPARTMENT",
-                value: editedFields.department ?? (app.department || ""),
-                field: "department",
-                type: "input",
-                placeholder: "Enter department",
-              },
-              {
-                label: "OWNER",
-                value: editedFields.owner ?? (app.owner || ""),
-                field: "owner",
-                type: "input",
-                placeholder: "Enter owner name",
-              },
-              {
-                label: "ACCESS POLICY & NOTES",
-                value: editedFields.comment ?? (app.comment || ""),
-                field: "comment",
-                type: "textarea",
-                placeholder: "Add access policy and notes",
-              },
-              {
-                label: "WHAT'S THE APP USED FOR",
-                value: editedFields.usageDescription ?? (app.usageDescription || ""),
-                field: "usageDescription",
-                type: "textarea",
-                placeholder: "Enter usage description",
-              },
-            ]}
-          />
 
           {/* Vendor Files & Notes Card */}
           <EditableCard
@@ -661,403 +610,165 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
 
         {/* Right Column */}
         <div className="space-y-6">
-          {/* App Management Card */}
-          <EditableCard
-            title="App Management"
-            icon={<Link className="h-5 w-5 text-primary-text" />}
-            isEditing={isEditMode}
-            onUpdate={(updates) => handleFieldChange(updates)}
-            appName={app.name}
-            userInfo={userInfo}
-            fields={[
-              {
-                label: "STITCHFLOW CONNECTION STATUS",
-                value: editedFields.stitchflowStatus ?? (app.stitchflowStatus || ""),
-                field: "stitchflowStatus",
-                type: "select",
-                placeholder: "Select connection status",
-                options: [
-                  { value: "Yes - API", label: "Yes - API" },
-                  { value: "Yes - CSV Sync", label: "Yes - CSV Sync" },
-                  { value: "Not connected", label: "Not connected" },
-                ],
-              },
-              {
-                label: "APP TIER",
-                value: editedFields.appTier ?? (app.appTier || ""),
-                field: "appTier",
-                type: "select",
-                placeholder: "Select app tier",
-                options: [
-                  { value: "Tier 1", label: "Tier 1" },
-                  { value: "Tier 2", label: "Tier 2" },
-                  { value: "Tier 3", label: "Tier 3" },
-                ],
-              },
-              {
-                label: "MANAGED STATUS",
-                value: editedFields.managedStatus ?? (app.managedStatus || ""),
-                field: "managedStatus",
-                type: "select",
-                placeholder: "Select managed status",
-                options: [
-                  { value: "Managed", label: "Managed" },
-                  { value: "Unmanaged", label: "Unmanaged" },
-                  { value: "Newly discovered", label: "Newly discovered" }
-                ],
-              }
-            ]}
-          />
-        {/* App Management Card */}
-        <EditableCard
-          title="App Management"
-          icon={<Link className="h-5 w-5 text-primary-text" />}
-          isEditing={isEditMode}
-          onUpdate={(updates) => handleFieldChange(updates)}
-          appName={app.name}
-          userInfo={userInfo}
-          fields={[
-            {
-              label: "STITCHFLOW CONNECTION STATUS",
-              value: editedFields.stitchflowStatus ?? (app.stitchflowStatus || ""),
-              field: "stitchflowStatus",
-              type: "select",
-              placeholder: "Select connection status",
-              options: [
-                { value: "Yes - API", label: "Yes - API" },
-                { value: "Yes - CSV Sync", label: "Yes - CSV Sync" },
-                { value: "Not connected", label: "Not connected" },
-              ],
-            },
-            {
-              label: "APP TIER",
-              value: editedFields.appTier ?? (app.appTier || ""),
-              field: "appTier",
-              type: "select",
-              placeholder: "Select app tier",
-              options: [
-                { value: "Tier 1", label: "Tier 1" },
-                { value: "Tier 2", label: "Tier 2" },
-                { value: "Tier 3", label: "Tier 3" },
-              ],
-            },
-            {
-              label: "MANAGED STATUS",
-              value: editedFields.managedStatus ?? (app.managedStatus || ""),
-              field: "managedStatus",
-              type: "select",
-              placeholder: "Select managed status",
-              options: [
-                { value: "Managed", label: "Managed" },
-                { value: "Unmanaged", label: "Unmanaged" },
-                { value: "Newly discovered", label: "Newly discovered" }
-              ],
-            }
-          ]}
-        />
-
-        {/* App Usage & Ownership Card */}
-        <EditableCard
-          title="App Usage & Ownership"
-          icon={<Users className="h-5 w-5 text-primary-text" />}
-          isEditing={isEditMode}
-          onUpdate={(updates) => handleFieldChange(updates)}
-          appName={app.name}
-          userInfo={userInfo}
-          fields={[
-            {
-              label: "DEPARTMENT",
-              value: editedFields.department ?? (app.department || ""),
-              field: "department",
-              type: "input",
-              placeholder: "Enter department",
-            },
-            {
-              label: "TECHNICAL OWNER",
-              value: editedFields.technicalOwner ?? (app.technicalOwner || ""),
-              field: "technicalOwner",
-              type: "input",
-              placeholder: "Enter technical owner name",
-            },
-            {
-              label: "ACCESS POLICY & NOTES",
-              value: editedFields.comment ?? (app.comment || ""),
-              field: "comment",
-              type: "textarea",
-              placeholder: "Add access policy and notes",
-            },
-            {
-              label: "WHAT'S THE APP USED FOR",
-              value: editedFields.usageDescription ?? (app.usageDescription || ""),
-              field: "usageDescription",
-              type: "textarea",
-              placeholder: "Enter usage description",
-            },
-          ]}
-        />
-          {/* App Usage & Ownership Card */}
-          <EditableCard
-            title="App Usage & Ownership"
-            icon={<Users className="h-5 w-5 text-primary-text" />}
-            isEditing={isEditMode}
-            onUpdate={(updates) => handleFieldChange(updates)}
-            appName={app.name}
-            userInfo={userInfo}
-            fields={[
-              {
-                label: "DEPARTMENT",
-                value: editedFields.department ?? (app.department || ""),
-                field: "department",
-                type: "input",
-                placeholder: "Enter department",
-              },
-              {
-                label: "OWNER",
-                value: editedFields.owner ?? (app.owner || ""),
-                field: "owner",
-                type: "input",
-                placeholder: "Enter owner name",
-              },
-              {
-                label: "ACCESS POLICY & NOTES",
-                value: editedFields.comment ?? (app.comment || ""),
-                field: "comment",
-                type: "textarea",
-                placeholder: "Add access policy and notes",
-              },
-              {
-                label: "WHAT'S THE APP USED FOR",
-                value: editedFields.usageDescription ?? (app.usageDescription || ""),
-                field: "usageDescription",
-                type: "textarea",
-                placeholder: "Enter usage description",
-              },
-            ]}
-          />
-
-          {/* Vendor Files & Notes Card */}
-          <EditableCard
-            title="Vendor Files and Notes"
-            icon={<FileText className="h-5 w-5 text-primary-text" />}
-            isEditing={isEditMode}
-            onUpdate={handleFieldChange}
-            appName={app.name}
-            userInfo={userInfo}
-            vendorFiles={vendorFiles}
-            onVendorFilesChange={handleVendorFilesChange}
-            fields={[]}
-          />
-        </div>
-
-        {/* Right Column */}
-        <div className="space-y-6">
-          {/* App Management Card */}
-          <EditableCard
-            title="App Management"
-            icon={<Link className="h-5 w-5 text-primary-text" />}
-            isEditing={isEditMode}
-            onUpdate={(updates) => handleFieldChange(updates)}
-            appName={app.name}
-            userInfo={userInfo}
-            fields={[
-              {
-                label: "STITCHFLOW CONNECTION STATUS",
-                value: editedFields.stitchflowStatus ?? (app.stitchflowStatus || ""),
-                field: "stitchflowStatus",
-                type: "select",
-                placeholder: "Select connection status",
-                options: [
-                  { value: "Yes - API", label: "Yes - API" },
-                  { value: "Yes - CSV Sync", label: "Yes - CSV Sync" },
-                  { value: "Not connected", label: "Not connected" },
-                ],
-              },
-              {
-                label: "APP TIER",
-                value: editedFields.appTier ?? (app.appTier || ""),
-                field: "appTier",
-                type: "select",
-                placeholder: "Select app tier",
-                options: [
-                  { value: "Tier 1", label: "Tier 1" },
-                  { value: "Tier 2", label: "Tier 2" },
-                  { value: "Tier 3", label: "Tier 3" },
-                ],
-              },
-              {
-                label: "MANAGED STATUS",
-                value: editedFields.managedStatus ?? (app.managedStatus || ""),
-                field: "managedStatus",
-                type: "select",
-                placeholder: "Select managed status",
-                options: [
-                  { value: "Managed", label: "Managed" },
-                  { value: "Unmanaged", label: "Unmanaged" },
-                  { value: "Newly discovered", label: "Newly discovered" }
-                ],
-              }
-            ]}
-          />
-
           {/* License & Renewal Card */}
-        <EditableCard
-          title="License & Renewal"
-          icon={<CreditCard className="h-5 w-5 text-primary-text" />}
-          isEditing={isEditMode}
-          onUpdate={(updates) => handleFieldChange(updates)}
-          appName={app.name}
-          userInfo={userInfo}
-          fields={[
-            {
-              label: "BILLING FREQUENCY/CYCLE",
-              value: editedFields.billingFrequency ?? (app.billingFrequency || ""),
-              field: "billingFrequency",
-              type: "select",
-              placeholder: "Select billing frequency",
-              options: [
-                { value: "Annual Plan", label: "Annual Plan" },
-                { value: "Monthly Plan", label: "Monthly Plan" },
-                { value: "Quarterly", label: "Quarterly" },
-                { value: "Usage Based", label: "Usage Based" },
-                { value: "Other", label: "Other" },
-              ],
-            },
-            {
-              label: "RENEWAL TYPE",
-              value: editedFields.renewalType ?? (app.renewalType || ""),
-              field: "renewalType",
-              type: "select",
-              placeholder: "Select renewal type",
-              options: [
-                { value: "Auto Renewal", label: "Auto Renewal" },
-                { value: "Manual Renewal", label: "Manual Renewal" },
-                { value: "Perpetual Renewal", label: "Perpetual Renewal" },
-              ],
-            },
-            {
-              label: "BILLING OWNER",
-              value: editedFields.billingOwner ?? (app.billingOwner || ""),
-              field: "billingOwner",
-              type: "input",
-              placeholder: "Enter billing owner name",
-            },
-            {
-              label: "PURCHASE CATEGORY",
-              value: editedFields.purchaseCategory ?? (app.purchaseCategory || ""),
-              field: "purchaseCategory",
-              type: "select",
-              placeholder: "Select purchase category",
-              options: [
-                { value: "Software", label: "Software" },
-                { value: "Services", label: "Services" },
-                { value: "Add-on", label: "Add-on" },
-                { value: "Infrastructure", label: "Infrastructure" },
-                { value: "Hardware", label: "Hardware" },
-                { value: "Others", label: "Others" },
-              ],
-            },
-            {
-              label: "OPT-OUT DATE",
-              value: editedFields.optOutDate ?? (app.optOutDate || ""),
-              field: "optOutDate",
-              type: "date",
-              placeholder: "Select opt-out deadline date",
-            },
-            {
-              label: "OPT-OUT PERIOD (DAYS)",
-              value: editedFields.optOutPeriod !== undefined ? String(editedFields.optOutPeriod || "") : String(app.optOutPeriod || ""),
-              field: "optOutPeriod",
-              type: "input",
-              placeholder: "Enter number of days for opt-out period",
-            },
-            {
-              label: "VENDOR/CONTRACT STATUS",
-              value: editedFields.vendorContractStatus ?? (app.vendorContractStatus || ""),
-              field: "vendorContractStatus",
-              type: "select",
-              placeholder: "Select vendor/contract status",
-              options: [
-                { value: "Active", label: "Active" },
-                { value: "Inactive", label: "Inactive" },
-              ],
-            },
-            {
-              label: "PAYMENT METHOD",
-              value: editedFields.paymentMethod ?? (app.paymentMethod || ""),
-              field: "paymentMethod",
-              type: "select",
-              placeholder: "Select payment method",
-              options: [
-                { value: "Company Credit Card", label: "Company Credit Card" },
-                { value: "E-Check", label: "E-Check" },
-                { value: "Wire", label: "Wire" },
-                { value: "Accounts Payable", label: "Accounts Payable" },
-              ],
-            },
-            {
-              label: "PAYMENT TERMS",
-              value: editedFields.paymentTerms ?? (app.paymentTerms || ""),
-              field: "paymentTerms",
-              type: "select",
-              placeholder: "Select payment terms",
-              options: [
-                { value: "Net 30", label: "Net 30" },
-                { value: "Due Upon Receipt", label: "Due Upon Receipt" },
-                { value: "2/10 Net 30", label: "2/10 Net 30" },
-                { value: "Partial Payment", label: "Partial Payment" },
-              ],
-            },
-            {
-              label: "BUDGET SOURCE",
-              value: editedFields.budgetSource ?? (app.budgetSource || ""),
-              field: "budgetSource",
-              type: "input",
-              placeholder: "Enter budget source (e.g., Legal, Finance, Tech)",
-            },
-            {
-              label: "RENEWAL DATE",
-              value: editedFields.renewalDate ?? (app.renewalDate || ""),
-              field: "renewalDate",
-              type: "date",
-              placeholder: "Select renewal date",
-            },
-            {
-              label: "PLAN LIMIT",
-              value: editedFields.planLimit ?? (app.planLimit || ""),
-              field: "planLimit",
-              type: "input",
-              placeholder: "Enter plan limit",
-            },
-            {
-              label: "LICENSES USED",
-              value: editedFields.licensesUsed !== undefined ? String(editedFields.licensesUsed || "") : String(app.licensesUsed || ""),
-              field: "licensesUsed",
-              type: "input",
-              placeholder: "Enter number of licenses used",
-            },
-            {
-              label: "PLAN REFERENCE",
-              value: editedFields.planReference ?? (app.planReference || ""),
-              field: "planReference",
-              type: "input",
-              placeholder: "Enter plan reference",
-            },
-            {
-              label: "COST PER USER (PER MONTH)",
-              value: editedFields.costPerUser ?? (app.costPerUser || ""),
-              field: "costPerUser",
-              type: "currency",
-              placeholder: "Enter cost per user",
-            },
-            {
-              label: "CONTRACT URL",
-              value: editedFields.contractUrl ?? (app.contractUrl || ""),
-              field: "contractUrl",
-              type: "file-url",
-              placeholder: "Upload contract or enter URL",
-            },
-          ]}
-        />
+          <EditableCard
+            title="License & Renewal"
+            icon={<CreditCard className="h-5 w-5 text-primary-text" />}
+            isEditing={isEditMode}
+            onUpdate={(updates) => handleFieldChange(updates)}
+            appName={app.name}
+            userInfo={userInfo}
+            fields={[
+              {
+                label: "BILLING FREQUENCY/CYCLE",
+                value: editedFields.billingFrequency ?? (app.billingFrequency || ""),
+                field: "billingFrequency",
+                type: "select",
+                placeholder: "Select billing frequency",
+                options: [
+                  { value: "Annual Plan", label: "Annual Plan" },
+                  { value: "Monthly Plan", label: "Monthly Plan" },
+                  { value: "Quarterly", label: "Quarterly" },
+                  { value: "Usage Based", label: "Usage Based" },
+                  { value: "Other", label: "Other" },
+                ],
+              },
+              {
+                label: "RENEWAL TYPE",
+                value: editedFields.renewalType ?? (app.renewalType || ""),
+                field: "renewalType",
+                type: "select",
+                placeholder: "Select renewal type",
+                options: [
+                  { value: "Auto Renewal", label: "Auto Renewal" },
+                  { value: "Manual Renewal", label: "Manual Renewal" },
+                  { value: "Perpetual Renewal", label: "Perpetual Renewal" },
+                ],
+              },
+              {
+                label: "BILLING OWNER",
+                value: editedFields.billingOwner ?? (app.billingOwner || ""),
+                field: "billingOwner",
+                type: "input",
+                placeholder: "Enter billing owner name",
+              },
+              {
+                label: "PURCHASE CATEGORY",
+                value: editedFields.purchaseCategory ?? (app.purchaseCategory || ""),
+                field: "purchaseCategory",
+                type: "select",
+                placeholder: "Select purchase category",
+                options: [
+                  { value: "Software", label: "Software" },
+                  { value: "Services", label: "Services" },
+                  { value: "Add-on", label: "Add-on" },
+                  { value: "Infrastructure", label: "Infrastructure" },
+                  { value: "Hardware", label: "Hardware" },
+                  { value: "Others", label: "Others" },
+                ],
+              },
+              {
+                label: "OPT-OUT DATE",
+                value: editedFields.optOutDate ?? (app.optOutDate || ""),
+                field: "optOutDate",
+                type: "date",
+                placeholder: "Select opt-out deadline date",
+              },
+              {
+                label: "OPT-OUT PERIOD (DAYS)",
+                value: editedFields.optOutPeriod !== undefined ? String(editedFields.optOutPeriod || "") : String(app.optOutPeriod || ""),
+                field: "optOutPeriod",
+                type: "input",
+                placeholder: "Enter number of days for opt-out period",
+              },
+              {
+                label: "VENDOR/CONTRACT STATUS",
+                value: editedFields.vendorContractStatus ?? (app.vendorContractStatus || ""),
+                field: "vendorContractStatus",
+                type: "select",
+                placeholder: "Select vendor/contract status",
+                options: [
+                  { value: "Active", label: "Active" },
+                  { value: "Inactive", label: "Inactive" },
+                ],
+              },
+              {
+                label: "PAYMENT METHOD",
+                value: editedFields.paymentMethod ?? (app.paymentMethod || ""),
+                field: "paymentMethod",
+                type: "select",
+                placeholder: "Select payment method",
+                options: [
+                  { value: "Company Credit Card", label: "Company Credit Card" },
+                  { value: "E-Check", label: "E-Check" },
+                  { value: "Wire", label: "Wire" },
+                  { value: "Accounts Payable", label: "Accounts Payable" },
+                ],
+              },
+              {
+                label: "PAYMENT TERMS",
+                value: editedFields.paymentTerms ?? (app.paymentTerms || ""),
+                field: "paymentTerms",
+                type: "select",
+                placeholder: "Select payment terms",
+                options: [
+                  { value: "Net 30", label: "Net 30" },
+                  { value: "Due Upon Receipt", label: "Due Upon Receipt" },
+                  { value: "2/10 Net 30", label: "2/10 Net 30" },
+                  { value: "Partial Payment", label: "Partial Payment" },
+                ],
+              },
+              {
+                label: "BUDGET SOURCE",
+                value: editedFields.budgetSource ?? (app.budgetSource || ""),
+                field: "budgetSource",
+                type: "input",
+                placeholder: "Enter budget source (e.g., Legal, Finance, Tech)",
+              },
+              {
+                label: "RENEWAL DATE",
+                value: editedFields.renewalDate ?? (app.renewalDate || ""),
+                field: "renewalDate",
+                type: "date",
+                placeholder: "Select renewal date",
+              },
+              {
+                label: "PLAN LIMIT",
+                value: editedFields.planLimit ?? (app.planLimit || ""),
+                field: "planLimit",
+                type: "input",
+                placeholder: "Enter plan limit",
+              },
+              {
+                label: "LICENSES USED",
+                value: editedFields.licensesUsed !== undefined ? String(editedFields.licensesUsed || "") : String(app.licensesUsed || ""),
+                field: "licensesUsed",
+                type: "input",
+                placeholder: "Enter number of licenses used",
+              },
+              {
+                label: "PLAN REFERENCE",
+                value: editedFields.planReference ?? (app.planReference || ""),
+                field: "planReference",
+                type: "input",
+                placeholder: "Enter plan reference",
+              },
+              {
+                label: "COST PER USER (PER MONTH)",
+                value: editedFields.costPerUser ?? (app.costPerUser || ""),
+                field: "costPerUser",
+                type: "currency",
+                placeholder: "Enter cost per user",
+              },
+              {
+                label: "CONTRACT URL",
+                value: editedFields.contractUrl ?? (app.contractUrl || ""),
+                field: "contractUrl",
+                type: "file-url",
+                placeholder: "Upload contract or enter URL",
+              },
+            ]}
+          />
         </div>
       </div>
     </div>
