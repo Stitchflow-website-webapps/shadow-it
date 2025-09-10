@@ -139,6 +139,8 @@ function SimpleAddAppsDialog({ open, onOpenChange, onAddApps, existingApps, orgS
         renewalDate: "",
         contractUrl: "",
         licensesUsed: null,
+        vendorFiles: [],
+        vendorFilesLimit: 0
         usageDescription: "",
         // New fields
         renewalType: "",
@@ -505,6 +507,109 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
             ]}
           />
 
+          {/* App Usage & Ownership Card */}
+          <EditableCard
+            title="App Usage & Ownership"
+            icon={<Users className="h-5 w-5 text-primary-text" />}
+            isEditing={isEditMode}
+            onUpdate={(updates) => handleFieldChange(updates)}
+            appName={app.name}
+            userInfo={userInfo}
+            fields={[
+              {
+                label: "DEPARTMENT",
+                value: editedFields.department ?? (app.department || ""),
+                field: "department",
+                type: "input",
+                placeholder: "Enter department",
+              },
+              {
+                label: "OWNER",
+                value: editedFields.owner ?? (app.owner || ""),
+                field: "owner",
+                type: "input",
+                placeholder: "Enter owner name",
+              },
+              {
+                label: "ACCESS POLICY & NOTES",
+                value: editedFields.comment ?? (app.comment || ""),
+                field: "comment",
+                type: "textarea",
+                placeholder: "Add access policy and notes",
+              },
+              {
+                label: "WHAT'S THE APP USED FOR",
+                value: editedFields.usageDescription ?? (app.usageDescription || ""),
+                field: "usageDescription",
+                type: "textarea",
+                placeholder: "Enter usage description",
+              },
+            ]}
+          />
+
+          {/* Vendor Files & Notes Card */}
+          <EditableCard
+            title="Vendor Files and Notes"
+            icon={<FileText className="h-5 w-5 text-primary-text" />}
+            isEditing={isEditMode}
+            onUpdate={handleFieldChange}
+            appName={app.name}
+            userInfo={userInfo}
+            vendorFiles={vendorFiles}
+            onVendorFilesChange={handleVendorFilesChange}
+            fields={[]}
+          />
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-6">
+          {/* App Management Card */}
+          <EditableCard
+            title="App Management"
+            icon={<Link className="h-5 w-5 text-primary-text" />}
+            isEditing={isEditMode}
+            onUpdate={(updates) => handleFieldChange(updates)}
+            appName={app.name}
+            userInfo={userInfo}
+            fields={[
+              {
+                label: "STITCHFLOW CONNECTION STATUS",
+                value: editedFields.stitchflowStatus ?? (app.stitchflowStatus || ""),
+                field: "stitchflowStatus",
+                type: "select",
+                placeholder: "Select connection status",
+                options: [
+                  { value: "Yes - API", label: "Yes - API" },
+                  { value: "Yes - CSV Sync", label: "Yes - CSV Sync" },
+                  { value: "Not connected", label: "Not connected" },
+                ],
+              },
+              {
+                label: "APP TIER",
+                value: editedFields.appTier ?? (app.appTier || ""),
+                field: "appTier",
+                type: "select",
+                placeholder: "Select app tier",
+                options: [
+                  { value: "Tier 1", label: "Tier 1" },
+                  { value: "Tier 2", label: "Tier 2" },
+                  { value: "Tier 3", label: "Tier 3" },
+                ],
+              },
+              {
+                label: "MANAGED STATUS",
+                value: editedFields.managedStatus ?? (app.managedStatus || ""),
+                field: "managedStatus",
+                type: "select",
+                placeholder: "Select managed status",
+                options: [
+                  { value: "Managed", label: "Managed" },
+                  { value: "Unmanaged", label: "Unmanaged" },
+                  { value: "Newly discovered", label: "Newly discovered" }
+                ],
+              }
+            ]}
+          />
         {/* App Management Card */}
         <EditableCard
           title="App Management"
