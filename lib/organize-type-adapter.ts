@@ -14,9 +14,9 @@ export function organizeAppToApp(organizeApp: OrganizeApp): App {
     stitchflowStatus: organizeApp.stitchflow_status || '',
     appTier: organizeApp.app_tier || '',
     department: organizeApp.department || '',
-    owner: organizeApp.owner || '',
+    technicalOwner: organizeApp.technical_owner || '',
     comment: organizeApp.comment || '',
-    appPlan: organizeApp.app_plan || '',
+    billingFrequency: organizeApp.billing_frequency || '',
     planLimit: organizeApp.plan_limit || '',
     planReference: organizeApp.plan_reference || '',
     costPerUser: organizeApp.cost_per_user || '',
@@ -26,6 +26,16 @@ export function organizeAppToApp(organizeApp: OrganizeApp): App {
     vendorFilesLimit: organizeApp.vendor_files ? organizeApp.vendor_files.length : 0,
     licensesUsed: organizeApp.licenses_used,
     usageDescription: organizeApp.usage_description || '',
+    // New fields
+    renewalType: organizeApp.renewal_type || '',
+    billingOwner: organizeApp.billing_owner || '',
+    purchaseCategory: organizeApp.purchase_category || '',
+    optOutDate: organizeApp.opt_out_date || '',
+    optOutPeriod: organizeApp.opt_out_period,
+    vendorContractStatus: organizeApp.vendor_contract_status || '',
+    paymentMethod: organizeApp.payment_method || '',
+    paymentTerms: organizeApp.payment_terms || '',
+    budgetSource: organizeApp.budget_source || '',
   }
 }
 
@@ -36,7 +46,7 @@ export function appToOrganizeApp(app: App, orgId: string): Partial<OrganizeApp> 
     name: app.name,
     department: app.department || null,
     licenses_used: app.licensesUsed,
-    owner: app.owner,
+    technical_owner: app.technicalOwner || null,
     comment: app.comment || null,
     sso_enforced: app.ssoEnforced || null,
     managed_status: app.managedStatus,
@@ -44,7 +54,7 @@ export function appToOrganizeApp(app: App, orgId: string): Partial<OrganizeApp> 
     stitchflow_status: app.stitchflowStatus || null,
     app_tier: app.appTier || null,
     deprovisioning: app.deprovisioning || null,
-    app_plan: app.appPlan || null,
+    billing_frequency: app.billingFrequency || null,
     plan_limit: app.planLimit || null,
     plan_reference: app.planReference || null,
     cost_per_user: app.costPerUser || null,
@@ -53,5 +63,15 @@ export function appToOrganizeApp(app: App, orgId: string): Partial<OrganizeApp> 
     vendor_files: app.vendorFiles || null,
     vendor_files_limit: app.vendorFiles ? app.vendorFiles.length : 0,
     usage_description: app.usageDescription || null,
+    // New fields
+    renewal_type: app.renewalType || null,
+    billing_owner: app.billingOwner || null,
+    purchase_category: app.purchaseCategory || null,
+    opt_out_date: app.optOutDate || null,
+    opt_out_period: app.optOutPeriod || null,
+    vendor_contract_status: app.vendorContractStatus || null,
+    payment_method: app.paymentMethod || null,
+    payment_terms: app.paymentTerms || null,
+    budget_source: app.budgetSource || null,
   }
 }
