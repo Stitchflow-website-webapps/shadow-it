@@ -372,6 +372,84 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
       const numValue = processedFields.licensesUsed === '' ? null : parseInt(processedFields.licensesUsed, 10)
       processedFields.licensesUsed = isNaN(numValue as number) ? null : numValue
     }
+
+    // Handle numeric conversion for optOutPeriod
+    if ('optOutPeriod' in processedFields && typeof processedFields.optOutPeriod === 'string') {
+      const numValue = processedFields.optOutPeriod === '' ? null : parseInt(processedFields.optOutPeriod, 10)
+      processedFields.optOutPeriod = isNaN(numValue as number) ? null : numValue
+    }
+
+    // Auto-calculate opt-out date/period based on renewal date
+    const currentFields = { ...app, ...editedFields, ...processedFields }
+    
+    // If renewal date is set and user changed opt-out date, calculate opt-out period
+    if (currentFields.renewalDate && 'optOutDate' in processedFields && processedFields.optOutDate) {
+      try {
+        const renewalDate = new Date(currentFields.renewalDate)
+        const optOutDate = new Date(processedFields.optOutDate)
+        
+        if (!isNaN(renewalDate.getTime()) && !isNaN(optOutDate.getTime())) {
+          const timeDiff = renewalDate.getTime() - optOutDate.getTime()
+          const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24))
+          
+          if (daysDiff >= 0) {
+            processedFields.optOutPeriod = daysDiff
+          }
+        }
+      } catch (error) {
+        console.error('Error calculating opt-out period:', error)
+      }
+    }
+    
+    // If renewal date is set and user changed opt-out period, calculate opt-out date
+    if (currentFields.renewalDate && 'optOutPeriod' in processedFields && processedFields.optOutPeriod !== null && processedFields.optOutPeriod !== undefined) {
+      try {
+        const renewalDate = new Date(currentFields.renewalDate)
+        const optOutPeriod = typeof processedFields.optOutPeriod === 'string' ? 
+          parseInt(processedFields.optOutPeriod, 10) : processedFields.optOutPeriod
+        
+        if (!isNaN(renewalDate.getTime()) && !isNaN(optOutPeriod) && optOutPeriod >= 0) {
+          const optOutDate = new Date(renewalDate.getTime() - (optOutPeriod * 24 * 60 * 60 * 1000))
+          processedFields.optOutDate = optOutDate.toISOString().split('T')[0] // Format as YYYY-MM-DD
+        }
+      } catch (error) {
+        console.error('Error calculating opt-out date:', error)
+      }
+    }
+
+    // If renewal date changed and either opt-out date or period exists, recalculate the other
+    if ('renewalDate' in processedFields && processedFields.renewalDate) {
+      try {
+        const renewalDate = new Date(processedFields.renewalDate)
+        
+        if (!isNaN(renewalDate.getTime())) {
+          // If opt-out date exists, recalculate period
+          const optOutDate = currentFields.optOutDate
+          if (optOutDate && !('optOutDate' in processedFields)) {
+            const optOutDateObj = new Date(optOutDate)
+            if (!isNaN(optOutDateObj.getTime())) {
+              const timeDiff = renewalDate.getTime() - optOutDateObj.getTime()
+              const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24))
+              
+              if (daysDiff >= 0) {
+                processedFields.optOutPeriod = daysDiff
+              }
+            }
+          }
+          // If opt-out period exists, recalculate date
+          else if (currentFields.optOutPeriod !== null && currentFields.optOutPeriod !== undefined && !('optOutPeriod' in processedFields)) {
+            const optOutPeriod = currentFields.optOutPeriod
+            if (!isNaN(optOutPeriod) && optOutPeriod >= 0) {
+              const optOutDate = new Date(renewalDate.getTime() - (optOutPeriod * 24 * 60 * 60 * 1000))
+              processedFields.optOutDate = optOutDate.toISOString().split('T')[0]
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error recalculating opt-out values:', error)
+      }
+    }
+
     setEditedFields((prev) => ({ ...prev, ...processedFields }))
   }
 
@@ -620,18 +698,11 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
             userInfo={userInfo}
             fields={[
               {
-                label: "BILLING FREQUENCY/CYCLE",
-                value: editedFields.billingFrequency ?? (app.billingFrequency || ""),
-                field: "billingFrequency",
-                type: "select",
-                placeholder: "Select billing frequency",
-                options: [
-                  { value: "Annual Plan", label: "Annual Plan" },
-                  { value: "Monthly Plan", label: "Monthly Plan" },
-                  { value: "Quarterly", label: "Quarterly" },
-                  { value: "Usage Based", label: "Usage Based" },
-                  { value: "Other", label: "Other" },
-                ],
+                label: "RENEWAL DATE",
+                value: editedFields.renewalDate ?? (app.renewalDate || ""),
+                field: "renewalDate",
+                type: "date",
+                placeholder: "Select renewal date",
               },
               {
                 label: "RENEWAL TYPE",
@@ -646,26 +717,46 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
                 ],
               },
               {
-                label: "BILLING OWNER",
-                value: editedFields.billingOwner ?? (app.billingOwner || ""),
-                field: "billingOwner",
-                type: "input",
-                placeholder: "Enter billing owner name",
+                label: "BILLING FREQUENCY/CYCLE",
+                value: editedFields.billingFrequency ?? (app.billingFrequency || ""),
+                field: "billingFrequency",
+                type: "select",
+                placeholder: "Select billing frequency",
+                options: [
+                  { value: "Annual Plan", label: "Annual Plan" },
+                  { value: "Monthly Plan", label: "Monthly Plan" },
+                  { value: "Quarterly", label: "Quarterly" },
+                  { value: "Usage Based", label: "Usage Based" },
+                  { value: "Other", label: "Other" },
+                ],
               },
               {
-                label: "PURCHASE CATEGORY",
-                value: editedFields.purchaseCategory ?? (app.purchaseCategory || ""),
-                field: "purchaseCategory",
-                type: "select",
-                placeholder: "Select purchase category",
-                options: [
-                  { value: "Software", label: "Software" },
-                  { value: "Services", label: "Services" },
-                  { value: "Add-on", label: "Add-on" },
-                  { value: "Infrastructure", label: "Infrastructure" },
-                  { value: "Hardware", label: "Hardware" },
-                  { value: "Others", label: "Others" },
-                ],
+                label: "COST PER USER (PER MONTH)",
+                value: editedFields.costPerUser ?? (app.costPerUser || ""),
+                field: "costPerUser",
+                type: "currency",
+                placeholder: "Enter cost per user",
+              },
+              {
+                label: "PLAN LIMIT",
+                value: editedFields.planLimit ?? (app.planLimit || ""),
+                field: "planLimit",
+                type: "input",
+                placeholder: "Enter plan limit",
+              },
+              {
+                label: "LICENSES USED",
+                value: editedFields.licensesUsed !== undefined ? String(editedFields.licensesUsed || "") : String(app.licensesUsed || ""),
+                field: "licensesUsed",
+                type: "input",
+                placeholder: "Enter number of licenses used",
+              },
+              {
+                label: "PLAN REFERENCE",
+                value: editedFields.planReference ?? (app.planReference || ""),
+                field: "planReference",
+                type: "input",
+                placeholder: "Enter plan reference",
               },
               {
                 label: "OPT-OUT DATE",
@@ -693,6 +784,20 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
                 ],
               },
               {
+                label: "BILLING OWNER",
+                value: editedFields.billingOwner ?? (app.billingOwner || ""),
+                field: "billingOwner",
+                type: "input",
+                placeholder: "Enter billing owner name",
+              },
+              {
+                label: "BUDGET SOURCE",
+                value: editedFields.budgetSource ?? (app.budgetSource || ""),
+                field: "budgetSource",
+                type: "input",
+                placeholder: "Enter budget source (e.g., Legal, Finance, Tech)",
+              },
+              {
                 label: "PAYMENT METHOD",
                 value: editedFields.paymentMethod ?? (app.paymentMethod || ""),
                 field: "paymentMethod",
@@ -703,6 +808,7 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
                   { value: "E-Check", label: "E-Check" },
                   { value: "Wire", label: "Wire" },
                   { value: "Accounts Payable", label: "Accounts Payable" },
+                  { value: "Others", label: "Others" },
                 ],
               },
               {
@@ -716,49 +822,23 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
                   { value: "Due Upon Receipt", label: "Due Upon Receipt" },
                   { value: "2/10 Net 30", label: "2/10 Net 30" },
                   { value: "Partial Payment", label: "Partial Payment" },
+                  { value: "Others", label: "Others" },
                 ],
               },
               {
-                label: "BUDGET SOURCE",
-                value: editedFields.budgetSource ?? (app.budgetSource || ""),
-                field: "budgetSource",
-                type: "input",
-                placeholder: "Enter budget source (e.g., Legal, Finance, Tech)",
-              },
-              {
-                label: "RENEWAL DATE",
-                value: editedFields.renewalDate ?? (app.renewalDate || ""),
-                field: "renewalDate",
-                type: "date",
-                placeholder: "Select renewal date",
-              },
-              {
-                label: "PLAN LIMIT",
-                value: editedFields.planLimit ?? (app.planLimit || ""),
-                field: "planLimit",
-                type: "input",
-                placeholder: "Enter plan limit",
-              },
-              {
-                label: "LICENSES USED",
-                value: editedFields.licensesUsed !== undefined ? String(editedFields.licensesUsed || "") : String(app.licensesUsed || ""),
-                field: "licensesUsed",
-                type: "input",
-                placeholder: "Enter number of licenses used",
-              },
-              {
-                label: "PLAN REFERENCE",
-                value: editedFields.planReference ?? (app.planReference || ""),
-                field: "planReference",
-                type: "input",
-                placeholder: "Enter plan reference",
-              },
-              {
-                label: "COST PER USER (PER MONTH)",
-                value: editedFields.costPerUser ?? (app.costPerUser || ""),
-                field: "costPerUser",
-                type: "currency",
-                placeholder: "Enter cost per user",
+                label: "PURCHASE CATEGORY",
+                value: editedFields.purchaseCategory ?? (app.purchaseCategory || ""),
+                field: "purchaseCategory",
+                type: "select",
+                placeholder: "Select purchase category",
+                options: [
+                  { value: "Software", label: "Software" },
+                  { value: "Services", label: "Services" },
+                  { value: "Add-on", label: "Add-on" },
+                  { value: "Infrastructure", label: "Infrastructure" },
+                  { value: "Hardware", label: "Hardware" },
+                  { value: "Others", label: "Others" },
+                ],
               },
               {
                 label: "CONTRACT URL",
