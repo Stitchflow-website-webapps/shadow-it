@@ -130,15 +130,26 @@ function SimpleAddAppsDialog({ open, onOpenChange, onAddApps, existingApps, orgS
         stitchflowStatus: appData?.connectionStatus || "Yes - CSV Sync",
         appTier: "",
         department: "",
-        owner: "",
+        technicalOwner: "",
         comment: "",
-        appPlan: "",
+        billingFrequency: "",
         planLimit: "",
         planReference: "",
         costPerUser: "",
         renewalDate: "",
         contractUrl: "",
         licensesUsed: null,
+        usageDescription: "",
+        // New fields
+        renewalType: "",
+        billingOwner: "",
+        purchaseCategory: "",
+        optOutDate: "",
+        optOutPeriod: null,
+        vendorContractStatus: "",
+        paymentMethod: "",
+        paymentTerms: "",
+        budgetSource: "",
       }
     })
 
@@ -157,7 +168,7 @@ function SimpleAddAppsDialog({ open, onOpenChange, onAddApps, existingApps, orgS
     onOpenChange(false)
   }
 
-  if (loading) {
+  if (loading) { 
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl h-[600px]">
@@ -396,7 +407,7 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-primary-text">{app.name}</h2>
-          <p className="text-sm text-gray-500 mt-1">{editedFields.appPlan ?? (app.appPlan || "—")}</p>
+          <p className="text-sm text-gray-500 mt-1">{editedFields.billingFrequency ?? (app.billingFrequency || "—")}</p>
         </div>
         <div className="flex items-center gap-2">
           {isEditMode ? (
@@ -547,11 +558,11 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
               placeholder: "Enter department",
             },
             {
-              label: "OWNER",
-              value: editedFields.owner ?? (app.owner || ""),
-              field: "owner",
+              label: "TECHNICAL OWNER",
+              value: editedFields.technicalOwner ?? (app.technicalOwner || ""),
+              field: "technicalOwner",
               type: "input",
-              placeholder: "Enter owner name",
+              placeholder: "Enter technical owner name",
             },
             {
               label: "ACCESS POLICY & NOTES",
@@ -580,11 +591,11 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
           userInfo={userInfo}
           fields={[
             {
-              label: "RENEWAL TYPE",
-              value: editedFields.appPlan ?? (app.appPlan || ""),
-              field: "appPlan",
+              label: "BILLING FREQUENCY/CYCLE",
+              value: editedFields.billingFrequency ?? (app.billingFrequency || ""),
+              field: "billingFrequency",
               type: "select",
-              placeholder: "Select renewal type",
+              placeholder: "Select billing frequency",
               options: [
                 { value: "Annual Plan", label: "Annual Plan" },
                 { value: "Monthly Plan", label: "Monthly Plan" },
@@ -592,6 +603,98 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
                 { value: "Usage Based", label: "Usage Based" },
                 { value: "Other", label: "Other" },
               ],
+            },
+            {
+              label: "RENEWAL TYPE",
+              value: editedFields.renewalType ?? (app.renewalType || ""),
+              field: "renewalType",
+              type: "select",
+              placeholder: "Select renewal type",
+              options: [
+                { value: "Auto Renewal", label: "Auto Renewal" },
+                { value: "Manual Renewal", label: "Manual Renewal" },
+                { value: "Perpetual Renewal", label: "Perpetual Renewal" },
+              ],
+            },
+            {
+              label: "BILLING OWNER",
+              value: editedFields.billingOwner ?? (app.billingOwner || ""),
+              field: "billingOwner",
+              type: "input",
+              placeholder: "Enter billing owner name",
+            },
+            {
+              label: "PURCHASE CATEGORY",
+              value: editedFields.purchaseCategory ?? (app.purchaseCategory || ""),
+              field: "purchaseCategory",
+              type: "select",
+              placeholder: "Select purchase category",
+              options: [
+                { value: "Software", label: "Software" },
+                { value: "Services", label: "Services" },
+                { value: "Add-on", label: "Add-on" },
+                { value: "Infrastructure", label: "Infrastructure" },
+                { value: "Hardware", label: "Hardware" },
+                { value: "Others", label: "Others" },
+              ],
+            },
+            {
+              label: "OPT-OUT DATE",
+              value: editedFields.optOutDate ?? (app.optOutDate || ""),
+              field: "optOutDate",
+              type: "date",
+              placeholder: "Select opt-out deadline date",
+            },
+            {
+              label: "OPT-OUT PERIOD (DAYS)",
+              value: editedFields.optOutPeriod !== undefined ? String(editedFields.optOutPeriod || "") : String(app.optOutPeriod || ""),
+              field: "optOutPeriod",
+              type: "input",
+              placeholder: "Enter number of days for opt-out period",
+            },
+            {
+              label: "VENDOR/CONTRACT STATUS",
+              value: editedFields.vendorContractStatus ?? (app.vendorContractStatus || ""),
+              field: "vendorContractStatus",
+              type: "select",
+              placeholder: "Select vendor/contract status",
+              options: [
+                { value: "Active", label: "Active" },
+                { value: "Inactive", label: "Inactive" },
+              ],
+            },
+            {
+              label: "PAYMENT METHOD",
+              value: editedFields.paymentMethod ?? (app.paymentMethod || ""),
+              field: "paymentMethod",
+              type: "select",
+              placeholder: "Select payment method",
+              options: [
+                { value: "Company Credit Card", label: "Company Credit Card" },
+                { value: "E-Check", label: "E-Check" },
+                { value: "Wire", label: "Wire" },
+                { value: "Accounts Payable", label: "Accounts Payable" },
+              ],
+            },
+            {
+              label: "PAYMENT TERMS",
+              value: editedFields.paymentTerms ?? (app.paymentTerms || ""),
+              field: "paymentTerms",
+              type: "select",
+              placeholder: "Select payment terms",
+              options: [
+                { value: "Net 30", label: "Net 30" },
+                { value: "Due Upon Receipt", label: "Due Upon Receipt" },
+                { value: "2/10 Net 30", label: "2/10 Net 30" },
+                { value: "Partial Payment", label: "Partial Payment" },
+              ],
+            },
+            {
+              label: "BUDGET SOURCE",
+              value: editedFields.budgetSource ?? (app.budgetSource || ""),
+              field: "budgetSource",
+              type: "input",
+              placeholder: "Enter budget source (e.g., Legal, Finance, Tech)",
             },
             {
               label: "RENEWAL DATE",
