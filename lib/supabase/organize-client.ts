@@ -63,18 +63,7 @@ export interface OrganizeApp {
   payment_method: string | null
   payment_terms: string | null
   budget_source: string | null
-  vendor_files: VendorFile[] | null
-  vendor_files_limit: number | null // Count of uploaded vendor files (not the maximum allowed)
-  // New fields for License & Renewal
-  renewal_type: string | null
-  billing_owner: string | null
-  purchase_category: string | null
-  opt_out_date: string | null
-  opt_out_period: number | null
-  vendor_contract_status: string | null
-  payment_method: string | null
-  payment_terms: string | null
-  budget_source: string | null
+  app_plan: string | null
   org_id: string
   created_at: string
   updated_at: string
