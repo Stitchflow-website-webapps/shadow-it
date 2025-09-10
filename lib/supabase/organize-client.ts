@@ -63,6 +63,8 @@ export interface OrganizeApp {
   payment_method: string | null
   payment_terms: string | null
   budget_source: string | null
+  vendor_files: VendorFile[] | null
+  vendor_files_limit: number | null // Count of uploaded vendor files (not the maximum allowed)
   org_id: string
   created_at: string
   updated_at: string
