@@ -16,7 +16,7 @@ export function organizeAppToApp(organizeApp: OrganizeApp): App {
     department: organizeApp.department || '',
     technicalOwner: organizeApp.technical_owner || '',
     comment: organizeApp.comment || '',
-    appPlan: organizeApp.app_plan || '',
+    appPlan: organizeApp.billing_frequency || '', // app_plan was renamed to billing_frequency in DB
     billingFrequency: organizeApp.billing_frequency || '',
     planLimit: organizeApp.plan_limit || '',
     planReference: organizeApp.plan_reference || '',
@@ -49,7 +49,6 @@ export function appToOrganizeApp(app: App, orgId: string): Partial<OrganizeApp> 
     licenses_used: app.licensesUsed,
     technical_owner: app.technicalOwner || null,
     comment: app.comment || null,
-    app_plan: app.appPlan || null,
     sso_enforced: app.ssoEnforced || null,
     managed_status: app.managedStatus,
     org_id: orgId,

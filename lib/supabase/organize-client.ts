@@ -63,7 +63,6 @@ export interface OrganizeApp {
   payment_method: string | null
   payment_terms: string | null
   budget_source: string | null
-  app_plan: string | null
   org_id: string
   created_at: string
   updated_at: string
