@@ -28,6 +28,7 @@ const FILTER_FIELDS = [
   { value: 'renewalDate', label: 'Renewal Date', type: 'date' },
   { value: 'comment', label: 'Access Policy & Notes', type: 'limited_text' },
   { value: 'usageDescription', label: "App Usage", type: 'limited_text' },
+  { value: 'vendorFileLabels', label: 'Vendor File Label', type: 'limited_text' },
 ]
 
 // Helper function to get field configuration
@@ -125,6 +126,8 @@ export function applyFilters(apps: App[], filters: FilterCondition[], searchQuer
       app.renewalDate?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       app.contractUrl?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       app.usageDescription?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      // Vendor file labels search
+      (app.vendorFiles || []).some(file => file.label?.toLowerCase().includes(searchQuery.toLowerCase())) ||
       // License utilization status search
       (() => {
         const utilizationStatus = getLicenseUtilizationStatus(app.licensesUsed, app.planLimit || '');
@@ -258,6 +261,7 @@ function getAppFieldValue(app: App, field: string): string {
     case 'comment': return app.comment || ''
     case 'contractUrl': return app.contractUrl || ''
     case 'usageDescription': return app.usageDescription || ''
+    case 'vendorFileLabels': return (app.vendorFiles || []).map(file => file.label).filter(label => label.trim()).join(' ')
     default: return ''
   }
 }

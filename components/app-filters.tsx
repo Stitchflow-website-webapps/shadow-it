@@ -58,6 +58,7 @@ const FILTER_FIELDS = [
   { value: 'renewalDate', label: 'Renewal Date', type: 'date' },
   { value: 'comment', label: 'Access Policy & Notes', type: 'limited_text' },
   { value: 'usageDescription', label: "App Usage", type: 'limited_text' },
+  { value: 'vendorFileLabels', label: 'Vendor File Label', type: 'limited_text' },
 ]
 
 const getOperatorOptions = (fieldType: string) => {
