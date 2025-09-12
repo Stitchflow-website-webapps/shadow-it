@@ -256,11 +256,11 @@ export const TabbedRiskScoringView: React.FC<TabbedRiskScoringViewProps> = ({
     <div className="w-full">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-5 mb-6">
-          <TabsTrigger value="risk-scoring" className="text-xs">Risk Scoring</TabsTrigger>
-          <TabsTrigger value="ai-technology" className="text-xs">AI & Technology</TabsTrigger>
-          <TabsTrigger value="security-compliance" className="text-xs">Security & Compliance</TabsTrigger>
-          <TabsTrigger value="business-impact" className="text-xs">Business Impact & Risk</TabsTrigger>
-          <TabsTrigger value="performance-adoption" className="text-xs">Performance & Adoption</TabsTrigger>
+          <TabsTrigger value="risk-scoring" className="text-xs hover-override">Risk Scoring</TabsTrigger>
+          <TabsTrigger value="ai-technology" className="text-xs hover-override">AI & Technology</TabsTrigger>
+          <TabsTrigger value="security-compliance" className="text-xs hover-override">Security & Compliance</TabsTrigger>
+          <TabsTrigger value="business-impact" className="text-xs hover-override">Business Impact & Risk</TabsTrigger>
+          <TabsTrigger value="performance-adoption" className="text-xs hover-override">Performance & Adoption</TabsTrigger>
         </TabsList>
         
         <TabsContent value="risk-scoring" className="space-y-4">

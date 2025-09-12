@@ -259,7 +259,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'applications' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -286,7 +286,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'ai-risk-analysis' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -321,7 +321,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'organize-app-inbox' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -366,7 +366,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'email-notifications' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -393,7 +393,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'organization-settings' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -420,7 +420,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'app-inbox-settings' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -482,7 +482,7 @@ export default function Sidebar({
                             e.stopPropagation();
                             onSignOut();
                           }}
-                          className="h-5 w-5 p-0 bg-white hover:bg-red-50 text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 rounded-full shadow-md hover:shadow-lg transition-all duration-200"
+                          className="h-5 w-5 p-0 bg-white hover:bg-red-50 text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 rounded-full shadow-md hover:shadow-lg transition-all duration-200 hover-override"
                           title="Sign out"
                         >
                           <LogOut className="h-2.5 w-2.5" />
@@ -529,7 +529,7 @@ export default function Sidebar({
                               e.stopPropagation();
                               onSignOut();
                             }}
-                            className="h-6 w-6 p-0 hover:bg-red-50 hover:text-red-600 text-[#7B7481] transition-all duration-200 rounded-md flex-shrink-0"
+                            className="h-6 w-6 p-0 hover:bg-red-50 hover:text-red-600 text-[#7B7481] transition-all duration-200 rounded-md flex-shrink-0 hover-override"
                             title="Sign out"
                           >
                             <LogOut className="h-3 w-3" />

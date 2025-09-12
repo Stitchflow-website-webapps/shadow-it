@@ -82,6 +82,79 @@ const getDaysUntilRenewal = (renewalDate: string): number => {
   }
 }
 
+// Helper function to parse dates with current year default
+const parseSmartDate = (input: string): string => {
+  if (!input || input.trim() === '') return input
+
+  const trimmedInput = input.trim()
+  const currentYear = new Date().getFullYear()
+  
+  // If it's already a complete YYYY-MM-DD format, return as is
+  if (trimmedInput.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return trimmedInput
+  }
+
+  try {
+    // Create a date object from the input
+    let parsedDate = new Date(trimmedInput)
+    
+    // If the parsed date is valid but has year 2001 (browser default for missing year)
+    // or any year before 2000, update it to current year
+    if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() <= 2001) {
+      parsedDate.setFullYear(currentYear)
+    }
+    
+    // If we successfully parsed a date, return it in YYYY-MM-DD format
+    if (!isNaN(parsedDate.getTime())) {
+      return format(parsedDate, 'yyyy-MM-dd')
+    }
+  } catch (error) {
+    // If parsing fails, try some common patterns
+    
+    // Handle month names (e.g., "sep", "september", "sep 15")
+    const monthPatterns = [
+      { pattern: /^(jan|january)\s*(\d{1,2})?$/i, month: 0 },
+      { pattern: /^(feb|february)\s*(\d{1,2})?$/i, month: 1 },
+      { pattern: /^(mar|march)\s*(\d{1,2})?$/i, month: 2 },
+      { pattern: /^(apr|april)\s*(\d{1,2})?$/i, month: 3 },
+      { pattern: /^(may)\s*(\d{1,2})?$/i, month: 4 },
+      { pattern: /^(jun|june)\s*(\d{1,2})?$/i, month: 5 },
+      { pattern: /^(jul|july)\s*(\d{1,2})?$/i, month: 6 },
+      { pattern: /^(aug|august)\s*(\d{1,2})?$/i, month: 7 },
+      { pattern: /^(sep|september)\s*(\d{1,2})?$/i, month: 8 },
+      { pattern: /^(oct|october)\s*(\d{1,2})?$/i, month: 9 },
+      { pattern: /^(nov|november)\s*(\d{1,2})?$/i, month: 10 },
+      { pattern: /^(dec|december)\s*(\d{1,2})?$/i, month: 11 },
+    ]
+    
+    for (const { pattern, month } of monthPatterns) {
+      const match = trimmedInput.match(pattern)
+      if (match) {
+        const day = match[2] ? parseInt(match[2], 10) : 1
+        if (day >= 1 && day <= 31) {
+          const date = new Date(currentYear, month, day)
+          return format(date, 'yyyy-MM-dd')
+        }
+      }
+    }
+    
+    // Handle MM/DD or MM-DD patterns (default to current year)
+    const mmddPattern = /^(\d{1,2})[\/\-](\d{1,2})$/
+    const mmddMatch = trimmedInput.match(mmddPattern)
+    if (mmddMatch) {
+      const month = parseInt(mmddMatch[1], 10) - 1 // 0-indexed
+      const day = parseInt(mmddMatch[2], 10)
+      if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+        const date = new Date(currentYear, month, day)
+        return format(date, 'yyyy-MM-dd')
+      }
+    }
+  }
+  
+  // If all parsing attempts fail, return the original input
+  return input
+}
+
 // Vendor Files Content Component
 function VendorFilesContent({
   vendorFiles,
@@ -838,6 +911,13 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
                 <Input
                   value={currentValue === "unset" ? "" : currentValue}
                   onChange={(e) => handleFieldChange(field.field, e.target.value)}
+                  onBlur={(e) => {
+                    // Apply smart date parsing when user finishes typing
+                    const smartParsedDate = parseSmartDate(e.target.value)
+                    if (smartParsedDate !== e.target.value) {
+                      handleFieldChange(field.field, smartParsedDate)
+                    }
+                  }}
                   placeholder={field.placeholder}
                   className="h-11 bg-white border-gray-100 text-primary-text placeholder:text-gray-400 focus:border-bg-dark focus:ring-2 focus:ring-gray-200 transition-all"
                 />

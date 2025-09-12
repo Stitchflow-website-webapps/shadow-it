@@ -3284,7 +3284,7 @@ export default function ShadowITDashboard() {
                 </div>
 
                 {mainView === "list" ? (
-                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+                  <div className="page-zoom-90 bg-white rounded-xl border border-gray-100 shadow-sm">
                     <div className="p-6">
                       {/* Filter section */}
                       <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
@@ -3785,7 +3785,7 @@ export default function ShadowITDashboard() {
                 ) : (
                   // Replace the dashboard view section with the following:
                   // Dashboard view with charts - updated to match the requested charts
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="page-zoom-90 grid grid-cols-1 md:grid-cols-2 gap-6">
                     
                     {/* Application Distribution by Category */}
                     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
@@ -4495,19 +4495,19 @@ export default function ShadowITDashboard() {
 
                     <Tabs defaultValue={defaultTab} className="mb-6">
                       <TabsList className="bg-gray-100 p-1">
-                        <TabsTrigger value="users" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                        <TabsTrigger value="users" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white hover-override">
                         All Users
                         </TabsTrigger>
-                        <TabsTrigger value="scopes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                        <TabsTrigger value="scopes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white hover-override">
                         Scope User Groups
                         </TabsTrigger>
-                        <TabsTrigger value="ai-risk-scoring" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                        <TabsTrigger value="ai-risk-scoring" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white hover-override">
                         AI Risk Scoring
                         </TabsTrigger>
                         {/* <TabsTrigger value="similar" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
                           Similar Apps
                         </TabsTrigger> */}
-                        <TabsTrigger value="notes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                        <TabsTrigger value="notes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white hover-override">
                           Notes
                         </TabsTrigger>
                       </TabsList>
@@ -5147,18 +5147,39 @@ export default function ShadowITDashboard() {
           color: #374151;
         }
 
-        /* Button hover states */
-        button:hover {
+        /* Button hover states - more specific selectors to avoid conflicts */
+        button:not([data-sidebar]):not([data-tabs-trigger]):not(.hover-override):hover {
           background-color: rgba(0, 0, 0, 0.05);
         }
 
-        button[data-state="active"] {
+        button[data-state="active"]:not([data-sidebar]):not([data-tabs-trigger]) {
           background-color: #111827;
           color: white;
         }
 
-        button[data-state="active"]:hover {
+        button[data-state="active"]:not([data-sidebar]):not([data-tabs-trigger]):hover {
           background-color: #1f2937;
+        }
+
+        /* Fix sidebar hover conflicts */
+        [data-sidebar="menu-button"]:hover {
+          background-color: var(--sidebar-accent) !important;
+          color: var(--sidebar-accent-foreground) !important;
+        }
+
+        /* Fix tab trigger hover conflicts */
+        [data-tabs-trigger]:hover {
+          background-color: hsl(var(--muted)) !important;
+        }
+
+        [data-tabs-trigger][data-state="active"]:hover {
+          background-color: hsl(var(--background)) !important;
+        }
+
+        /* Ensure card hover states work properly */
+        .hover-card:hover {
+          background-color: hsl(var(--muted)/0.1) !important;
+          border-color: hsl(var(--border)) !important;
         }
       `}</style>
     </div>

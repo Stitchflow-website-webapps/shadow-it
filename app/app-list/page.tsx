@@ -379,61 +379,75 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
       processedFields.optOutPeriod = isNaN(numValue as number) ? null : numValue
     }
 
+    // Helper function to validate if a date string is complete and valid
+    const isValidCompleteDate = (dateString: string): boolean => {
+      if (!dateString || dateString.trim() === '') return false
+      // Check if it matches YYYY-MM-DD format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+      if (!dateRegex.test(dateString)) return false
+      
+      const date = new Date(dateString)
+      return !isNaN(date.getTime()) && dateString === date.toISOString().split('T')[0]
+    }
+
     // Auto-calculate opt-out date/period based on renewal date
     const currentFields = { ...app, ...editedFields, ...processedFields }
     
     // If renewal date is set and user changed opt-out date, calculate opt-out period
     if (currentFields.renewalDate && 'optOutDate' in processedFields && processedFields.optOutDate) {
-      try {
-        const renewalDate = new Date(currentFields.renewalDate)
-        const optOutDate = new Date(processedFields.optOutDate)
-        
-        if (!isNaN(renewalDate.getTime()) && !isNaN(optOutDate.getTime())) {
+      // Only calculate if both dates are valid and complete
+      if (isValidCompleteDate(currentFields.renewalDate) && isValidCompleteDate(processedFields.optOutDate)) {
+        try {
+          const renewalDate = new Date(currentFields.renewalDate)
+          const optOutDate = new Date(processedFields.optOutDate)
+          
           const timeDiff = renewalDate.getTime() - optOutDate.getTime()
           const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24))
           
           if (daysDiff >= 0) {
             processedFields.optOutPeriod = daysDiff
           }
+        } catch (error) {
+          console.error('Error calculating opt-out period:', error)
         }
-      } catch (error) {
-        console.error('Error calculating opt-out period:', error)
       }
     }
     
     // If renewal date is set and user changed opt-out period, calculate opt-out date
     if (currentFields.renewalDate && 'optOutPeriod' in processedFields && processedFields.optOutPeriod !== null && processedFields.optOutPeriod !== undefined) {
-      try {
-        const renewalDate = new Date(currentFields.renewalDate)
-        const optOutPeriod = typeof processedFields.optOutPeriod === 'string' ? 
-          parseInt(processedFields.optOutPeriod, 10) : processedFields.optOutPeriod
-        
-        if (!isNaN(renewalDate.getTime()) && !isNaN(optOutPeriod) && optOutPeriod >= 0) {
-          const optOutDate = new Date(renewalDate.getTime() - (optOutPeriod * 24 * 60 * 60 * 1000))
-          processedFields.optOutDate = optOutDate.toISOString().split('T')[0] // Format as YYYY-MM-DD
+      // Only calculate if renewal date is valid and complete, and opt-out period is a valid number
+      if (isValidCompleteDate(currentFields.renewalDate)) {
+        try {
+          const renewalDate = new Date(currentFields.renewalDate)
+          const optOutPeriod = typeof processedFields.optOutPeriod === 'string' ? 
+            parseInt(processedFields.optOutPeriod, 10) : processedFields.optOutPeriod
+          
+          if (!isNaN(optOutPeriod) && optOutPeriod >= 0) {
+            const optOutDate = new Date(renewalDate.getTime() - (optOutPeriod * 24 * 60 * 60 * 1000))
+            processedFields.optOutDate = optOutDate.toISOString().split('T')[0] // Format as YYYY-MM-DD
+          }
+        } catch (error) {
+          console.error('Error calculating opt-out date:', error)
         }
-      } catch (error) {
-        console.error('Error calculating opt-out date:', error)
       }
     }
 
     // If renewal date changed and either opt-out date or period exists, recalculate the other
     if ('renewalDate' in processedFields && processedFields.renewalDate) {
-      try {
-        const renewalDate = new Date(processedFields.renewalDate)
-        
-        if (!isNaN(renewalDate.getTime())) {
+      // Only recalculate if the new renewal date is valid and complete
+      if (isValidCompleteDate(processedFields.renewalDate)) {
+        try {
+          const renewalDate = new Date(processedFields.renewalDate)
+          
           // If opt-out date exists, recalculate period
           const optOutDate = currentFields.optOutDate
-          if (optOutDate && !('optOutDate' in processedFields)) {
+          if (optOutDate && !('optOutDate' in processedFields) && isValidCompleteDate(optOutDate)) {
             const optOutDateObj = new Date(optOutDate)
-            if (!isNaN(optOutDateObj.getTime())) {
-              const timeDiff = renewalDate.getTime() - optOutDateObj.getTime()
-              const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24))
-              
-              if (daysDiff >= 0) {
-                processedFields.optOutPeriod = daysDiff
-              }
+            const timeDiff = renewalDate.getTime() - optOutDateObj.getTime()
+            const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24))
+            
+            if (daysDiff >= 0) {
+              processedFields.optOutPeriod = daysDiff
             }
           }
           // If opt-out period exists, recalculate date
@@ -444,9 +458,9 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
               processedFields.optOutDate = optOutDate.toISOString().split('T')[0]
             }
           }
+        } catch (error) {
+          console.error('Error recalculating opt-out values:', error)
         }
-      } catch (error) {
-        console.error('Error recalculating opt-out values:', error)
       }
     }
 

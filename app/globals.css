@@ -10,6 +10,17 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  /* Mimic 90% browser zoom for specific views */
+  .page-zoom-90 {
+    zoom: 0.9; /* Chromium/WebKit */
+  }
+  @supports not (zoom: 0.9) {
+    .page-zoom-90 {
+      transform: scale(0.9);
+      transform-origin: top left;
+      width: calc(100% / 0.9);
+    }
+  }
 }
 
 @layer base {

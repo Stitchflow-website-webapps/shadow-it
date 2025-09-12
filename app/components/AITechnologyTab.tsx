@@ -28,7 +28,7 @@ export const AITechnologyTab: React.FC<AITechnologyTabProps> = ({ data }) => {
         <p className="text-sm text-gray-500 mb-6">Detailed information about AI & technology</p>
       </div>
       
-      <Card className="border-gray-200">
+      <Card className="border-gray-200 hover-card transition-all duration-200">
         <CardHeader className="pb-4">
           <CardTitle className="text-lg text-gray-900">AI Features & Implementation</CardTitle>
         </CardHeader>
@@ -39,7 +39,7 @@ export const AITechnologyTab: React.FC<AITechnologyTabProps> = ({ data }) => {
         </CardContent>
       </Card>
 
-      <Card className="border-gray-200">
+      <Card className="border-gray-200 hover-card transition-all duration-200">
         <CardHeader className="pb-4">
           <CardTitle className="text-lg text-gray-900">Data Handling & Privacy</CardTitle>
         </CardHeader>
