@@ -289,11 +289,11 @@ function VendorFilesContent({
             <div key={file.id} className="p-3 border border-gray-100 rounded-lg bg-gray-50 space-y-3">
               {/* File Info Row */}
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-gray-600" />
-                <span className="text-sm text-gray-700 flex-1">
+                <FileText className="h-4 w-4 text-gray-600 flex-shrink-0" />
+                <span className="text-sm text-gray-700 flex-1 min-w-0 truncate" title={file.fileName}>
                   {file.fileName}
                 </span>
-                <span className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded">
+                <span className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded flex-shrink-0">
                   {getFileTypeLabel(file.fileType)}
                 </span>
               </div>
