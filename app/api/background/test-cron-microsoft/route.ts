@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     // 2. Find the organization using the provided domain
     const { data: org, error: orgError } = await supabaseAdmin
       .from('organizations')
-      .select('id, name, domain, auth_provider')
+      .select('id, name, domain, auth_provider, creation_source')
       .eq('domain', orgDomain)
       .single();
 
@@ -529,7 +529,7 @@ export async function POST(request: Request) {
   }
 }
 
-async function processWeeklyNewAppReport(org: { id: string, name: string }, newApps: any[]) {
+async function processWeeklyNewAppReport(org: { id: string, name: string, creation_source?: boolean }, newApps: any[]) {
   try {
     console.log(`[TestCron:Microsoft:${org.name}] Checking for weekly new app reports...`);
     const currentWeek = getWeekNumber(new Date());
@@ -578,8 +578,8 @@ async function processWeeklyNewAppReport(org: { id: string, name: string }, newA
     });
 
     // Format the apps data for the email
-    const eventAppsString = appsDiscoveredThisWeek.map(app => 
-      `App name: ${app.name}\nTotal scope permission(s): ${app.total_permissions}\nScope Risk level: ${app.risk_level}\nTotal user(s): ${userCountMap.get(app.id) || 0}`
+    const eventAppsString = appsDiscoveredThisWeek.map((app, index) => 
+      `${index + 1}. ${app.name}\n* # of scopes granted: ${app.total_permissions}\n* Scope risk level: ${app.risk_level}\n* # of users: ${userCountMap.get(app.id) || 0}`
     ).join('\n\n');
 
     const notificationPrefs = await getNotificationPreferences(org.id, 'new_app_detected');
@@ -591,7 +591,7 @@ async function processWeeklyNewAppReport(org: { id: string, name: string }, newA
         userEmail: pref.user_email,
         notificationType: 'weekly_new_apps',
         reportIdentifier: weekIdentifier,
-        sendFunction: () => EmailService.sendNewAppsDigest(pref.user_email, eventAppsString, org.name)
+        sendFunction: () => EmailService.sendNewAppsDigest(pref.user_email, eventAppsString, org.name, org.creation_source)
       });
     }
   } catch (error) {
@@ -599,7 +599,7 @@ async function processWeeklyNewAppReport(org: { id: string, name: string }, newA
   }
 }
 
-async function processNewUserDigestReport(org: { id: string, name: string }, newRelationships: any[]) {
+async function processNewUserDigestReport(org: { id: string, name: string, creation_source?: boolean }, newRelationships: any[]) {
   try {
     console.log(`[TestCron:Microsoft:${org.name}] Checking for new user digest report...`);
     const reportIdentifier = `digest-users-${new Date().toISOString().split('T')[0]}`;
@@ -614,7 +614,7 @@ async function processNewUserDigestReport(org: { id: string, name: string }, new
     });
 
     const eventUsersString = Array.from(usersToAppsMap.entries()).map(([email, apps]) => 
-      `User email: ${email}\nApp names: ${apps.join(', ')}`
+      `User email: ${email}\nDiscovered app(s): ${apps.join(', ')}`
     ).join('\n\n');
 
     const notificationPrefs = await getNotificationPreferences(org.id, 'new_user_in_app');
@@ -626,7 +626,7 @@ async function processNewUserDigestReport(org: { id: string, name: string }, new
         userEmail: pref.user_email,
         notificationType: 'digest_new_users',
         reportIdentifier: reportIdentifier,
-        sendFunction: () => EmailService.sendNewUsersDigest(pref.user_email, eventUsersString, org.name)
+        sendFunction: () => EmailService.sendNewUsersDigest(pref.user_email, eventUsersString, org.name, org.creation_source)
       });
     }
   } catch (error) {

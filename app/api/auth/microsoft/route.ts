@@ -548,7 +548,8 @@ export async function GET(request: NextRequest) {
           domain: emailDomain,
           auth_provider: 'microsoft',
           updated_at: new Date().toISOString(),
-          first_admin: userData.userPrincipalName // Set first admin for new organizations
+          first_admin: userData.userPrincipalName, // Set first admin for new organizations
+          creation_source: true // Shadow IT signup
         })
         .select('id')
         .single();

@@ -166,20 +166,46 @@ export class EmailService {
     }
   }
 
-  static async sendNewAppsDigest(to: string, eventAppsString: string, organizationName: string) {
+  static async sendNewAppsDigest(to: string, eventAppsString: string, organizationName: string, creationSource?: boolean) {
     if (!this.NEW_APP_TEMPLATE_ID) {
       console.error('NEW_APP_TEMPLATE_ID is not set');
       return false;
     }
+    
+    // Determine the platform and format the email content accordingly
+    const isAppHub = creationSource === false;
+    let emailContent: string;
+    
+    if (isAppHub) {
+      // AppHub format
+      emailContent = `Hello,
+
+We've discovered additional app(s) for you to review. Visit AppHub for more details.
+
+${eventAppsString}`;
+    } else {
+      // Shadow IT format
+      emailContent = `Hi there, 
+ 
+Heads up—our latest scan detected new app(s) being used in your workspace. For deeper insights, go to your Shadow IT dashboard. 
+ 
+Here are the details:
+
+${eventAppsString}
+ 
+Best,
+Stitchflow Shadow IT Scanner`;
+    }
+    
     try {
       await loops.sendTransactionalEmail({
         transactionalId: this.NEW_APP_TEMPLATE_ID,
         email: to,
         dataVariables: {
-          'event-apps': eventAppsString
+          'event-apps': emailContent
         }
       });
-      console.log(`Successfully sent new apps digest to ${to}`);
+      console.log(`Successfully sent new apps digest to ${to} (${isAppHub ? 'AppHub' : 'Shadow IT'} format)`);
       return true;
     } catch (error) {
       console.error(`Failed to send new apps digest to ${to}:`, error);
@@ -187,20 +213,46 @@ export class EmailService {
     }
   }
 
-  static async sendNewUsersDigest(to: string, eventUsersString: string, organizationName: string) {
+  static async sendNewUsersDigest(to: string, eventUsersString: string, organizationName: string, creationSource?: boolean) {
     if (!this.NEW_USER_TEMPLATE_ID) {
       console.error('NEW_USER_TEMPLATE_ID is not set');
       return false;
     }
+    
+    // Determine the platform and format the email content accordingly
+    const isAppHub = creationSource === false;
+    let emailContent: string;
+    
+    if (isAppHub) {
+      // AppHub format
+      emailContent = `Hello,
+
+We've discovered additional user(s) for you to review. Visit AppHub for more details.
+
+${eventUsersString}`;
+    } else {
+      // Shadow IT format
+      emailContent = `Hi there, 
+ 
+Looks like there's some new user(s) in your org workspace. For deeper insights, go to your Shadow IT dashboard. 
+ 
+Here are the details:
+
+${eventUsersString}
+
+Best,
+Stitchflow Shadow IT Scanner`;
+    }
+    
     try {
       await loops.sendTransactionalEmail({
         transactionalId: this.NEW_USER_TEMPLATE_ID,
         email: to,
         dataVariables: {
-          'event-users': eventUsersString
+          'event-users': emailContent
         }
       });
-      console.log(`Successfully sent new users digest to ${to}`);
+      console.log(`Successfully sent new users digest to ${to} (${isAppHub ? 'AppHub' : 'Shadow IT'} format)`);
       return true;
     } catch (error) {
       console.error(`Failed to send new users digest to ${to}:`, error);

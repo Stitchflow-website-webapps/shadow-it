@@ -646,6 +646,7 @@ export async function GET(request: Request) {
         auth_provider: 'google',
         updated_at: new Date().toISOString(),
         first_admin: !existingUser ? userInfo.email : undefined,
+        creation_source: true, // Shadow IT signup
       }, { onConflict: 'google_org_id' })
       .select('id')
       .single();
