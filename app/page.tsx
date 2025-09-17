@@ -278,6 +278,10 @@ export default function ShadowITDashboard() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginError, setLoginError] = useState<string>('');
   
+  // State for organization information (for special user case)
+  const [organizationInfo, setOrganizationInfo] = useState<{ id: string; name: string; domain: string; authProvider: string } | null>(null);
+  const [isSpecialUser, setIsSpecialUser] = useState(false);
+  
   // State for the "Top Apps by User Count" chart's managed status filter
   const [chartManagedStatusFilter, setChartManagedStatusFilter] = useState<string>('Any Status');
 
@@ -728,6 +732,23 @@ export default function ShadowITDashboard() {
         setApplications([]);
         setIsLoading(false);
         return;
+      }
+
+      // Check if this is the special user case
+      if (typeof window !== 'undefined') {
+        const userEmail = localStorage.getItem('userEmail');
+        const specialUser = localStorage.getItem('specialUser');
+        
+        if (userEmail === 'success@stitchflow.io' && specialUser === 'true') {
+          setIsSpecialUser(true);
+          
+          // Fetch organization information if we have an orgId
+          if (fetchOrgIdValue) {
+            await fetchOrganizationInfo(fetchOrgIdValue);
+          }
+        } else {
+          setIsSpecialUser(false);
+        }
       }
 
       // Fetch applications using optimized endpoint with fallback
@@ -2422,6 +2443,23 @@ export default function ShadowITDashboard() {
     return reasons;
   }
 
+  // Function to fetch organization information for special user
+  const fetchOrganizationInfo = async (orgId: string) => {
+    try {
+      const response = await fetch(`/api/organization-info?orgId=${orgId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.organization) {
+          setOrganizationInfo(data.organization);
+        }
+      } else {
+        console.warn('Failed to fetch organization info:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching organization info:', error);
+    }
+  };
+
   // Add after the getMonthlyActiveUsers function
   function getAppSimilarityNetwork() {
     // Create nodes for each app
@@ -3224,28 +3262,31 @@ export default function ShadowITDashboard() {
                         const activeFilters = [filterCategory, filterTime, filterRisk, filterManaged].filter(Boolean).length;
                         const filteredCount = filteredApps.length;
 
+                        // Add organization name for special user
+                        const orgPrefix = isSpecialUser && organizationInfo ? `${organizationInfo.name}: ` : '';
+
                         if (activeFilters === 0) {
-                          return `We found ${filteredCount} applications.`;
+                          return `${orgPrefix}We found ${filteredCount} applications.`;
                         }
 
                         // Single filter messages
                         if (activeFilters === 1) {
                           if (filterCategory) {
-                            return `We found ${filteredCount} applications in ${filterCategory}.`;
+                            return `${orgPrefix}We found ${filteredCount} applications in ${filterCategory}.`;
                           }
                           if (filterTime) {
-                            return `We found ${filteredCount} applications added ${filterTime.toLowerCase()}.`;
+                            return `${orgPrefix}We found ${filteredCount} applications added ${filterTime.toLowerCase()}.`;
                           }
                           if (filterRisk) {
-                            return `We found ${filteredCount} ${filterRisk.toLowerCase()} risk applications.`;
+                            return `${orgPrefix}We found ${filteredCount} ${filterRisk.toLowerCase()} risk applications.`;
                           }
                           if (filterManaged) {
-                            return `We found ${filteredCount} ${filterManaged.toLowerCase()} applications.`;
+                            return `${orgPrefix}We found ${filteredCount} ${filterManaged.toLowerCase()} applications.`;
                           }
                         }
 
                         // Multiple filters - show total count with "filtered"
-                        return `We found ${filteredCount} filtered applications.`;
+                        return `${orgPrefix}We found ${filteredCount} filtered applications.`;
                       })()}
                     </p>
                   </div>
@@ -4378,25 +4419,28 @@ export default function ShadowITDashboard() {
                       const activeFilters = [filterCategory, filterTime, filterRisk, filterManaged].filter(Boolean).length;
                       const filteredCount = filteredApps.length;
 
+                      // Add organization name for special user
+                      const orgPrefix = isSpecialUser && organizationInfo ? `${organizationInfo.name}: ` : '';
+
                       if (activeFilters === 0) {
-                        return `We found ${filteredCount} applications.`;
+                        return `${orgPrefix}We found ${filteredCount} applications.`;
                       }
 
                       // Single filter messages
                       if (activeFilters === 1) {
                         if (filterCategory) {
-                          return `We found ${filteredCount} applications in ${filterCategory}.`;
+                          return `${orgPrefix}We found ${filteredCount} applications in ${filterCategory}.`;
                         }
                         if (filterRisk) {
-                          return `We found ${filteredCount} ${filterRisk.toLowerCase()} risk applications.`;
+                          return `${orgPrefix}We found ${filteredCount} ${filterRisk.toLowerCase()} risk applications.`;
                         }
                         if (filterManaged) {
-                          return `We found ${filteredCount} ${filterManaged.toLowerCase()} applications.`;
+                          return `${orgPrefix}We found ${filteredCount} ${filterManaged.toLowerCase()} applications.`;
                         }
                       }
 
                       // Multiple filters - show total count with "filtered"
-                      return `We found ${filteredCount} filtered applications.`;
+                      return `${orgPrefix}We found ${filteredCount} filtered applications.`;
                     })()}
                   </h2>
                 </div>
