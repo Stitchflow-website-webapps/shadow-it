@@ -172,37 +172,23 @@ export class EmailService {
       return false;
     }
     
-    // Determine the platform and format the email content accordingly
+    // Determine the platform and send appropriate variables
     const isAppHub = creationSource === false;
-    let emailContent: string;
-    
-    if (isAppHub) {
-      // AppHub format
-      emailContent = `Hello,
-
-We've discovered additional app(s) for you to review. Visit AppHub for more details.
-
-${eventAppsString}`;
-    } else {
-      // Shadow IT format
-      emailContent = `Hi there, 
- 
-Heads up—our latest scan detected new app(s) being used in your workspace. For deeper insights, go to your Shadow IT dashboard. 
- 
-Here are the details:
-
-${eventAppsString}
- 
-Best,
-Stitchflow Shadow IT Scanner`;
-    }
     
     try {
       await loops.sendTransactionalEmail({
         transactionalId: this.NEW_APP_TEMPLATE_ID,
         email: to,
         dataVariables: {
-          'event-apps': emailContent
+          'event-apps': eventAppsString,
+          'platform_type': isAppHub ? 'AppHub' : 'Shadow IT',
+          'platform_link': isAppHub ? 'AppHub' : 'Shadow IT dashboard',
+          'greeting': isAppHub ? 'Hello,' : 'Hi there,',
+          'intro_text': isAppHub 
+            ? 'We\'ve discovered additional app(s) for you to review. Visit AppHub for more details.' 
+            : 'Heads up—our latest scan detected new app(s) being used in your workspace. For deeper insights, go to your Shadow IT dashboard.',
+          'details_header': 'Here are the details:',
+          'closing': isAppHub ? '\nBest,\nAppHub' : '\nBest,\nStitchflow Shadow IT Scanner'
         }
       });
       console.log(`Successfully sent new apps digest to ${to} (${isAppHub ? 'AppHub' : 'Shadow IT'} format)`);
@@ -219,37 +205,23 @@ Stitchflow Shadow IT Scanner`;
       return false;
     }
     
-    // Determine the platform and format the email content accordingly
+    // Determine the platform and send appropriate variables
     const isAppHub = creationSource === false;
-    let emailContent: string;
-    
-    if (isAppHub) {
-      // AppHub format
-      emailContent = `Hello,
-
-We've discovered additional user(s) for you to review. Visit AppHub for more details.
-
-${eventUsersString}`;
-    } else {
-      // Shadow IT format
-      emailContent = `Hi there, 
- 
-Looks like there's some new user(s) in your org workspace. For deeper insights, go to your Shadow IT dashboard. 
- 
-Here are the details:
-
-${eventUsersString}
-
-Best,
-Stitchflow Shadow IT Scanner`;
-    }
     
     try {
       await loops.sendTransactionalEmail({
         transactionalId: this.NEW_USER_TEMPLATE_ID,
         email: to,
         dataVariables: {
-          'event-users': emailContent
+          'event-users': eventUsersString,
+          'platform_type': isAppHub ? 'AppHub' : 'Shadow IT',
+          'platform_link': isAppHub ? 'AppHub' : 'Shadow IT dashboard',
+          'greeting': isAppHub ? 'Hello,' : 'Hi there,',
+          'intro_text': isAppHub 
+            ? 'We\'ve discovered additional user(s) for you to review. Visit AppHub for more details.' 
+            : 'Looks like there\'s some new user(s) in your org workspace. For deeper insights, go to your Shadow IT dashboard.',
+          'details_header': 'Here are the details:',
+          'closing': isAppHub ? '\nBest,\nAppHub' : '\nBest,\nStitchflow Shadow IT Scanner'
         }
       });
       console.log(`Successfully sent new users digest to ${to} (${isAppHub ? 'AppHub' : 'Shadow IT'} format)`);

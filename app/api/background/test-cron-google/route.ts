@@ -611,7 +611,7 @@ async function processWeeklyNewAppReport(org: { id: string, name: string, creati
 
     // Format the apps data for the email
     const eventAppsString = appsDiscoveredThisWeek.map((app, index) => 
-      `${index + 1}. ${app.name}\n* # of scopes granted: ${app.total_permissions}\n* Scope risk level: ${app.risk_level}\n* # of users: ${userCountMap.get(app.id) || 0}`
+      `${index + 1}. ${app.name}\n• # of scopes granted: ${app.total_permissions}\n• Scope risk level: ${app.risk_level}\n• # of users: ${userCountMap.get(app.id) || 0}`
     ).join('\n\n');
 
     const notificationPrefs = await getNotificationPreferences(org.id, 'new_app_detected');
@@ -647,8 +647,8 @@ async function processNewUserDigestReport(org: { id: string, name: string, creat
         }
     });
 
-    const eventUsersString = Array.from(usersToAppsMap.entries()).map(([email, apps]) => 
-      `User email: ${email}\nDiscovered app(s): ${[...new Set(apps)].join(', ')}`
+    const eventUsersString = Array.from(usersToAppsMap.entries()).map(([email, apps], index) => 
+      `${index + 1}. User email: ${email}\nDiscovered app(s): ${[...new Set(apps)].join(', ')}`
     ).join('\n\n');
 
     const notificationPrefs = await getNotificationPreferences(org.id, 'new_user_in_app');
@@ -1001,16 +1001,14 @@ async function sendNewAppsWebhookNotification(organizationId: string, newAppName
   const webhookPassword = process.env.WEBHOOK_PASSWORD || 'SF-AI-DB';
 
   try {
-    // Clean app names and create comma-separated string
-    const cleanedAppNames = newAppNames
+    // Clean app names and create array format for webhook
+    const cleanedAppNamesArray = newAppNames
       .map(appName => cleanAppNameForWebhook(appName))
-      .filter(name => name && name.trim()) // Remove empty names
-      .join(', ');
+      .filter(name => name && name.trim()); // Remove empty names
 
-    // Prepare webhook payload in the correct format
     const webhookPayload = {
       org_id: organizationId,
-      tool_name: cleanedAppNames
+      tool_name: cleanedAppNamesArray
     };
 
     // Create basic auth header
