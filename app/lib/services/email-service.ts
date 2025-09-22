@@ -183,12 +183,15 @@ export class EmailService {
           'event-apps': eventAppsString,
           'platform_type': isAppHub ? 'AppHub' : 'Shadow IT',
           'platform_link': isAppHub ? 'AppHub' : 'Shadow IT dashboard',
+          'platform_url': isAppHub ? 'https://www.manage.stitchflow.io/' : '',
           'greeting': isAppHub ? 'Hello,' : 'Hi there,',
           'intro_text': isAppHub 
-            ? 'We\'ve discovered additional app(s) for you to review. Visit AppHub for more details.' 
+            ? 'We\'ve discovered additional app(s) for you to review. Visit <a href="https://www.manage.stitchflow.io/">AppHub</a> for more details.' 
             : 'Heads up—our latest scan detected new app(s) being used in your workspace. For deeper insights, go to your Shadow IT dashboard.',
           'details_header': 'Here are the details:',
-          'closing': isAppHub ? '\nBest,\nAppHub' : '\nBest,\nStitchflow Shadow IT Scanner'
+          'closing': isAppHub ? '\nBest,\nAppHub' : '\nBest,\nStitchflow Shadow IT Scanner',
+          'sender_name': isAppHub ? 'Stitchflow AppHub' : 'Stitchflow Shadow IT Scanner',
+          'subject_line': isAppHub ? 'New app(s) discovered for review' : 'New app(s) found in your org workspace'
         }
       });
       console.log(`Successfully sent new apps digest to ${to} (${isAppHub ? 'AppHub' : 'Shadow IT'} format)`);
@@ -216,12 +219,15 @@ export class EmailService {
           'event-users': eventUsersString,
           'platform_type': isAppHub ? 'AppHub' : 'Shadow IT',
           'platform_link': isAppHub ? 'AppHub' : 'Shadow IT dashboard',
+          'platform_url': isAppHub ? 'https://www.manage.stitchflow.io/' : '',
           'greeting': isAppHub ? 'Hello,' : 'Hi there,',
           'intro_text': isAppHub 
-            ? 'We\'ve discovered additional user(s) for you to review. Visit AppHub for more details.' 
+            ? 'We\'ve discovered additional user(s) for you to review. Visit <a href="https://www.manage.stitchflow.io/">AppHub</a> for more details.' 
             : 'Looks like there\'s some new user(s) in your org workspace. For deeper insights, go to your Shadow IT dashboard.',
           'details_header': 'Here are the details:',
-          'closing': isAppHub ? '\nBest,\nAppHub' : '\nBest,\nStitchflow Shadow IT Scanner'
+          'closing': isAppHub ? '\nBest,\nAppHub' : '\nBest,\nStitchflow Shadow IT Scanner',
+          'sender_name': isAppHub ? 'Stitchflow AppHub' : 'Stitchflow Shadow IT Scanner',
+          'subject_line': isAppHub ? 'New user(s) discovered for review' : 'New user(s) in your org workspace'
         }
       });
       console.log(`Successfully sent new users digest to ${to} (${isAppHub ? 'AppHub' : 'Shadow IT'} format)`);
