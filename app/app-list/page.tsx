@@ -16,14 +16,29 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { EditableCard } from "@/components/editable-card"
+import { SKUTable } from "@/components/sku-table"
+import { Switch } from "@/components/ui/switch"
 import { organizeApi } from "@/lib/organize-api"
 import { applyFilters } from "@/lib/filter-utils"
 import { organizeAppToApp, appToOrganizeApp } from "@/lib/organize-type-adapter"
 import { useAppIntegrations, type AppIntegration } from "@/hooks/use-app-integrations"
 import { cn } from "@/lib/utils"
 import type { OrganizeApp } from "@/lib/supabase/organize-client"
-import type { App, VendorFile } from "@/types/app"
+import type { App, VendorFile, AppSKU } from "@/types/app"
 import Sidebar from "@/app/components/Sidebar"
+
+// Simple UUID generator fallback
+const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  // Fallback UUID generation
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0
+    const v = c == 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
+}
 
 // Local organization settings interface
 interface OrganizationSettings {
@@ -120,7 +135,7 @@ function SimpleAddAppsDialog({ open, onOpenChange, onAddApps, existingApps, orgS
     const appsToAdd: App[] = Array.from(selectedApps).map((appName) => {
       const appData = allApps.find((app) => app.name === appName)
       return {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         name: appName,
         identityProvider: orgSettings?.identityProvider || "",
         emailProvider: orgSettings?.emailProvider || "",
@@ -329,12 +344,18 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
   const [editedFields, setEditedFields] = useState<Partial<App>>({})
   const [showRemoveDialog, setShowRemoveDialog] = useState(false)
   const [vendorFiles, setVendorFiles] = useState<VendorFile[]>(app.vendorFiles || [])
+  // Multi-SKU state
+  const [isMultiSKUEnabled, setIsMultiSKUEnabled] = useState(app.isMultiSKUEnabled || false)
+  const [skus, setSKUs] = useState<AppSKU[]>(app.skus || [])
+  const [showMultiSKUConfirm, setShowMultiSKUConfirm] = useState(false)
 
   // Reset edit mode when app changes
   useEffect(() => {
     setIsEditMode(initialEditMode)
     setEditedFields({})
     setVendorFiles(app.vendorFiles || [])
+    setIsMultiSKUEnabled(app.isMultiSKUEnabled || false)
+    setSKUs(app.skus || [])
   }, [app.id, initialEditMode])
 
   const handleEdit = () => {
@@ -348,7 +369,13 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
   }
 
   const handleSave = () => {
-    const updatedApp = { ...app, ...editedFields, vendorFiles }
+    const updatedApp = {
+      ...app,
+      ...editedFields,
+      vendorFiles,
+      isMultiSKUEnabled,
+      skus
+    }
     onUpdateApp(updatedApp)
     setIsEditMode(false)
     setEditedFields({})
@@ -464,7 +491,70 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
       }
     }
 
+    // Handle SKU-related updates
+    if ('isMultiSKUEnabled' in processedFields) {
+      setIsMultiSKUEnabled(processedFields.isMultiSKUEnabled || false)
+    }
+
+    if ('skus' in processedFields) {
+      setSKUs(processedFields.skus || [])
+    }
+
     setEditedFields((prev) => ({ ...prev, ...processedFields }))
+  }
+
+  // Multi-SKU toggle handler
+  const handleMultiSKUToggle = (enabled: boolean) => {
+    if (enabled) {
+      // Convert current single SKU data to multi-SKU format
+      const currentSKU: AppSKU = {
+        id: generateUUID(),
+        name: "",
+        planLimit: editedFields.planLimit ?? (app.planLimit || ""),
+        licensesUsed: editedFields.licensesUsed ?? app.licensesUsed,
+        planReference: editedFields.planReference ?? (app.planReference || ""),
+        costPerUser: editedFields.costPerUser ?? (app.costPerUser || ""),
+        isDefault: true,
+        overrideContractFields: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+
+      setSKUs([currentSKU])
+      setEditedFields(prev => ({
+        ...prev,
+        isMultiSKUEnabled: true,
+        skus: [currentSKU]
+      }))
+      setIsMultiSKUEnabled(enabled)
+    } else {
+      // Check if there are multiple SKUs - if so, show confirmation
+      if (skus.length > 1) {
+        setShowMultiSKUConfirm(true)
+      } else {
+        // Safe to convert back to single SKU
+        confirmMultiSKUDisable()
+      }
+    }
+  }
+
+  // Confirm disabling Multi-SKU
+  const confirmMultiSKUDisable = () => {
+    const defaultSKU = skus.find(sku => sku.isDefault) || skus[0]
+    if (defaultSKU) {
+      setEditedFields(prev => ({
+        ...prev,
+        planLimit: defaultSKU.planLimit,
+        licensesUsed: defaultSKU.licensesUsed,
+        planReference: defaultSKU.planReference,
+        costPerUser: defaultSKU.costPerUser,
+        isMultiSKUEnabled: false,
+        skus: []
+      }))
+    }
+    setSKUs([])
+    setIsMultiSKUEnabled(false)
+    setShowMultiSKUConfirm(false)
   }
 
   const getDeprovisioningOptions = () => {
@@ -508,10 +598,23 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-primary-text">{app.name}</h2>
-          <p className="text-sm text-gray-500 mt-1">{editedFields.billingFrequency ?? (app.billingFrequency || "—")}</p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-primary-text">{app.name}</h2>
+            <p className="text-sm text-gray-500 mt-1">{editedFields.billingFrequency ?? (app.billingFrequency || "—")}</p>
+          </div>
+
+          {/* Multi-SKU Toggle */}
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+            <span className="text-sm font-medium text-gray-700">Multi-SKU</span>
+            <Switch
+              checked={isMultiSKUEnabled}
+              onCheckedChange={handleMultiSKUToggle}
+              disabled={!isEditMode}
+            />
+          </div>
         </div>
+
         <div className="flex items-center gap-2">
           {isEditMode ? (
             <>
@@ -562,9 +665,17 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
       </div>
 
       {/* Card Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        {/* Left Column */}
-        <div className="space-y-6">
+      <div className={cn(
+        "gap-6 items-start",
+        isMultiSKUEnabled
+          ? "space-y-6" // Single column when Multi-SKU is enabled
+          : "grid grid-cols-1 lg:grid-cols-2" // Two columns when Multi-SKU is disabled
+      )}>
+        {/* Left Column / All Cards when Multi-SKU disabled */}
+        <div className={cn(
+          "space-y-6",
+          isMultiSKUEnabled ? "w-full" : ""
+        )}>
           {/* Authentication Card */}
           <EditableCard
             title="Authentication"
@@ -698,11 +809,181 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
             onVendorFilesChange={handleVendorFilesChange}
             fields={[]}
           />
+
         </div>
 
-        {/* Right Column */}
-        <div className="space-y-6">
-          {/* License & Renewal Card */}
+        {/* Right Column - Only when Multi-SKU is disabled */}
+        {!isMultiSKUEnabled && (
+          <div className="space-y-6">
+            {/* License & Renewal Card - Right Column when Multi-SKU is disabled */}
+            <EditableCard
+              title="License & Renewal"
+              icon={<CreditCard className="h-5 w-5 text-primary-text" />}
+              isEditing={isEditMode}
+              onUpdate={(updates) => handleFieldChange(updates)}
+              appName={app.name}
+              userInfo={userInfo}
+              fields={[
+                {
+                  label: "RENEWAL DATE",
+                  value: editedFields.renewalDate ?? (app.renewalDate || ""),
+                  field: "renewalDate",
+                  type: "date",
+                  placeholder: "Select renewal date",
+                },
+                {
+                  label: "RENEWAL TYPE",
+                  value: editedFields.renewalType ?? (app.renewalType || ""),
+                  field: "renewalType",
+                  type: "select",
+                  placeholder: "Select renewal type",
+                  options: [
+                    { value: "Auto Renewal", label: "Auto Renewal" },
+                    { value: "Manual Renewal", label: "Manual Renewal" },
+                    { value: "Perpetual Renewal", label: "Perpetual Renewal" },
+                  ],
+                },
+                {
+                  label: "BILLING FREQUENCY/CYCLE",
+                  value: editedFields.billingFrequency ?? (app.billingFrequency || ""),
+                  field: "billingFrequency",
+                  type: "select",
+                  placeholder: "Select billing frequency",
+                  options: [
+                    { value: "Annual Plan", label: "Annual Plan" },
+                    { value: "Monthly Plan", label: "Monthly Plan" },
+                    { value: "Quarterly", label: "Quarterly" },
+                    { value: "Usage Based", label: "Usage Based" },
+                    { value: "Other", label: "Other" },
+                  ],
+                },
+                {
+                  label: "COST PER USER (PER MONTH)",
+                  value: editedFields.costPerUser ?? (app.costPerUser || ""),
+                  field: "costPerUser",
+                  type: "currency",
+                  placeholder: "Enter cost per user",
+                },
+                {
+                  label: "PLAN LIMIT",
+                  value: editedFields.planLimit ?? (app.planLimit || ""),
+                  field: "planLimit",
+                  type: "input",
+                  placeholder: "Enter plan limit",
+                },
+                {
+                  label: "LICENSES USED",
+                  value: editedFields.licensesUsed !== undefined ? String(editedFields.licensesUsed || "") : String(app.licensesUsed || ""),
+                  field: "licensesUsed",
+                  type: "input",
+                  placeholder: "Enter number of licenses used",
+                },
+                {
+                  label: "PLAN REFERENCE",
+                  value: editedFields.planReference ?? (app.planReference || ""),
+                  field: "planReference",
+                  type: "input",
+                  placeholder: "Enter plan reference",
+                },
+                {
+                  label: "OPT-OUT DATE",
+                  value: editedFields.optOutDate ?? (app.optOutDate || ""),
+                  field: "optOutDate",
+                  type: "date",
+                  placeholder: "Select opt-out deadline date",
+                },
+                {
+                  label: "OPT-OUT PERIOD (DAYS)",
+                  value: editedFields.optOutPeriod !== undefined ? String(editedFields.optOutPeriod || "") : String(app.optOutPeriod || ""),
+                  field: "optOutPeriod",
+                  type: "input",
+                  placeholder: "Enter number of days for opt-out period",
+                },
+                {
+                  label: "VENDOR/CONTRACT STATUS",
+                  value: editedFields.vendorContractStatus ?? (app.vendorContractStatus || ""),
+                  field: "vendorContractStatus",
+                  type: "select",
+                  placeholder: "Select vendor/contract status",
+                  options: [
+                    { value: "Active", label: "Active" },
+                    { value: "Inactive", label: "Inactive" },
+                  ],
+                },
+                {
+                  label: "BILLING OWNER",
+                  value: editedFields.billingOwner ?? (app.billingOwner || ""),
+                  field: "billingOwner",
+                  type: "input",
+                  placeholder: "Enter billing owner name",
+                },
+                {
+                  label: "BUDGET SOURCE",
+                  value: editedFields.budgetSource ?? (app.budgetSource || ""),
+                  field: "budgetSource",
+                  type: "input",
+                  placeholder: "Enter budget source (e.g., Legal, Finance, Tech)",
+                },
+                {
+                  label: "PAYMENT METHOD",
+                  value: editedFields.paymentMethod ?? (app.paymentMethod || ""),
+                  field: "paymentMethod",
+                  type: "select",
+                  placeholder: "Select payment method",
+                  options: [
+                    { value: "Company Credit Card", label: "Company Credit Card" },
+                    { value: "E-Check", label: "E-Check" },
+                    { value: "Wire", label: "Wire" },
+                    { value: "Accounts Payable", label: "Accounts Payable" },
+                    { value: "Others", label: "Others" },
+                  ],
+                },
+                {
+                  label: "PAYMENT TERMS",
+                  value: editedFields.paymentTerms ?? (app.paymentTerms || ""),
+                  field: "paymentTerms",
+                  type: "select",
+                  placeholder: "Select payment terms",
+                  options: [
+                    { value: "Net 30", label: "Net 30" },
+                    { value: "Due Upon Receipt", label: "Due Upon Receipt" },
+                    { value: "2/10 Net 30", label: "2/10 Net 30" },
+                    { value: "Partial Payment", label: "Partial Payment" },
+                    { value: "Others", label: "Others" },
+                  ],
+                },
+                {
+                  label: "PURCHASE CATEGORY",
+                  value: editedFields.purchaseCategory ?? (app.purchaseCategory || ""),
+                  field: "purchaseCategory",
+                  type: "select",
+                  placeholder: "Select purchase category",
+                  options: [
+                    { value: "Software", label: "Software" },
+                    { value: "Services", label: "Services" },
+                    { value: "Add-on", label: "Add-on" },
+                    { value: "Infrastructure", label: "Infrastructure" },
+                    { value: "Hardware", label: "Hardware" },
+                    { value: "Others", label: "Others" },
+                  ],
+                },
+                {
+                  label: "CONTRACT URL",
+                  value: editedFields.contractUrl ?? (app.contractUrl || ""),
+                  field: "contractUrl",
+                  type: "file-url",
+                  placeholder: "Upload contract or enter URL",
+                },
+              ]}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Full-width License & Renewal Card when Multi-SKU is enabled */}
+      {isMultiSKUEnabled && (
+        <div className="mt-6">
+          {/* License & Renewal Card - Full Width */}
           <EditableCard
             title="License & Renewal"
             icon={<CreditCard className="h-5 w-5 text-primary-text" />}
@@ -710,161 +991,117 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
             onUpdate={(updates) => handleFieldChange(updates)}
             appName={app.name}
             userInfo={userInfo}
-            fields={[
-              {
-                label: "RENEWAL DATE",
-                value: editedFields.renewalDate ?? (app.renewalDate || ""),
-                field: "renewalDate",
-                type: "date",
-                placeholder: "Select renewal date",
-              },
-              {
-                label: "RENEWAL TYPE",
-                value: editedFields.renewalType ?? (app.renewalType || ""),
-                field: "renewalType",
-                type: "select",
-                placeholder: "Select renewal type",
-                options: [
-                  { value: "Auto Renewal", label: "Auto Renewal" },
-                  { value: "Manual Renewal", label: "Manual Renewal" },
-                  { value: "Perpetual Renewal", label: "Perpetual Renewal" },
-                ],
-              },
-              {
-                label: "BILLING FREQUENCY/CYCLE",
-                value: editedFields.billingFrequency ?? (app.billingFrequency || ""),
-                field: "billingFrequency",
-                type: "select",
-                placeholder: "Select billing frequency",
-                options: [
-                  { value: "Annual Plan", label: "Annual Plan" },
-                  { value: "Monthly Plan", label: "Monthly Plan" },
-                  { value: "Quarterly", label: "Quarterly" },
-                  { value: "Usage Based", label: "Usage Based" },
-                  { value: "Other", label: "Other" },
-                ],
-              },
-              {
-                label: "COST PER USER (PER MONTH)",
-                value: editedFields.costPerUser ?? (app.costPerUser || ""),
-                field: "costPerUser",
-                type: "currency",
-                placeholder: "Enter cost per user",
-              },
-              {
-                label: "PLAN LIMIT",
-                value: editedFields.planLimit ?? (app.planLimit || ""),
-                field: "planLimit",
-                type: "input",
-                placeholder: "Enter plan limit",
-              },
-              {
-                label: "LICENSES USED",
-                value: editedFields.licensesUsed !== undefined ? String(editedFields.licensesUsed || "") : String(app.licensesUsed || ""),
-                field: "licensesUsed",
-                type: "input",
-                placeholder: "Enter number of licenses used",
-              },
-              {
-                label: "PLAN REFERENCE",
-                value: editedFields.planReference ?? (app.planReference || ""),
-                field: "planReference",
-                type: "input",
-                placeholder: "Enter plan reference",
-              },
-              {
-                label: "OPT-OUT DATE",
-                value: editedFields.optOutDate ?? (app.optOutDate || ""),
-                field: "optOutDate",
-                type: "date",
-                placeholder: "Select opt-out deadline date",
-              },
-              {
-                label: "OPT-OUT PERIOD (DAYS)",
-                value: editedFields.optOutPeriod !== undefined ? String(editedFields.optOutPeriod || "") : String(app.optOutPeriod || ""),
-                field: "optOutPeriod",
-                type: "input",
-                placeholder: "Enter number of days for opt-out period",
-              },
-              {
-                label: "VENDOR/CONTRACT STATUS",
-                value: editedFields.vendorContractStatus ?? (app.vendorContractStatus || ""),
-                field: "vendorContractStatus",
-                type: "select",
-                placeholder: "Select vendor/contract status",
-                options: [
-                  { value: "Active", label: "Active" },
-                  { value: "Inactive", label: "Inactive" },
-                ],
-              },
-              {
-                label: "BILLING OWNER",
-                value: editedFields.billingOwner ?? (app.billingOwner || ""),
-                field: "billingOwner",
-                type: "input",
-                placeholder: "Enter billing owner name",
-              },
-              {
-                label: "BUDGET SOURCE",
-                value: editedFields.budgetSource ?? (app.budgetSource || ""),
-                field: "budgetSource",
-                type: "input",
-                placeholder: "Enter budget source (e.g., Legal, Finance, Tech)",
-              },
-              {
-                label: "PAYMENT METHOD",
-                value: editedFields.paymentMethod ?? (app.paymentMethod || ""),
-                field: "paymentMethod",
-                type: "select",
-                placeholder: "Select payment method",
-                options: [
-                  { value: "Company Credit Card", label: "Company Credit Card" },
-                  { value: "E-Check", label: "E-Check" },
-                  { value: "Wire", label: "Wire" },
-                  { value: "Accounts Payable", label: "Accounts Payable" },
-                  { value: "Others", label: "Others" },
-                ],
-              },
-              {
-                label: "PAYMENT TERMS",
-                value: editedFields.paymentTerms ?? (app.paymentTerms || ""),
-                field: "paymentTerms",
-                type: "select",
-                placeholder: "Select payment terms",
-                options: [
-                  { value: "Net 30", label: "Net 30" },
-                  { value: "Due Upon Receipt", label: "Due Upon Receipt" },
-                  { value: "2/10 Net 30", label: "2/10 Net 30" },
-                  { value: "Partial Payment", label: "Partial Payment" },
-                  { value: "Others", label: "Others" },
-                ],
-              },
-              {
-                label: "PURCHASE CATEGORY",
-                value: editedFields.purchaseCategory ?? (app.purchaseCategory || ""),
-                field: "purchaseCategory",
-                type: "select",
-                placeholder: "Select purchase category",
-                options: [
-                  { value: "Software", label: "Software" },
-                  { value: "Services", label: "Services" },
-                  { value: "Add-on", label: "Add-on" },
-                  { value: "Infrastructure", label: "Infrastructure" },
-                  { value: "Hardware", label: "Hardware" },
-                  { value: "Others", label: "Others" },
-                ],
-              },
-              {
-                label: "CONTRACT URL",
-                value: editedFields.contractUrl ?? (app.contractUrl || ""),
-                field: "contractUrl",
-                type: "file-url",
-                placeholder: "Upload contract or enter URL",
-              },
-            ]}
+            customContent={
+              <div className="space-y-6">
+                {/* Contract-level fields */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-gray-700 border-b border-gray-200 pb-2">Contract-Level Fields</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 uppercase tracking-wider">Renewal Date</label>
+                      <div className="mt-1">
+                        {isEditMode ? (
+                          <input
+                            type="date"
+                            value={editedFields.renewalDate ?? (app.renewalDate || "")}
+                            onChange={(e) => handleFieldChange({ renewalDate: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        ) : (
+                          <div className="text-sm">{editedFields.renewalDate ?? (app.renewalDate || "—")}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 uppercase tracking-wider">Renewal Type</label>
+                      <div className="mt-1">
+                        {isEditMode ? (
+                          <select
+                            value={editedFields.renewalType ?? (app.renewalType || "")}
+                            onChange={(e) => handleFieldChange({ renewalType: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Select renewal type</option>
+                            <option value="Auto Renewal">Auto Renewal</option>
+                            <option value="Manual Renewal">Manual Renewal</option>
+                            <option value="Perpetual Renewal">Perpetual Renewal</option>
+                          </select>
+                        ) : (
+                          <div className="text-sm">{editedFields.renewalType ?? (app.renewalType || "—")}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 uppercase tracking-wider">Billing Frequency</label>
+                      <div className="mt-1">
+                        {isEditMode ? (
+                          <select
+                            value={editedFields.billingFrequency ?? (app.billingFrequency || "")}
+                            onChange={(e) => handleFieldChange({ billingFrequency: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Select billing frequency</option>
+                            <option value="Annual Plan">Annual Plan</option>
+                            <option value="Monthly Plan">Monthly Plan</option>
+                            <option value="Quarterly">Quarterly</option>
+                            <option value="Usage Based">Usage Based</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        ) : (
+                          <div className="text-sm">{editedFields.billingFrequency ?? (app.billingFrequency || "—")}</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SKU Table */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-gray-700 border-b border-gray-200 pb-2">SKU Management</h3>
+                  <SKUTable
+                    skus={skus}
+                    onSKUsChange={(newSKUs) => {
+                      setSKUs(newSKUs)
+                      handleFieldChange({ skus: newSKUs })
+                    }}
+                    editMode={isEditMode}
+                    contractRenewalDate={editedFields.renewalDate ?? (app.renewalDate || "")}
+                    contractRenewalType={editedFields.renewalType ?? (app.renewalType || "")}
+                    contractBillingFrequency={editedFields.billingFrequency ?? (app.billingFrequency || "")}
+                  />
+                </div>
+              </div>
+            }
+            fields={[]}
           />
         </div>
-      </div>
+      )}
+
+      {/* Multi-SKU Confirmation Dialog */}
+      {showMultiSKUConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Disable Multi-SKU Mode?</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              You have multiple SKUs configured. Disabling Multi-SKU mode will remove all SKUs except the first one and convert back to single SKU mode. This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowMultiSKUConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmMultiSKUDisable}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
+              >
+                Disable Multi-SKU
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

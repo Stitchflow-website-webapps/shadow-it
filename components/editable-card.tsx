@@ -50,6 +50,7 @@ interface EditableCardProps {
   userInfo?: UserInfo | null
   vendorFiles?: VendorFile[]
   onVendorFilesChange?: (files: VendorFile[]) => void
+  customContent?: React.ReactNode
 }
 
 // Helper function to calculate days until renewal
@@ -503,7 +504,7 @@ function VendorFilesContent({
   )
 }
 
-export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing, userInfo, vendorFiles, onVendorFilesChange }: EditableCardProps) {
+export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing, userInfo, vendorFiles, onVendorFilesChange, customContent }: EditableCardProps) {
   const [internalIsEditing, setInternalIsEditing] = useState(false)
   
   // Use external isEditing prop when provided, otherwise use internal state
@@ -1326,7 +1327,9 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-7 px-6 pb-6">
-        {title === "Vendor Files and Notes" ? (
+        {customContent ? (
+          customContent
+        ) : title === "Vendor Files and Notes" ? (
           <VendorFilesContent
             vendorFiles={vendorFiles || []}
             onVendorFilesChange={onVendorFilesChange}

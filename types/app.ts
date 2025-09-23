@@ -9,6 +9,24 @@ export interface VendorFile {
   url?: string
 }
 
+// Type for individual SKU metadata
+export interface AppSKU {
+  id: string
+  name: string
+  planLimit: string
+  licensesUsed: number | null
+  planReference: string
+  costPerUser: string
+  isDefault: boolean
+  overrideContractFields: boolean
+  // Contract override fields (only used when overrideContractFields is true)
+  renewalDate?: string | null
+  renewalType?: string | null
+  billingFrequency?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface App {
   id: string
   name: string
@@ -43,4 +61,7 @@ export interface App {
   paymentTerms?: string
   budgetSource?: string
   billingFrequency?: string
+  // Multi-SKU fields
+  isMultiSKUEnabled?: boolean
+  skus?: AppSKU[]
 }
