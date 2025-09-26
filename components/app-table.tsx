@@ -43,20 +43,23 @@ const parseDateString = (dateString: string): Date | null => {
     return fullDate
   }
 
-  // If that fails, try parsing as a month name
-  const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
-  const monthIndex = monthNames.findIndex(m => m.startsWith(dateString.toLowerCase()))
+  // Only parse month names if they are complete month names (4+ characters)
+  // This prevents accidental parsing of short inputs like "dec"
+  if (dateString.length >= 4) {
+    const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+    const monthIndex = monthNames.findIndex(m => m.startsWith(dateString.toLowerCase()))
 
-  if (monthIndex !== -1) {
-    const today = new Date()
-    let year = today.getFullYear()
-    const monthDate = new Date(year, monthIndex, 1)
+    if (monthIndex !== -1) {
+      const today = new Date()
+      let year = today.getFullYear()
+      const monthDate = new Date(year, monthIndex, 1)
 
-    // If the month has already passed this year, use next year
-    if (monthDate < today) {
-      year += 1
+      // If the month has already passed this year, use next year
+      if (monthDate < today) {
+        year += 1
+      }
+      return new Date(year, monthIndex, 1)
     }
-    return new Date(year, monthIndex, 1)
   }
 
   return null // Return null if parsing fails
@@ -262,18 +265,18 @@ export function AppTable({
 
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return "—"
-    
+
     const parsedDate = parseDateString(dateString)
     if (!parsedDate) return dateString // Show original string if it can't be parsed
 
-    // Check if the original string was just a month
+    // Check if the original string was just a month (4+ characters to avoid short inputs)
     const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
-    const isMonthOnly = monthNames.some(m => m.startsWith(dateString.toLowerCase()))
+    const isMonthOnly = dateString.length >= 4 && monthNames.some(m => m.startsWith(dateString.toLowerCase()))
 
     if (isMonthOnly) {
       return format(parsedDate, "MMMM") // Display only the month name
     }
-    
+
     return format(parsedDate, "MMM dd, yyyy") // Full date format
   }
 

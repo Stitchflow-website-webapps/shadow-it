@@ -1003,7 +1003,7 @@ function SimpleAppDetail({ app, onUpdateApp, onRemoveApp, initialEditMode = fals
                         {isEditMode ? (
                           <input
                             type="date"
-                            value={editedFields.renewalDate ?? (app.renewalDate || "")}
+                            value={editedFields.renewalDate ?? app.renewalDate ?? ""}
                             onChange={(e) => handleFieldChange({ renewalDate: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
