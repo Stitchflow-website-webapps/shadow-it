@@ -658,89 +658,122 @@ export async function GET(request: Request) {
     // DOMAIN MAPPING LOGIC: Check if domain exists in any organize-app-inbox organization's comma-separated domain list
     try {
       console.log('Checking for existing App Inbox organization with domain:', userInfo.hd);
-      
-      // Get all App Inbox organizations to check their comma-separated domain lists
+
+      const parseCsv = (value?: string | null) =>
+        (value ? value.split(',') : [])
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0);
+
+      // Get all App Inbox organizations to allow both shadow-org and domain matching
       const { data: allOrganizeOrgs, error: fetchError } = await organizeSupabaseAdmin
         .from('organizations')
-        .select('id, name, domain, shadow_org_id')
-        .not('domain', 'is', null);
-      
+        .select('id, name, domain, shadow_org_id');
+
       if (fetchError) {
         console.error('Error fetching App Inbox organizations:', fetchError);
         throw fetchError;
       }
-      
-      // Find organization that contains this domain in its comma-separated list
-      const matchingOrg = allOrganizeOrgs?.find(orgItem => {
-        if (!orgItem.domain) return false;
-        const orgDomains = orgItem.domain.split(',').map((d: string) => d.trim());
-        return orgDomains.includes(userInfo.hd);
+
+      // First, check whether this Shadow IT org is already linked anywhere
+      const existingByShadowOrg = allOrganizeOrgs?.find((orgItem) => {
+        const orgShadowIds = parseCsv(orgItem.shadow_org_id);
+        return orgShadowIds.includes(org.id);
       });
-      
-      if (matchingOrg) {
-        console.log('Found existing App Inbox organization with matching domain:', userInfo.hd, {
-          existingOrgId: matchingOrg.id,
-          existingDomains: matchingOrg.domain,
-          existingShadowOrgIds: matchingOrg.shadow_org_id,
-          newShadowOrgId: org.id
+
+      if (existingByShadowOrg) {
+        console.log('Found existing App Inbox organization linked by shadow org ID:', {
+          existingOrgId: existingByShadowOrg.id,
+          existingDomains: existingByShadowOrg.domain,
+          shadowOrgIds: existingByShadowOrg.shadow_org_id,
+          shadowOrgIdToLink: org.id,
         });
-        
-        // Add the new shadow org ID to the existing comma-separated list
-        let updatedShadowOrgIds = matchingOrg.shadow_org_id || '';
-        
-        // Parse existing shadow org IDs
-        const existingShadowOrgIds = updatedShadowOrgIds ? 
-          updatedShadowOrgIds.split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0) : 
-          [];
-        
-        // Add new shadow org ID if not already present
-        if (!existingShadowOrgIds.includes(org.id)) {
-          existingShadowOrgIds.push(org.id);
-          updatedShadowOrgIds = existingShadowOrgIds.join(',');
-          
-          console.log('Adding new shadow org ID to existing list:', {
-            previous: matchingOrg.shadow_org_id,
-            updated: updatedShadowOrgIds
+
+        // Ensure the current domain is recorded
+        const existingDomains = parseCsv(existingByShadowOrg.domain);
+        if (userInfo.hd && !existingDomains.includes(userInfo.hd)) {
+          const updatedDomains = [...existingDomains, userInfo.hd].join(',');
+          console.log('Adding new domain to existing App Inbox org linked by shadow org ID:', {
+            previous: existingByShadowOrg.domain,
+            updated: updatedDomains,
           });
-          
-          // Update the existing App Inbox organization
-          const { error: updateError } = await organizeSupabaseAdmin
+
+          const { error: updateDomainError } = await organizeSupabaseAdmin
             .from('organizations')
             .update({
-              shadow_org_id: updatedShadowOrgIds,
-              updated_at: new Date().toISOString()
+              domain: updatedDomains,
+              updated_at: new Date().toISOString(),
             })
-            .eq('id', matchingOrg.id);
-          
-          if (updateError) {
-            console.error('Error updating App Inbox organization with new shadow org ID:', updateError);
-          } else {
-            console.log('Successfully added shadow org ID to existing App Inbox organization');
+            .eq('id', existingByShadowOrg.id);
+
+          if (updateDomainError) {
+            console.error('Error updating App Inbox organization domain list:', updateDomainError);
           }
-        } else {
-          console.log('Shadow org ID already exists in App Inbox organization, no update needed');
         }
       } else {
-        // No existing organization found with this domain, create a new one
-        console.log('No existing App Inbox organization found with domain:', userInfo.hd, '- creating new one');
-        
-        const { error: organizeOrgError } = await organizeSupabaseAdmin
-          .from('organizations')
-          .insert({
-            name: `${userInfo.hd}'s Organization`,
-            domain: userInfo.hd,
-            identity_provider: '',
-            email_provider: '',
-            shadow_org_id: org.id,
-            updated_at: new Date().toISOString(),
-            created_at: new Date().toISOString()
+        // Fall back to domain-based matching when no shadow-org link exists
+        const matchingOrg = allOrganizeOrgs?.find((orgItem) => {
+          if (!orgItem.domain) return false;
+          const orgDomains = parseCsv(orgItem.domain);
+          return orgDomains.includes(userInfo.hd);
+        });
+
+        if (matchingOrg) {
+          console.log('Found existing App Inbox organization with matching domain:', userInfo.hd, {
+            existingOrgId: matchingOrg.id,
+            existingDomains: matchingOrg.domain,
+            existingShadowOrgIds: matchingOrg.shadow_org_id,
+            newShadowOrgId: org.id,
           });
-        
-        if (organizeOrgError) {
-          console.error('Error creating App Inbox organization:', organizeOrgError);
-          // Don't throw - this shouldn't block the main auth flow
+
+          const existingShadowOrgIds = parseCsv(matchingOrg.shadow_org_id);
+
+          if (!existingShadowOrgIds.includes(org.id)) {
+            existingShadowOrgIds.push(org.id);
+            const updatedShadowOrgIds = existingShadowOrgIds.join(',');
+
+            console.log('Adding new shadow org ID to existing list:', {
+              previous: matchingOrg.shadow_org_id,
+              updated: updatedShadowOrgIds,
+            });
+
+            const { error: updateError } = await organizeSupabaseAdmin
+              .from('organizations')
+              .update({
+                shadow_org_id: updatedShadowOrgIds,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', matchingOrg.id);
+
+            if (updateError) {
+              console.error('Error updating App Inbox organization with new shadow org ID:', updateError);
+            } else {
+              console.log('Successfully added shadow org ID to existing App Inbox organization');
+            }
+          } else {
+            console.log('Shadow org ID already exists in App Inbox organization, no update needed');
+          }
         } else {
-          console.log('Created new App Inbox organization for domain:', userInfo.hd);
+          // No existing organization found with this domain, create a new one
+          console.log('No existing App Inbox organization found with domain:', userInfo.hd, '- creating new one');
+
+          const { error: organizeOrgError } = await organizeSupabaseAdmin
+            .from('organizations')
+            .insert({
+              name: `${userInfo.hd}'s Organization`,
+              domain: userInfo.hd,
+              identity_provider: '',
+              email_provider: '',
+              shadow_org_id: org.id,
+              updated_at: new Date().toISOString(),
+              created_at: new Date().toISOString(),
+            });
+
+          if (organizeOrgError) {
+            console.error('Error creating App Inbox organization:', organizeOrgError);
+            // Don't throw - this shouldn't block the main auth flow
+          } else {
+            console.log('Created new App Inbox organization for domain:', userInfo.hd);
+          }
         }
       }
     } catch (error) {
