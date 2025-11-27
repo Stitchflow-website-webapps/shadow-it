@@ -2433,53 +2433,45 @@ export default function ShadowITDashboard() {
       <NavbarMain />
       <main className="pt-[64px]">
 
-        <div className="max-w-[70rem] mx-auto px-4 sm:px-8 py-8">
-          <h2 className="text-2xl font-semibold mb-8 sm:mb-14 text-gray-900 text-center">
-            Complete visibility. Real control. All in one place
-          </h2>
+        <div className="pt-6 pb-6 sm:pt-12 sm:pb-10 px-4 sm:px-8 max-w-[70rem] mx-auto text-center">
           <a
             href="https://www.stitchflow.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-medium hover:bg-primary/15 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 shadow-sm rounded-full text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors mb-6"
           >
             Free tool from Stitchflow
             <ExternalLink className="h-3 w-3" />
           </a>
 
-          <div className="space-y-4 sm:space-y-6">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mx-auto max-w-[900px] leading-tight">
-              Free Shadow IT Scanner
-            </h1>
+          <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-gray-900 mb-4 max-w-4xl mx-auto leading-[1.1]">
+            Free Shadow IT Scanner
+          </h1>
 
-            <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Discover the apps your employees are using, detect potential risks by tracking app scopes, and prevent compliance gaps before they escalate.
-            </p>
-            {!isAuthenticated() && (
-              <div className="mt-6 sm:mt-8 flex justify-center">
-                <Button_website
-                  onClick={() => setShowLoginModal(true)}
-                  variant="primary" // This variant will be styled by the className
-                  type="button"
-                  // className combines custom button's base styles with overrides for white bg, dark text, border, and new padding
-                  className="py-3 px-8 w-auto flex group z-50 pointer-events-auto bg-white hover:bg-gray-100 text-[#363338] border border-gray-300 rounded-lg"
-                >
-                  <div className="flex justify-center items-center">
-                    <span className="font-medium text-base leading-4 whitespace-nowrap">
-                      Start your scan
-                    </span>
-                    <ArrowRight className="ml-2 h-4 w-0 flex-shrink-0 transition-all ease-in duration-200 group-hover:w-4 group-active:translate-x-1.5" />
-                  </div>
-                </Button_website>
-              </div>
-            )}
-          </div>
+          <p className="text-lg sm:text-xl text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
+            Discover the apps your employees are using, detect potential risks by tracking app scopes, and prevent compliance gaps before they escalate.
+          </p>
+
+          {!isAuthenticated() && (
+            <div className="flex justify-center mb-4">
+              <Button_website
+                onClick={() => setShowLoginModal(true)}
+                variant="secondary"
+                type="button"
+                className="py-3 px-8 w-auto flex group z-50 pointer-events-auto shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg"
+              >
+                <div className="flex justify-center items-center">
+                  <span className="font-medium text-base leading-4 whitespace-nowrap">
+                    Start your scan
+                  </span>
+                  <ArrowRight className="ml-2 h-4 w-4 flex-shrink-0" />
+                </div>
+              </Button_website>
+            </div>
+          )}
         </div>
 
-
-
-
-        <main className="pt-[40px] pl-10 pr-10 bg-white mt-4 pb-10">
+        <div className="pt-4 pl-10 pr-10 bg-white mt-4 pb-10">
 
           {!isAuthenticated() && (
             <div className="bg-black border border-gray-800 rounded-lg p-4 mb-6">
@@ -4360,8 +4352,8 @@ export default function ShadowITDashboard() {
 
                               {saveMessage && (
                                 <div className={`p-3 rounded-md ${saveMessage.type === "success"
-                                    ? "bg-green-50 text-green-700 border border-green-200"
-                                    : "bg-red-50 text-red-700 border border-red-200"
+                                  ? "bg-green-50 text-green-700 border border-green-200"
+                                  : "bg-red-50 text-red-700 border border-red-200"
                                   }`}>
                                   {saveMessage.text}
                                 </div>
@@ -4383,7 +4375,7 @@ export default function ShadowITDashboard() {
               </div>
             </div>
           )}
-        </main>
+        </div>
 
         {/* Use the new SettingsModal component */}
         <SettingsModal
@@ -4557,7 +4549,7 @@ export default function ShadowITDashboard() {
         }
       `}</style>
       {showLoginModal && <LoginModal error={loginError} />}
-    </div>
+    </div >
   )
 }
 
