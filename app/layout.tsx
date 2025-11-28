@@ -23,6 +23,31 @@ export const metadata: Metadata = {
   title: 'Free Shadow IT Scanner for SaaS & AI Apps | Stitchflow',
   description: 'With Shadow IT discovery tool, detect all apps tied to your Google Workspace/Microsoft 365, see risky apps ranked by OAuth scopes & get alerts for risky usage',
   generator: 'Stitchflow',
+  alternates: {
+    canonical: "https://www.stitchflow.com/tools/shadow-it-scan"
+  },
+  openGraph: {
+    title: 'Free Shadow IT Scanner for SaaS & AI Apps | Stitchflow',
+    description: 'With Shadow IT discovery tool, detect all apps tied to your Google Workspace/Microsoft 365, see risky apps ranked by OAuth scopes & get alerts for risky usage',
+    url: "https://www.stitchflow.com/tools/shadow-it-scan",
+    siteName: "Stitchflow",
+    images: [
+      {
+        url: "https://www.stitchflow.com/opengraph-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Shadow IT Scanner",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: 'Free Shadow IT Scanner for SaaS & AI Apps | Stitchflow',
+    description: 'With Shadow IT discovery tool, detect all apps tied to your Google Workspace/Microsoft 365, see risky apps ranked by OAuth scopes & get alerts for risky usage',
+    images: ["https://www.stitchflow.com/opengraph-image.png"],
+  }
 }
 
 export default function RootLayout({
@@ -43,7 +68,6 @@ export default function RootLayout({
 
         <meta charSet="UTF-8" />
         <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-        <link rel="canonical" href="https://www.stitchflow.com/tools/shadow-it-scan" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
         {/* Google Tag Manager (noscript) */}
