@@ -70,6 +70,11 @@ const navbarConfig: NavbarConfig = {
                     path: "https://www.stitchflow.com/case-studies"
                 },
                 {
+                    title: "Whitepapers",
+                    description: "Deep dives into our security and automation resilience.",
+                    path: "https://www.stitchflow.com/whitepapers"
+                },
+                {
                     title: "Stitchflow Savings Calculator",
                     description: "Get a tailored ROI snapshot of how Stitchflow pays for itself.",
                     path: "https://www.stitchflow.com/tools/roi-calculator"
