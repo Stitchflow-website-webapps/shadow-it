@@ -1,5 +1,5 @@
 import type { OrganizeApp } from '@/lib/supabase/organize-client'
-import type { App, VendorFile } from '@/types/app'
+import type { App, VendorFile, AppSKU } from '@/types/app'
 
 // Convert OrganizeApp to App for compatibility with existing components
 export function organizeAppToApp(organizeApp: OrganizeApp): App {
@@ -37,6 +37,9 @@ export function organizeAppToApp(organizeApp: OrganizeApp): App {
     paymentMethod: organizeApp.payment_method || '',
     paymentTerms: organizeApp.payment_terms || '',
     budgetSource: organizeApp.budget_source || '',
+    // Multi-SKU fields
+    isMultiSKUEnabled: organizeApp.is_multi_sku_enabled || false,
+    skus: organizeApp.skus || [],
   }
 }
 
@@ -74,5 +77,8 @@ export function appToOrganizeApp(app: App, orgId: string): Partial<OrganizeApp> 
     payment_method: app.paymentMethod || null,
     payment_terms: app.paymentTerms || null,
     budget_source: app.budgetSource || null,
+    // Multi-SKU fields
+    is_multi_sku_enabled: app.isMultiSKUEnabled || false,
+    skus: app.skus || null,
   }
 }

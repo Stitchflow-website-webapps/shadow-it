@@ -35,6 +35,9 @@ export interface VendorFile {
   url?: string
 }
 
+// Import AppSKU type
+import type { AppSKU } from '@/types/app'
+
 export interface OrganizeApp {
   id: string
   name: string
@@ -69,6 +72,9 @@ export interface OrganizeApp {
   managed_status: string | null
   licenses_used: number | null
   usage_description: string | null
+  // Multi-SKU fields
+  is_multi_sku_enabled: boolean | null
+  skus: AppSKU[] | null
   source_shadow_org_id?: string // Optional field added by API for tracking which shadow org the app belongs to
 }
 

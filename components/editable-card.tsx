@@ -50,6 +50,7 @@ interface EditableCardProps {
   userInfo?: UserInfo | null
   vendorFiles?: VendorFile[]
   onVendorFilesChange?: (files: VendorFile[]) => void
+  customContent?: React.ReactNode
 }
 
 // Helper function to calculate days until renewal
@@ -88,56 +89,63 @@ const parseSmartDate = (input: string): string => {
 
   const trimmedInput = input.trim()
   const currentYear = new Date().getFullYear()
-  
+
   // If it's already a complete YYYY-MM-DD format, return as is
   if (trimmedInput.match(/^\d{4}-\d{2}-\d{2}$/)) {
     return trimmedInput
   }
 
+  // Don't auto-parse very short inputs that might be accidental
+  // This prevents "dec" from being auto-converted to a full date
+  if (trimmedInput.length <= 3) {
+    return input
+  }
+
   try {
     // Create a date object from the input
     let parsedDate = new Date(trimmedInput)
-    
+
     // If the parsed date is valid but has year 2001 (browser default for missing year)
     // or any year before 2000, update it to current year
     if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() <= 2001) {
       parsedDate.setFullYear(currentYear)
     }
-    
+
     // If we successfully parsed a date, return it in YYYY-MM-DD format
     if (!isNaN(parsedDate.getTime())) {
       return format(parsedDate, 'yyyy-MM-dd')
     }
   } catch (error) {
     // If parsing fails, try some common patterns
-    
-    // Handle month names (e.g., "sep", "september", "sep 15")
-    const monthPatterns = [
-      { pattern: /^(jan|january)\s*(\d{1,2})?$/i, month: 0 },
-      { pattern: /^(feb|february)\s*(\d{1,2})?$/i, month: 1 },
-      { pattern: /^(mar|march)\s*(\d{1,2})?$/i, month: 2 },
-      { pattern: /^(apr|april)\s*(\d{1,2})?$/i, month: 3 },
-      { pattern: /^(may)\s*(\d{1,2})?$/i, month: 4 },
-      { pattern: /^(jun|june)\s*(\d{1,2})?$/i, month: 5 },
-      { pattern: /^(jul|july)\s*(\d{1,2})?$/i, month: 6 },
-      { pattern: /^(aug|august)\s*(\d{1,2})?$/i, month: 7 },
-      { pattern: /^(sep|september)\s*(\d{1,2})?$/i, month: 8 },
-      { pattern: /^(oct|october)\s*(\d{1,2})?$/i, month: 9 },
-      { pattern: /^(nov|november)\s*(\d{1,2})?$/i, month: 10 },
-      { pattern: /^(dec|december)\s*(\d{1,2})?$/i, month: 11 },
+
+    // Handle month names with explicit day (e.g., "sep 15", "september 15")
+    // Only parse if there's a day specified to avoid accidental conversion
+    const monthWithDayPatterns = [
+      { pattern: /^(jan|january)\s+(\d{1,2})$/i, month: 0 },
+      { pattern: /^(feb|february)\s+(\d{1,2})$/i, month: 1 },
+      { pattern: /^(mar|march)\s+(\d{1,2})$/i, month: 2 },
+      { pattern: /^(apr|april)\s+(\d{1,2})$/i, month: 3 },
+      { pattern: /^(may)\s+(\d{1,2})$/i, month: 4 },
+      { pattern: /^(jun|june)\s+(\d{1,2})$/i, month: 5 },
+      { pattern: /^(jul|july)\s+(\d{1,2})$/i, month: 6 },
+      { pattern: /^(aug|august)\s+(\d{1,2})$/i, month: 7 },
+      { pattern: /^(sep|september)\s+(\d{1,2})$/i, month: 8 },
+      { pattern: /^(oct|october)\s+(\d{1,2})$/i, month: 9 },
+      { pattern: /^(nov|november)\s+(\d{1,2})$/i, month: 10 },
+      { pattern: /^(dec|december)\s+(\d{1,2})$/i, month: 11 },
     ]
-    
-    for (const { pattern, month } of monthPatterns) {
+
+    for (const { pattern, month } of monthWithDayPatterns) {
       const match = trimmedInput.match(pattern)
       if (match) {
-        const day = match[2] ? parseInt(match[2], 10) : 1
+        const day = parseInt(match[2], 10)
         if (day >= 1 && day <= 31) {
           const date = new Date(currentYear, month, day)
           return format(date, 'yyyy-MM-dd')
         }
       }
     }
-    
+
     // Handle MM/DD or MM-DD patterns (default to current year)
     const mmddPattern = /^(\d{1,2})[\/\-](\d{1,2})$/
     const mmddMatch = trimmedInput.match(mmddPattern)
@@ -150,7 +158,7 @@ const parseSmartDate = (input: string): string => {
       }
     }
   }
-  
+
   // If all parsing attempts fail, return the original input
   return input
 }
@@ -503,7 +511,7 @@ function VendorFilesContent({
   )
 }
 
-export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing, userInfo, vendorFiles, onVendorFilesChange }: EditableCardProps) {
+export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing, userInfo, vendorFiles, onVendorFilesChange, customContent }: EditableCardProps) {
   const [internalIsEditing, setInternalIsEditing] = useState(false)
   
   // Use external isEditing prop when provided, otherwise use internal state
@@ -1326,7 +1334,9 @@ export function EditableCard({ title, icon, fields, onUpdate, appName, isEditing
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-7 px-6 pb-6">
-        {title === "Vendor Files and Notes" ? (
+        {customContent ? (
+          customContent
+        ) : title === "Vendor Files and Notes" ? (
           <VendorFilesContent
             vendorFiles={vendorFiles || []}
             onVendorFilesChange={onVendorFilesChange}
