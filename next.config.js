@@ -36,10 +36,11 @@ const nextConfig = {
         child_process: false,
       });
     }
-    
+
     return config;}
   ,
-  assetPrefix:'/tools/shadow-it-scan',
+  // Only use assetPrefix in production, not in local development
+  ...(process.env.NODE_ENV === 'production' ? { assetPrefix: '/tools/shadow-it-scan', basePath: '/tools/shadow-it-scan' } : {}),
 }
 
 // Handle optional user config merging

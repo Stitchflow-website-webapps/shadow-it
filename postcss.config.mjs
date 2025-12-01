@@ -4,7 +4,7 @@ const config = {
     tailwindcss: {},
   },
   images: {
-    domains: ['localhost:3000','stitchflow.com', 'dev-web.stitchflow.com'],
+    domains: ['localhost:3000', 'stitchflow.com', 'dev-web.stitchflow.com'],
     unoptimized: true,
   },
   eslint: {
@@ -24,9 +24,9 @@ const config = {
       test: /\.json$/,
       type: 'json',
     });
-    return config;  
+    return config;
   },
-  assetPrefix:'/tools/shadow-it',
+  assetPrefix: '/tools/shadow-it',
   // Security-related configuration
   poweredByHeader: false, // Remove X-Powered-By header
 };

@@ -28,7 +28,9 @@ import {
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import { WhyStitchflow } from "@/components/ui/demo";
+import { WhyStitchflow } from "@/components/home/demo";
+import NavbarMain from "@/components/home/navbar-main";
+import FooterMain from "@/components/home/footer-main";
 import { Button } from "@/components/ui/button"
 import Button_website from "@/components/ui/Button_website"
 import Link from 'next/link';
@@ -215,7 +217,7 @@ export default function ShadowITDashboard() {
   // Add this state near your other useState declarations
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginError, setLoginError] = useState<string>('');
-  
+
   // State for the "Top Apps by User Count" chart's managed status filter
   const [chartManagedStatusFilter, setChartManagedStatusFilter] = useState<string>('Any Status');
 
@@ -232,19 +234,19 @@ export default function ShadowITDashboard() {
   const [ownerEmail, setOwnerEmail] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [saveMessage, setSaveMessage] = useState<{type: "success" | "error", text: string} | null>(null);
+  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error", text: string } | null>(null);
 
   // Helper function to redirect to Google consent screen
   const redirectToGoogleConsent = () => {
     let redirectURI;
-    
+
     // Check if we're on localhost
     if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1'))) {
       redirectURI = `${window.location.origin}/tools/shadow-it-scan/api/auth/google/callback`;
     } else {
       redirectURI = `https://stitchflow.com/tools/shadow-it-scan/api/auth/google`;
     }
-    
+
     const scopes = [
       'openid',
       'profile',
@@ -253,11 +255,11 @@ export default function ShadowITDashboard() {
       'https://www.googleapis.com/auth/admin.directory.domain.readonly',
       'https://www.googleapis.com/auth/admin.directory.user.security',
     ];
-    
+
     const state = Math.random().toString(36).substring(2, 15);
     localStorage.setItem('oauth_state', state);
     localStorage.setItem('auth_provider', 'google');
-    
+
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     url.searchParams.append('client_id', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '');
     url.searchParams.append('redirect_uri', redirectURI);
@@ -266,32 +268,32 @@ export default function ShadowITDashboard() {
     url.searchParams.append('access_type', 'offline');
     url.searchParams.append('state', state);
     url.searchParams.append('prompt', 'consent');
-    
+
     console.log("Redirecting to Google with URI:", redirectURI);
     window.location.href = url.toString();
   };
-  
+
   // Helper function to redirect to Microsoft consent screen
   const redirectToMicrosoftConsent = () => {
     let redirectURI;
-    
+
     // Check if we're on localhost
     if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1'))) {
       redirectURI = `${window.location.origin}/tools/shadow-it-scan/api/auth/microsoft/callback`;
     } else {
       redirectURI = `https://stitchflow.com/tools/shadow-it-scan/api/auth/microsoft`;
     }
-    
+
     const scopes = [
       'user.read',
       'User.ReadBasic.All',
       'Directory.Read.All'
     ];
-    
+
     const state = Math.random().toString(36).substring(2, 15);
     localStorage.setItem('oauth_state', state);
     localStorage.setItem('auth_provider', 'microsoft');
-    
+
     const url = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
     url.searchParams.append('client_id', process.env.NEXT_PUBLIC_MICROSOFT_CLIENT_ID || '');
     url.searchParams.append('redirect_uri', redirectURI);
@@ -299,11 +301,11 @@ export default function ShadowITDashboard() {
     url.searchParams.append('scope', scopes.join(' '));
     url.searchParams.append('state', state);
     url.searchParams.append('prompt', 'consent');
-    
+
     console.log("Redirecting to Microsoft with URI:", redirectURI);
     window.location.href = url.toString();
   };
-  
+
   // Add a useEffect to check for error parameters in the URL
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -339,56 +341,56 @@ export default function ShadowITDashboard() {
       }
 
       let friendlyMessage = '';
-        switch (errorParam) {
-          case 'admin_required':
-            friendlyMessage = "Please use an admin workspace account as personal accounts are not supported.";
-            break;
-          case 'not_workspace_account':
-            friendlyMessage = "Please use an admin workspace account as personal accounts are not supported.";
-            break;
-          case 'not_work_account':
-            friendlyMessage = "Please use an admin workspace account as personal accounts are not supported.";
-            break;
-          case 'no_code':
-            friendlyMessage = "Authentication failed: Authorization code missing. Please try again. Check you mail for detailed error message.";
-            break;
-          case 'auth_failed':
-            friendlyMessage = "Authentication failed. Please try again or reach out to contact@stitchflow.io if the issue persists.";
-            break;
-          case 'user_data_failed':
-            friendlyMessage = "Failed to fetch user data after authentication. Please try again.";
-            break;
-          case 'config_missing':
-            friendlyMessage = "OAuth configuration is missing. Please reach out to contact@stitchflow.io.";
-            break;
-          case 'data_refresh_required': // Also in needsDirectConsentErrors
-            // If provider was missing, this message will be shown.
-            friendlyMessage = "We need to refresh your account permissions. Please sign in again to grant access.";
-            break;
-          // Cases for interaction_required, login_required, consent_required, missing_data
-          // are handled by the default block below if they were a 'isDirectConsentError' but provider was null.
-          case 'interaction_required':
-          case 'login_required':
-          case 'consent_required':
-          case 'missing_data':
-          case 'unknown':
-          default:
-            if (isDirectConsentError) { // Error was a direct consent type, but provider was null (so no redirect)
-              friendlyMessage = 'We need to refresh your data access. Please grant permission again.';
-            } else {
-              friendlyMessage = "An unknown authentication error occurred. Please try again.";
-            }
-            break;
-        }
-        
+      switch (errorParam) {
+        case 'admin_required':
+          friendlyMessage = "Please use an admin workspace account as personal accounts are not supported.";
+          break;
+        case 'not_workspace_account':
+          friendlyMessage = "Please use an admin workspace account as personal accounts are not supported.";
+          break;
+        case 'not_work_account':
+          friendlyMessage = "Please use an admin workspace account as personal accounts are not supported.";
+          break;
+        case 'no_code':
+          friendlyMessage = "Authentication failed: Authorization code missing. Please try again. Check you mail for detailed error message.";
+          break;
+        case 'auth_failed':
+          friendlyMessage = "Authentication failed. Please try again or reach out to contact@stitchflow.io if the issue persists.";
+          break;
+        case 'user_data_failed':
+          friendlyMessage = "Failed to fetch user data after authentication. Please try again.";
+          break;
+        case 'config_missing':
+          friendlyMessage = "OAuth configuration is missing. Please reach out to contact@stitchflow.io.";
+          break;
+        case 'data_refresh_required': // Also in needsDirectConsentErrors
+          // If provider was missing, this message will be shown.
+          friendlyMessage = "We need to refresh your account permissions. Please sign in again to grant access.";
+          break;
+        // Cases for interaction_required, login_required, consent_required, missing_data
+        // are handled by the default block below if they were a 'isDirectConsentError' but provider was null.
+        case 'interaction_required':
+        case 'login_required':
+        case 'consent_required':
+        case 'missing_data':
+        case 'unknown':
+        default:
+          if (isDirectConsentError) { // Error was a direct consent type, but provider was null (so no redirect)
+            friendlyMessage = 'We need to refresh your data access. Please grant permission again.';
+          } else {
+            friendlyMessage = "An unknown authentication error occurred. Please try again.";
+          }
+          break;
+      }
+
       setLoginError(friendlyMessage);
       setShowLoginModal(true);
 
       // Clean up the URL by removing the error parameter
       const cleanUrl = new URL(window.location.href);
       if (cleanUrl.searchParams.has('error')) {
-          cleanUrl.searchParams.delete('error');
-          window.history.replaceState({}, document.title, cleanUrl.toString());
+        cleanUrl.searchParams.delete('error');
+        window.history.replaceState({}, document.title, cleanUrl.toString());
       }
     }
   }, [searchParams, redirectToGoogleConsent, redirectToMicrosoftConsent, setLoginError, setShowLoginModal]);
@@ -397,12 +399,12 @@ export default function ShadowITDashboard() {
   const checkCategories = async () => {
     try {
       let categoryOrgId: string | null = null;
-      
+
       // Only run client-side code in browser environment
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
         categoryOrgId = urlParams.get('orgId');
-        
+
         if (!categoryOrgId) {
           try {
             const cookies = document.cookie.split(';');
@@ -414,7 +416,7 @@ export default function ShadowITDashboard() {
             console.error("Error parsing cookies:", cookieError);
           }
         }
-        
+
         if (!categoryOrgId) return;
       } else {
         // Skip this function on the server
@@ -429,10 +431,10 @@ export default function ShadowITDashboard() {
       if (!response.ok) return;
 
       const data = await response.json();
-      
+
       // Update only the categories state
       setAppCategories(prev => ({ ...prev, ...data }));
-      
+
       // Remove categorized apps from uncategorized set
       setUncategorizedApps(prev => {
         const next = new Set(prev);
@@ -470,13 +472,13 @@ export default function ShadowITDashboard() {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      
+
       // Check URL parameters for orgId (which might be set during OAuth redirect)
       let fetchOrgId = null;
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
         const urlOrgId = urlParams.get('orgId');
-        
+
         if (urlOrgId) {
           fetchOrgId = urlOrgId;
         } else if (document.cookie.split(';').find(cookie => cookie.trim().startsWith('orgId='))) {
@@ -484,7 +486,7 @@ export default function ShadowITDashboard() {
           fetchOrgId = orgIdCookie?.split('=')[1].trim();
         }
       }
-      
+
       // Only load dummy data if not authenticated
       if (!isAuthenticated()) {
         console.log('Not authenticated, loading dummy data');
@@ -794,7 +796,7 @@ export default function ShadowITDashboard() {
             "Status": "Newly discovered"
           }
         ]
-        
+
         setApplications(transformDummyData(dummyData));
         setIsLoading(false);
         return;
@@ -816,14 +818,14 @@ export default function ShadowITDashboard() {
         }))
       }));
       setApplications(processedData);
-      
+
       // Track apps still uncategorized
       const unknownIds = new Set<string>();
       processedData.forEach((app: Application) => { // Use processedData here
         if (app.category === 'Unknown') unknownIds.add(app.id);
       });
       setUncategorizedApps(unknownIds);
-      
+
       setIsLoading(false);
     } catch (error) {
       console.error("Error fetching application data:", error);
@@ -835,7 +837,7 @@ export default function ShadowITDashboard() {
   // Add useEffect to trigger fetchData
   useEffect(() => {
     fetchData();
-    
+
     // Cleanup function
     return () => {
       if (pollingInterval.current) {
@@ -866,7 +868,7 @@ export default function ShadowITDashboard() {
     const fetchUserData = async () => {
       try {
         const response = await fetch('/tools/shadow-it-scan/api/session-info');
-        
+
         if (response.ok) {
           const userData = await response.json();
           setUserInfo(userData);
@@ -878,7 +880,7 @@ export default function ShadowITDashboard() {
         console.error('Error fetching user data:', error);
       }
     };
-    
+
     fetchUserData();
   }, []);
 
@@ -888,12 +890,12 @@ export default function ShadowITDashboard() {
       // Clear all cookies by setting them to expire in the past
       const allCookies = document.cookie.split(';');
       console.log('Cookies before clearing:', allCookies);
-      
+
       // Specifically clear the critical cookies with all path/domain combinations
       const cookiesToClear = ['orgId', 'userEmail', 'accessToken', 'refreshToken'];
       const domains = [window.location.hostname, '', null, 'stitchflow.com', `.${window.location.hostname}`];
       const paths = ['/', '/tools/shadow-it-scan', '/tools/shadow-it-scan/', '', null];
-      
+
       // Try all combinations to ensure cookies are cleared
       for (const cookieName of cookiesToClear) {
         for (const domain of domains) {
@@ -904,7 +906,7 @@ export default function ShadowITDashboard() {
           }
         }
       }
-      
+
       // Also try to clear all cookies generically
       allCookies.forEach((cookie: string) => {
         const [name] = cookie.trim().split('=');
@@ -919,21 +921,21 @@ export default function ShadowITDashboard() {
           }
         }
       });
-      
+
       // Clear local storage
       localStorage.clear();
-      
+
       // Clear session storage too
       sessionStorage.clear();
-      
+
       console.log('Cookies after clearing:', document.cookie);
-      
+
       // Redirect and force refresh (using a timestamp to prevent caching)
       window.location.href = `/tools/shadow-it-scan/`;
     }
   };
 
-  
+
   // Sorting function
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -955,17 +957,17 @@ export default function ShadowITDashboard() {
   // Memoize filtered applications
   const filteredApps = useMemo(() => {
     return applications.filter((app) => {
-      const matchesSearch = searchTerm === "" || 
-      app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (app.category && app.category.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchesRisk = filterRisk ? app.riskLevel === filterRisk : true
-    const matchesManaged = filterManaged ? app.managementStatus === filterManaged : true
-    // Use appCategories for filtering if available, otherwise fallback to app.category
-    const effectiveCategory = appCategories[app.id] || app.category;
-    const matchesCategory = filterCategory ? effectiveCategory === filterCategory : true
+      const matchesSearch = searchTerm === "" ||
+        app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (app.category && app.category.toLowerCase().includes(searchTerm.toLowerCase()))
+      const matchesRisk = filterRisk ? app.riskLevel === filterRisk : true
+      const matchesManaged = filterManaged ? app.managementStatus === filterManaged : true
+      // Use appCategories for filtering if available, otherwise fallback to app.category
+      const effectiveCategory = appCategories[app.id] || app.category;
+      const matchesCategory = filterCategory ? effectiveCategory === filterCategory : true
 
-    return matchesSearch && matchesRisk && matchesManaged && matchesCategory
-  })
+      return matchesSearch && matchesRisk && matchesManaged && matchesCategory
+    })
   }, [applications, searchTerm, filterRisk, filterManaged, filterCategory, appCategories]) // Added appCategories to dependency array
 
   // Get unique categories for the filter dropdown
@@ -1103,7 +1105,7 @@ export default function ShadowITDashboard() {
         if (!valA && !valB) return 0;
         if (!valA) return userSortDirection === "asc" ? -1 : 1;
         if (!valB) return userSortDirection === "asc" ? 1 : -1;
-        
+
         const dateA = new Date(valA).getTime()
         const dateB = new Date(valB).getTime()
         return userSortDirection === "asc" ? dateA - dateB : dateB - dateA
@@ -1118,14 +1120,14 @@ export default function ShadowITDashboard() {
           return compareDate(a.created_at, b.created_at)
         case "riskLevel": {
           // Create a more comprehensive mapping to handle all possible RiskLevel values
-          const riskOrder: Record<string, number> = { 
+          const riskOrder: Record<string, number> = {
             'Low': 1, 'low': 1, 'LOW': 1,
-            'Medium': 2, 'medium': 2, 'MEDIUM': 2, 
+            'Medium': 2, 'medium': 2, 'MEDIUM': 2,
             'High': 3, 'high': 3, 'HIGH': 3
           };
-          
+
           // Use transformRiskLevel to normalize keys as needed
-          return userSortDirection === "asc" 
+          return userSortDirection === "asc"
             ? (riskOrder[transformRiskLevel(a.riskLevel)] || 0) - (riskOrder[transformRiskLevel(b.riskLevel)] || 0)
             : (riskOrder[transformRiskLevel(b.riskLevel)] || 0) - (riskOrder[transformRiskLevel(a.riskLevel)] || 0);
         }
@@ -1183,31 +1185,31 @@ export default function ShadowITDashboard() {
     if (typeof window === 'undefined') {
       return false; // On server, consider not authenticated
     }
-    
+
     // Debug: Log all cookies to see what's available
     const allCookies = document.cookie;
     console.log("All cookies:", allCookies);
-    
+
     const cookies = document.cookie.split(';');
     console.log("Split cookies:", cookies);
-    
+
     // Trim the cookies and check for orgId and userEmail
     const orgIdCookie = cookies.find(cookie => cookie.trim().startsWith('orgId='));
     const userEmailCookie = cookies.find(cookie => cookie.trim().startsWith('userEmail='));
-    
+
     console.log("orgIdCookie:", orgIdCookie);
     console.log("userEmailCookie:", userEmailCookie);
-    
+
     // Use the same logic as in fetchData to also check URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const urlOrgId = urlParams.get('orgId');
-    
+
     console.log("URL orgId:", urlOrgId);
-    
+
     // Consider authenticated if either cookies or URL param is present
     const authenticated = !!(orgIdCookie && userEmailCookie) || !!urlOrgId;
     console.log("Authentication result:", authenticated);
-    
+
     return authenticated;
   };
 
@@ -1218,7 +1220,7 @@ export default function ShadowITDashboard() {
       setShowLoginModal(true);
       return false;
     }
-    
+
     action();
     return true;
   };
@@ -1392,10 +1394,10 @@ export default function ShadowITDashboard() {
     if (scopePermissionsManagedStatusFilter && scopePermissionsManagedStatusFilter !== 'Any Status') {
       filtered = applications.filter(app => app.managementStatus === scopePermissionsManagedStatusFilter);
     }
-    
+
     // Sort by number of permissions (scope count)
     const sorted = [...filtered].sort((a, b) => b.totalPermissions - a.totalPermissions);
-    
+
     return sorted.map((app) => ({
       name: app.name,
       value: app.totalPermissions,
@@ -1456,22 +1458,22 @@ export default function ShadowITDashboard() {
   // Update the getCategoryColor function for charts
   const getCategoryColor = (category: string | null): string => {
     if (!category) return "#CBD5E1"; // Default gray for null/undefined
-    
+
     // Fixed color mapping for consistent colors with proper hex values instead of tailwind classes
     const colorMap: Record<string, string> = {
-      "Analytics & Business Intelligence":   "#FBCFE8", // pink-200  :contentReference[oaicite:0]{index=0}
-      "Cloud Platforms & Infrastructure":    "#C7D2FE", // indigo-200  :contentReference[oaicite:1]{index=1}
-      "Customer Success & Support":          "#99F6E4", // teal-200  :contentReference[oaicite:2]{index=2}
-      "Design & Creative Tools":             "#F5D0FE", // fuchsia-200  :contentReference[oaicite:3]{index=3}
-      "Developer & Engineering Tools":       "#BFDBFE", // blue-200  :contentReference[oaicite:4]{index=4}
-      "Finance & Accounting":                "#FDE68A", // amber-200  :contentReference[oaicite:5]{index=5}
+      "Analytics & Business Intelligence": "#FBCFE8", // pink-200  :contentReference[oaicite:0]{index=0}
+      "Cloud Platforms & Infrastructure": "#C7D2FE", // indigo-200  :contentReference[oaicite:1]{index=1}
+      "Customer Success & Support": "#99F6E4", // teal-200  :contentReference[oaicite:2]{index=2}
+      "Design & Creative Tools": "#F5D0FE", // fuchsia-200  :contentReference[oaicite:3]{index=3}
+      "Developer & Engineering Tools": "#BFDBFE", // blue-200  :contentReference[oaicite:4]{index=4}
+      "Finance & Accounting": "#FDE68A", // amber-200  :contentReference[oaicite:5]{index=5}
       "Human Resources & People Management": "#D9F99D", // lime-200  :contentReference[oaicite:6]{index=6}
-      "IT Operations & Security":            "#FECACA", // red-200   :contentReference[oaicite:7]{index=7}
-      "Identity & Access Management":        "#DDD6FE", // violet-200  :contentReference[oaicite:8]{index=8}
-      "Productivity & Collaboration":        "#A7F3D0", // emerald-200  :contentReference[oaicite:9]{index=9}
-      "Project Management":                  "#FED7AA", // orange-200  :contentReference[oaicite:10]{index=10}
-      "Sales & Marketing":                   "#A5F3FC", // cyan-200   :contentReference[oaicite:11]{index=11}
-      Others:                                "#E5E7EB", // gray-200   :contentReference[oaicite:12]{index=12}
+      "IT Operations & Security": "#FECACA", // red-200   :contentReference[oaicite:7]{index=7}
+      "Identity & Access Management": "#DDD6FE", // violet-200  :contentReference[oaicite:8]{index=8}
+      "Productivity & Collaboration": "#A7F3D0", // emerald-200  :contentReference[oaicite:9]{index=9}
+      "Project Management": "#FED7AA", // orange-200  :contentReference[oaicite:10]{index=10}
+      "Sales & Marketing": "#A5F3FC", // cyan-200   :contentReference[oaicite:11]{index=11}
+      Others: "#E5E7EB", // gray-200   :contentReference[oaicite:12]{index=12}
     };
     // Return the mapped color or a default
     return colorMap[category] || "#E2E8F0"; // Default slate-200 for unknown categories
@@ -1503,8 +1505,8 @@ export default function ShadowITDashboard() {
   }
 
   // App Icon component with improved fallbacks
-  const AppIcon = ({ name, logoUrl, logoUrlFallback }: { 
-    name: string; 
+  const AppIcon = ({ name, logoUrl, logoUrlFallback }: {
+    name: string;
     logoUrl?: string;
     logoUrlFallback?: string;
   }) => {
@@ -1519,7 +1521,7 @@ export default function ShadowITDashboard() {
       const hash = appName.split('').reduce((acc, char) => {
         return char.charCodeAt(0) + ((acc << 5) - acc);
       }, 0);
-      
+
       // Generate a pastel color using the hash
       const h = Math.abs(hash) % 360;
       return `hsl(${h}, 70%, 85%)`;
@@ -1556,7 +1558,7 @@ export default function ShadowITDashboard() {
       );
     } else {
       return (
-        <div 
+        <div
           className="flex items-center justify-center w-8 h-8 rounded-md text-gray-800 font-medium"
           style={{ backgroundColor: bgColor }}
         >
@@ -1591,21 +1593,21 @@ export default function ShadowITDashboard() {
 
     const getCategoryBadgeColor = (category: string) => {
       // Use the same color mapping but for tailwind classes
-      const colorMap: Record<string, string> = 
+      const colorMap: Record<string, string> =
       {
-        "Analytics & Business Intelligence":   "bg-pink-100     text-pink-600",
-        "Cloud Platforms & Infrastructure":    "bg-indigo-100   text-indigo-600",
-        "Customer Success & Support":          "bg-teal-100     text-teal-600",
-        "Design & Creative Tools":             "bg-fuchsia-100  text-fuchsia-600",
-        "Developer & Engineering Tools":       "bg-blue-100     text-blue-600",
-        "Finance & Accounting":                "bg-amber-100    text-amber-600",
+        "Analytics & Business Intelligence": "bg-pink-100     text-pink-600",
+        "Cloud Platforms & Infrastructure": "bg-indigo-100   text-indigo-600",
+        "Customer Success & Support": "bg-teal-100     text-teal-600",
+        "Design & Creative Tools": "bg-fuchsia-100  text-fuchsia-600",
+        "Developer & Engineering Tools": "bg-blue-100     text-blue-600",
+        "Finance & Accounting": "bg-amber-100    text-amber-600",
         "Human Resources & People Management": "bg-lime-100     text-lime-600",
-        "IT Operations & Security":            "bg-red-100      text-red-600",
-        "Identity & Access Management":        "bg-violet-100   text-violet-600",
-        "Productivity & Collaboration":        "bg-emerald-100  text-emerald-600",
-        "Project Management":                  "bg-orange-100   text-orange-600",
-        "Sales & Marketing":                   "bg-cyan-100     text-cyan-600",
-        Others:                                "bg-gray-100     text-gray-600",
+        "IT Operations & Security": "bg-red-100      text-red-600",
+        "Identity & Access Management": "bg-violet-100   text-violet-600",
+        "Productivity & Collaboration": "bg-emerald-100  text-emerald-600",
+        "Project Management": "bg-orange-100   text-orange-600",
+        "Sales & Marketing": "bg-cyan-100     text-cyan-600",
+        Others: "bg-gray-100     text-gray-600",
       };
       return colorMap[category] || "bg-slate-100 text-slate-800";
     };
@@ -1614,7 +1616,7 @@ export default function ShadowITDashboard() {
       <TooltipProvider delayDuration={300}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <div 
+            <div
               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCategoryBadgeColor(currentCategory)} overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px] group-hover:max-w-none`}
             >
               {currentCategory}
@@ -1639,10 +1641,10 @@ export default function ShadowITDashboard() {
       // For backward compatibility, transform the provided level
       riskLevel = transformRiskLevel(level);
     }
-    
+
     // Normalize for display (e.g., "High", "Medium", "Low")
     const normalizedLevel = transformRiskLevel(riskLevel);
-    
+
     const iconMap: Record<string, JSX.Element> = {
       Low: <CheckCircle className="h-5 w-5 mr-1 text-green-700" />,
       Medium: <AlertTriangle className="h-5 w-5 mr-1 text-yellow-700" />,
@@ -1671,7 +1673,7 @@ export default function ShadowITDashboard() {
 
     try {
       const date = new Date(dateString);
-      
+
       // Check if the date is valid
       if (isNaN(date.getTime())) {
         return 'Invalid date';
@@ -1776,7 +1778,7 @@ export default function ShadowITDashboard() {
   }
 
   // Add after the getAppFunctionality function
-  function getSimilarApps(currentApp: Application, allApps: Application[]): Array<{app: Application, score: number, reasons: string[]}> {
+  function getSimilarApps(currentApp: Application, allApps: Application[]): Array<{ app: Application, score: number, reasons: string[] }> {
     return allApps
       .filter(app => app.id !== currentApp.id)
       .map(app => {
@@ -1789,7 +1791,7 @@ export default function ShadowITDashboard() {
           ...currentApp,
           category: appCategories[currentApp.id] || currentApp.category
         };
-        
+
         const score = calculateSimilarityScore(currentAppWithUpdatedCategory, appWithCurrentCategory);
         const reasons = getSimilarityReasons(currentAppWithUpdatedCategory, appWithCurrentCategory);
         return { app, score, reasons };
@@ -1801,38 +1803,38 @@ export default function ShadowITDashboard() {
 
   function calculateSimilarityScore(app1: Application, app2: Application): number {
     let score = 0;
-    
+
     // User co-occurrence (50%)
-    const sharedUsers = app1.users.filter(u1 => 
+    const sharedUsers = app1.users.filter(u1 =>
       app2.users.some(u2 => u2.email === u1.email)
     ).length;
     const userOverlapScore = Math.min(sharedUsers / Math.max(app1.users.length, app2.users.length, 1), 1) * 0.5;
-    
+
     // Functional similarity (30%)
     const app1Functions = getAppFunctionality(app1.scopes);
     const app2Functions = getAppFunctionality(app2.scopes);
     const sharedFunctions = Array.from(app1Functions).filter(f => app2Functions.has(f)).length;
     const functionalScore = Math.min(sharedFunctions / Math.max(app1Functions.size, app2Functions.size, 1), 1) * 0.3;
-    
+
     // Usage patterns (20%)
     // Only calculate if both apps have lastActive data
     let usageScore = 0.2; // Default score if we can't calculate
-    
+
     score = userOverlapScore + functionalScore + usageScore;
     return score;
   }
 
   function getSimilarityReasons(app1: Application, app2: Application): string[] {
     const reasons: string[] = [];
-    
+
     // Check user overlap
-    const sharedUsers = app1.users.filter(u1 => 
+    const sharedUsers = app1.users.filter(u1 =>
       app2.users.some(u2 => u2.email === u1.email)
     ).length;
     if (sharedUsers > 0) {
       reasons.push(`${sharedUsers} shared users`);
     }
-    
+
     // Check functional similarity
     const app1Functions = getAppFunctionality(app1.scopes);
     const app2Functions = getAppFunctionality(app2.scopes);
@@ -1840,14 +1842,14 @@ export default function ShadowITDashboard() {
     if (sharedFunctions.length > 0) {
       reasons.push(`Similar functionality: ${sharedFunctions.join(', ')}`);
     }
-    
+
     // Check if they belong to the same category
     const category1 = app1.category;
     const category2 = app2.category;
     if (category1 && category2 && category1 === category2 && category1 !== 'Unknown') {
       reasons.push(`Same category: ${category1}`);
     }
-    
+
     return reasons;
   }
 
@@ -1863,8 +1865,8 @@ export default function ShadowITDashboard() {
     }));
 
     // Create edges between similar apps
-    const edges: Array<{source: string, target: string, value: number}> = [];
-    
+    const edges: Array<{ source: string, target: string, value: number }> = [];
+
     applications.forEach(app1 => {
       const similarApps = getSimilarApps(app1, applications);
       similarApps.forEach(({ app: app2, score }) => {
@@ -1913,7 +1915,7 @@ export default function ShadowITDashboard() {
   });
 
 
-    // Helper to convert app name to likely domain format
+  // Helper to convert app name to likely domain format
   function appNameToDomain(appName: string): string {
     // Common apps with special domain formats
     const knownDomains: Record<string, string> = {
@@ -1941,42 +1943,42 @@ export default function ShadowITDashboard() {
       'microsoft': 'microsoft.com',
       'office365': 'office.com'
     };
-    
+
     // Convert app name to lowercase for case-insensitive lookup
     const lowerAppName = appName.toLowerCase();
-    
+
     // Check for exact matches in known domains
     if (knownDomains[lowerAppName]) {
       return knownDomains[lowerAppName];
     }
-    
+
     // Check for partial matches (e.g., if app name contains known key)
     for (const [key, domain] of Object.entries(knownDomains)) {
       if (lowerAppName.includes(key)) {
         return domain;
       }
     }
-    
+
     // Default processing for unknown apps
     // Remove special characters, spaces, and convert to lowercase
     const sanitized = lowerAppName
       .replace(/[^\w\s-]/gi, '')  // Keep hyphens as they're common in domains
       .replace(/\s+/g, '');
-    
+
     // Default to .com instead of .io
     return sanitized + '.com';
   }
 
   function getAppLogoUrl(appName: string) {
     const domain = appNameToDomain(appName);
-    
+
     // Try to get the app icon using Logo.dev
     const logoUrl = `https://img.logo.dev/${domain}?token=pk_ZLJInZ4_TB-ZDbNe2FnQ_Q&format=png&retina=true`;
-    
+
     // We could also provide a fallback URL using other icon services if needed
     // This gives us multiple ways to find a logo if the primary method fails
     const fallbackUrl = `https://icon.horse/icon/${domain}`;
-    
+
     // Return both URLs so the frontend can try multiple sources
     return {
       primary: logoUrl,
@@ -1987,7 +1989,7 @@ export default function ShadowITDashboard() {
   // Function to transform the dummy data into our app's format
   const transformDummyData = (dummyData: any[]): Application[] => {
     return dummyData.map(item => {
-      
+
       const id = generateId();
       const logoUrls = getAppLogoUrl(item.Apps);
       let appUsers = item.Users.map((user: string) => transformUser(user, id, item.Scopes));
@@ -2072,7 +2074,7 @@ export default function ShadowITDashboard() {
     useEffect(() => {
       setCurrentLoginError(error); // Update error when prop changes
     }, [error]);
-    
+
     const handleGoogleLogin = async () => {
       try {
         setIsLoading(true);
@@ -2095,9 +2097,9 @@ export default function ShadowITDashboard() {
         } else {
           redirectUri = 'https://stitchflow.com/tools/shadow-it-scan/api/auth/google';
         }
-        
+
         console.log('Using redirectUri:', redirectUri);
-        
+
         // Use minimal scopes initially - just enough to identify the user
         const scopes = [
           'openid',
@@ -2107,13 +2109,13 @@ export default function ShadowITDashboard() {
 
         // Generate a state parameter to verify the response and enable cross-browser detection
         const state = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
-        
+
         // Always store in localStorage to identify this browser session
         localStorage.setItem('oauthState', state);
         localStorage.setItem('auth_provider', 'google');
         localStorage.setItem('lastLogin', Date.now().toString());
         localStorage.setItem('login_attempt_time', Date.now().toString());
-        
+
         // Direct account selection - show the accounts dialog directly
         // This bypasses the initial email input screen
         const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -2121,10 +2123,10 @@ export default function ShadowITDashboard() {
         authUrl.searchParams.append('redirect_uri', redirectUri);
         authUrl.searchParams.append('response_type', 'code');
         authUrl.searchParams.append('scope', scopes);
-        authUrl.searchParams.append('access_type', 'offline'); 
+        authUrl.searchParams.append('access_type', 'offline');
         authUrl.searchParams.append('include_granted_scopes', 'true');
         authUrl.searchParams.append('state', state);
-        
+
         // Clean URL before redirecting
         const cleanUrl = new URL(window.location.href);
         if (cleanUrl.searchParams.has('error')) {
@@ -2152,7 +2154,7 @@ export default function ShadowITDashboard() {
 
         if (!clientId || !redirectUri) {
           setCurrentLoginError("Missing Microsoft OAuth configuration");
-          console.error('Missing env variables:', { 
+          console.error('Missing env variables:', {
             clientId: clientId ? 'present' : 'missing',
             redirectUri: redirectUri ? 'present' : 'missing'
           });
@@ -2167,9 +2169,9 @@ export default function ShadowITDashboard() {
         } else {
           redirectUri = 'https://www.stitchflow.com/tools/shadow-it-scan/api/auth/microsoft';
         }
-        
+
         console.log('Using redirectUri:', redirectUri);
-        
+
         const scopes = [
           // Start with minimal scopes; we'll request admin scopes later if needed
           'User.Read',
@@ -2181,13 +2183,13 @@ export default function ShadowITDashboard() {
 
         // Generate a state parameter to verify the response and enable cross-browser detection
         const state = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
-        
+
         // Always store in localStorage to identify this browser session
         localStorage.setItem('oauthState', state);
         localStorage.setItem('auth_provider', 'microsoft');
         localStorage.setItem('lastLogin', Date.now().toString());
         localStorage.setItem('login_attempt_time', Date.now().toString());
-        
+
         const authUrl = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
         authUrl.searchParams.append('client_id', clientId);
         authUrl.searchParams.append('redirect_uri', redirectUri);
@@ -2222,7 +2224,7 @@ export default function ShadowITDashboard() {
               <div className="space-y-2">
                 <h2 className="text-2xl font-bold">Sign in to continue</h2>
                 <p className="text-sm text-muted-foreground">
-                Connect with your org admin account to begin using the app
+                  Connect with your org admin account to begin using the app
                 </p>
               </div>
 
@@ -2281,13 +2283,13 @@ export default function ShadowITDashboard() {
                 <div className="text-sm text-muted-foreground">
 
                   <p className="mt-2">
-                  We take data privacy seriously. Learn more about our approach to{" "}
+                    We take data privacy seriously. Learn more about our approach to{" "}
                     <a href="https://www.stitchflow.com/security" className="font-medium text-green-600 hover:underline">
-                    security {" "}
+                      security {" "}
                     </a>
                     or {" "}
                     <a href="https://www.stitchflow.com/demo" className="font-medium text-green-600 hover:underline">
-                    schedule a time
+                      schedule a time
                     </a>{" "}
                     to chat with us
                   </p>
@@ -2348,14 +2350,14 @@ export default function ShadowITDashboard() {
     if (highRiskUsersManagedStatusFilter && highRiskUsersManagedStatusFilter !== 'Any Status') {
       filtered = applications.filter(app => app.managementStatus === highRiskUsersManagedStatusFilter);
     }
-    
+
     // Map applications to get name, high-risk user count, and color
     const mappedData = filtered.map(app => ({
       name: app.name,
       value: app.users.filter(user => transformRiskLevel(user.riskLevel) === "High").length,
       color: getCategoryColor(appCategories[app.id] || app.category),
     }));
-    
+
     // Sort by number of high-risk users (descending)
     return mappedData.sort((a, b) => b.value - a.value);
   };
@@ -2395,12 +2397,12 @@ export default function ShadowITDashboard() {
       // Update applications state with the updated app
       setApplications(prevApps => {
         // Create a new array with the updated application
-        const updatedApps = prevApps.map(app => 
-          app.id === selectedApp.id 
-            ? { ...app, ownerEmail, notes } 
+        const updatedApps = prevApps.map(app =>
+          app.id === selectedApp.id
+            ? { ...app, ownerEmail, notes }
             : app
         );
-        
+
         return updatedApps;
       });
 
@@ -2427,171 +2429,152 @@ export default function ShadowITDashboard() {
   };
 
   return (
-    <div className="mx-auto font-sans text-gray-900 bg-[#f8f5f3]">
+    <div className="min-h-screen bg-[#F8F5F3]">
+      <NavbarMain />
+      <main className="pt-[64px]">
 
-      <header className="fixed top-0 left-0 right-0 z-50 bg-[#f8f5f3] border-b">
-        <div className="flex items-center align-middle justify-between max-w-7xl mx-auto px-4 sm:px-8 py-3">
-          <div className="flex items-center gap-2.5">
-            <a href="https://www.stitchflow.com" target="_blank" rel="noopener noreferrer" className="flex items-center">
-              <img
-                src="/Stitchflow.png"
-                alt="Stitchflow"
-                className="h-6 w-auto"
-              />
-            </a>
-            <span className="text-lg font-medium font-['Epilogue', sans-serif] text-gray-900 flex items-center">Shadow IT Scanner</span>
-          </div>
+        <div className="pt-6 pb-6 sm:pt-12 sm:pb-10 px-4 sm:px-8 max-w-[70rem] mx-auto text-center">
+          <a
+            href="https://www.stitchflow.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 shadow-sm rounded-full text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors mb-6"
+          >
+            Free tool from Stitchflow
+            <ExternalLink className="h-3 w-3" />
+          </a>
+
+          <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-gray-900 mb-4 max-w-4xl mx-auto leading-[1.1]">
+            Free Shadow IT Scanner
+          </h1>
+
+          <p className="text-lg sm:text-xl text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
+            Discover the apps your employees are using, detect potential risks by tracking app scopes, and prevent compliance gaps before they escalate.
+          </p>
+
+          {!isAuthenticated() && (
+            <div className="flex justify-center mb-4">
+              <Button_website
+                onClick={() => setShowLoginModal(true)}
+                variant="secondary"
+                type="button"
+                className="py-3 px-8 w-auto flex group z-50 pointer-events-auto shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg"
+              >
+                <div className="flex justify-center items-center">
+                  <span className="font-medium text-base leading-4 whitespace-nowrap">
+                    Start your scan
+                  </span>
+                  <ArrowRight className="ml-2 h-4 w-4 flex-shrink-0" />
+                </div>
+              </Button_website>
+            </div>
+          )}
         </div>
-      </header>
 
-       
-          <div className="text-center space-y-4 sm:space-y-6 py-6 sm:py-16 px-4 max-w-[1900px] mx-auto">
-            <a
-              href="https://www.stitchflow.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-medium hover:bg-primary/15 transition-colors"
-            >
-               Free tool from Stitchflow
-              <ExternalLink className="h-3 w-3" />
-            </a>
-            
-            <div className="space-y-4 sm:space-y-6">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mx-auto max-w-[900px] leading-tight">
-               Free Shadow IT Scanner 
-              </h1>
-              
-              <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Discover the apps your employees are using, detect potential risks by tracking app scopes, and prevent compliance gaps before they escalate.
-              </p>
-              {!isAuthenticated() && (
-                <div className="mt-6 sm:mt-8 flex justify-center">
-                  <Button_website 
-                    onClick={() => setShowLoginModal(true)} 
-                    variant="primary" // This variant will be styled by the className
-                    type="button"
-                    // className combines custom button's base styles with overrides for white bg, dark text, border, and new padding
-                    className="py-3 px-8 w-auto flex group z-50 pointer-events-auto bg-white hover:bg-gray-100 text-[#363338] border border-gray-300 rounded-lg"
-                  >
-                    <div className="flex justify-center items-center">
-                        <span className="font-medium text-base leading-4 whitespace-nowrap">
-                            Start your scan
-                        </span>
-                        <ArrowRight className="ml-2 h-4 w-0 flex-shrink-0 transition-all ease-in duration-200 group-hover:w-4 group-active:translate-x-1.5" />
-                    </div>
-                  </Button_website>
+        <div className="pt-4 pl-10 pr-10 bg-white mt-4 pb-10">
+
+          {!isAuthenticated() && (
+            <div className="bg-black border border-gray-800 rounded-lg p-4 mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-yellow-500">👋</span>
+                  <p className="text-gray-200">
+                    This is a preview of the app. Get started with the Shadow IT scan for your workspace
+                  </p>
                 </div>
-              )}
+                <Button_website
+                  onClick={() => {
+                    setShowLoginModal(true)
+                  }}
+                  variant="primary"
+                  type="button"
+                  className="py-2 px-8 w-auto flex group z-50 pointer-events-auto bg-white hover:bg-gray-100 text-[#363338] border border-gray-300 rounded-lg"
+                >
+                  <span className="font-medium text-base leading-4 whitespace-nowrap">
+                    Sign in
+                  </span>
+
+                </Button_website>
+              </div>
             </div>
+          )}
+
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-xl font-bold">Shadow IT Overview</h2>
+            <Share url="https://www.stitchflow.com/tools/shadow-it-scan" />
           </div>
 
-
-        
-
-      <main className="pt-[40px] pl-10 pr-10 bg-white mt-4 pb-10">
-
-            {!isAuthenticated() && (
-              <div className="bg-black border border-gray-800 rounded-lg p-4 mb-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-yellow-500">👋</span>
-                    <p className="text-gray-200">
-                    This is a preview of the app. Get started with the Shadow IT scan for your workspace
-                    </p>
-                  </div>
-                  <Button_website
-                    onClick={() => {
-                      setShowLoginModal(true)
-                    }}
-                    variant="primary"
-                    type="button"
-                    className="py-2 px-8 w-auto flex group z-50 pointer-events-auto bg-white hover:bg-gray-100 text-[#363338] border border-gray-300 rounded-lg"
-                  >
-                    <span className="font-medium text-base leading-4 whitespace-nowrap">
-                            Sign in
-                        </span>
-                        
-                  </Button_website>
+          {isLoading ? (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="p-6 flex justify-center items-center min-h-[400px]">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+                  <p>Loading application data...</p>
                 </div>
               </div>
-            )}
-
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-xl font-bold">Shadow IT Overview</h2>
-              <Share url="https://www.stitchflow.com/tools/shadow-it-scan" />
             </div>
+          ) : !selectedAppId ? (
+            <div ref={mainContentRef} className="space-y-6"> {/* Added ref here */}
+              <div className="flex justify-between items-center mt-[-4px]">
+                <div>
+                  <p className="text-lg font-medium text-gray-800">
+                    {(() => {
+                      // Count how many filters are active
+                      const activeFilters = [filterCategory, filterRisk, filterManaged].filter(Boolean).length;
 
-            {isLoading ? (
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-                <div className="p-6 flex justify-center items-center min-h-[400px]">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                    <p>Loading application data...</p>
-                  </div>
+                      if (activeFilters === 0) {
+                        return `We found ${sortedApps.length} applications.`;
+                      }
+
+                      // Single filter messages
+                      if (activeFilters === 1) {
+                        if (filterCategory) {
+                          return `We found ${sortedApps.length} applications in ${filterCategory}.`;
+                        }
+                        if (filterRisk) {
+                          return `We found ${sortedApps.length} ${filterRisk.toLowerCase()} risk applications.`;
+                        }
+                        if (filterManaged) {
+                          return `We found ${sortedApps.length} ${filterManaged.toLowerCase()} applications.`;
+                        }
+                      }
+
+                      // Multiple filters - show total count with "filtered"
+                      return `We found ${sortedApps.length} filtered applications.`;
+                    })()}
+                  </p>
                 </div>
-              </div>
-            ) : !selectedAppId ? (
-              <div ref={mainContentRef} className="space-y-6"> {/* Added ref here */}
-                <div className="flex justify-between items-center mt-[-4px]">
-                  <div>
-                    <p className="text-lg font-medium text-gray-800">
-                      {(() => {
-                        // Count how many filters are active
-                        const activeFilters = [filterCategory, filterRisk, filterManaged].filter(Boolean).length;
-                        
-                        if (activeFilters === 0) {
-                          return `We found ${sortedApps.length} applications.`;
-                        }
+                <div className="flex gap-2">
+                  <Button
+                    variant={mainView === "list" ? "default" : "outline"}
+                    onClick={() => {
+                      setMainView("list");
+                      handleCloseUserModal();
+                    }}
+                    className={mainView === "list" ? "bg-gray-900 hover:bg-gray-800" : ""}
+                  >
+                    <LayoutGrid className="h-4 w-4 mr-2" />
+                    Applications
+                  </Button>
+                  <Button
+                    variant={mainView === "Insights" ? "default" : "outline"}
+                    onClick={handleViewInsights}
+                    className={mainView === "Insights" ? "bg-gray-900 hover:bg-gray-800" : ""}
+                  >
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Insights
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleOpenSettings}
+                    className="border-gray-200"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Email Notifications
+                  </Button>
 
-                        // Single filter messages
-                        if (activeFilters === 1) {
-                          if (filterCategory) {
-                            return `We found ${sortedApps.length} applications in ${filterCategory}.`;
-                          }
-                          if (filterRisk) {
-                            return `We found ${sortedApps.length} ${filterRisk.toLowerCase()} risk applications.`;
-                          }
-                          if (filterManaged) {
-                            return `We found ${sortedApps.length} ${filterManaged.toLowerCase()} applications.`;
-                          }
-                        }
-
-                        // Multiple filters - show total count with "filtered"
-                        return `We found ${sortedApps.length} filtered applications.`;
-                      })()}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant={mainView === "list" ? "default" : "outline"} 
-                      onClick={() => {
-                        setMainView("list");
-                        handleCloseUserModal();
-                      }}
-                      className={mainView === "list" ? "bg-gray-900 hover:bg-gray-800" : ""}
-                    >
-                      <LayoutGrid className="h-4 w-4 mr-2" />
-                      Applications
-                    </Button>
-                    <Button 
-                      variant={mainView === "Insights" ? "default" : "outline"} 
-                      onClick={handleViewInsights}
-                      className={mainView === "Insights" ? "bg-gray-900 hover:bg-gray-800" : ""}
-                    >
-                      <BarChart3 className="h-4 w-4 mr-2" />
-                      Insights
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleOpenSettings}
-                      className="border-gray-200"
-                    >
-                      <Settings className="h-4 w-4 mr-2" />
-                      Email Notifications
-                    </Button>
-
-                    {/* Only show profile if authenticated */}
-                    {isAuthenticated() && (
+                  {/* Only show profile if authenticated */}
+                  {isAuthenticated() && (
                     <div className="relative" ref={profileRef}>
                       <button
                         onClick={() => setIsProfileOpen(!isProfileOpen)}
@@ -2609,9 +2592,9 @@ export default function ShadowITDashboard() {
                         className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors overflow-hidden"
                       >
                         {userInfo?.avatar_url ? (
-                          <img 
-                            src={userInfo.avatar_url} 
-                            alt={userInfo.name || "User"} 
+                          <img
+                            src={userInfo.avatar_url}
+                            alt={userInfo.name || "User"}
                             className="h-10 w-10 object-cover"
                           />
                         ) : userInfo?.name ? (
@@ -2624,7 +2607,7 @@ export default function ShadowITDashboard() {
                       </button>
 
                       {isProfileOpen && (
-                        <div 
+                        <div
                           className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-100 py-2 z-50"
                           role="menu"
                           aria-orientation="vertical"
@@ -2661,196 +2644,195 @@ export default function ShadowITDashboard() {
                         </div>
                       )}
                     </div>
-                    )}
-                  </div>
+                  )}
                 </div>
+              </div>
 
-                {mainView === "list" ? (
-                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-                    <div className="p-6">
-                      {/* Filter section */}
-                      <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-                        <div className="flex-1 mt-1">
-                          <div className="flex justify-between items-center mb-1">
-                            <Label htmlFor="search" className="text-sm font-medium text-gray-700">
+              {mainView === "list" ? (
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+                  <div className="p-6">
+                    {/* Filter section */}
+                    <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
+                      <div className="flex-1 mt-1">
+                        <div className="flex justify-between items-center mb-1">
+                          <Label htmlFor="search" className="text-sm font-medium text-gray-700">
                             Search Applications
                           </Label>
-                            {searchInput && (
+                          {searchInput && (
+                            <button
+                              onClick={() => setSearchInput("")}
+                              className="text-xs text-primary hover:text-primary/80 transition-colors"
+                            >
+                              Clear search
+                            </button>
+                          )}
+                        </div>
+                        <Input
+                          id="search"
+                          placeholder="Search by name or category..."
+                          value={searchInput}
+                          onChange={(e) => setSearchInput(e.target.value)}
+                          className="mt-1 border-gray-200"
+                        />
+                      </div>
+
+                      <div className="flex flex-col md:flex-row gap-4">
+                        <div className="min-w-[150px]">
+                          <div className="flex justify-between items-center mb-1">
+                            <Label className="text-sm font-medium text-gray-700">Category</Label>
+                            {filterCategory && (
                               <button
-                                onClick={() => setSearchInput("")}
+                                onClick={() => setFilterCategory(null)}
                                 className="text-xs text-primary hover:text-primary/80 transition-colors"
                               >
-                                Clear search
+                                Clear filter
                               </button>
                             )}
                           </div>
-                          <Input
-                            id="search"
-                            placeholder="Search by name or category..."
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            className="mt-1 border-gray-200"
-                          />
+                          <select
+                            className="w-full min-w-[300px] h-10 px-3 rounded-lg border border-gray-200 bg-white mt-1 text-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 truncate"
+                            value={filterCategory || ""}
+                            onChange={(e) => {
+                              if (!isAuthenticated()) {
+                                setShowLoginModal(true);
+                                return;
+                              }
+                              setFilterCategory(e.target.value || null);
+                            }}
+                          >
+                            <option value="">All Categories</option>
+                            {uniqueCategories.map((category) => (
+                              <option key={category} value={category} className="truncate">
+                                {category}
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                        
-                        <div className="flex flex-col md:flex-row gap-4">
-                          <div className="min-w-[150px]">
-                            <div className="flex justify-between items-center mb-1">
-                              <Label className="text-sm font-medium text-gray-700">Category</Label>
-                              {filterCategory && (
-                                <button
-                                  onClick={() => setFilterCategory(null)}
-                                  className="text-xs text-primary hover:text-primary/80 transition-colors"
-                                >
-                                  Clear filter
-                                </button>
-                              )}
-                            </div>
-                            <select
-                              className="w-full min-w-[300px] h-10 px-3 rounded-lg border border-gray-200 bg-white mt-1 text-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 truncate"
-                              value={filterCategory || ""}
-                              onChange={(e) => {
-                                if (!isAuthenticated()) {
-                                  setShowLoginModal(true);
-                                  return;
-                                }
-                                setFilterCategory(e.target.value || null);
-                              }}
-                            >
-                              <option value="">All Categories</option>
-                              {uniqueCategories.map((category) => (
-                                <option key={category} value={category} className="truncate">
-                                  {category}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          
-                            <div className="min-w-[150px]">
-                              <div className="flex justify-between items-center mb-1">
-                                <Label className="text-sm font-medium text-gray-700">Scope Risk</Label>
-                                {filterRisk && (
-                                  <button
-                                    onClick={() => setFilterRisk(null)}
-                                    className="text-xs text-primary hover:text-primary/80 transition-colors"
-                                  >
-                                    Clear filter
-                                  </button>
-                                )}
-                              </div>
-                              <select
-                                className="w-full h-10 px-3 rounded-lg border border-gray-200 bg-white mt-1 text-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200"
-                                value={filterRisk || ""}
-                                onChange={(e) => setFilterRisk(e.target.value || null)}
+
+                        <div className="min-w-[150px]">
+                          <div className="flex justify-between items-center mb-1">
+                            <Label className="text-sm font-medium text-gray-700">Scope Risk</Label>
+                            {filterRisk && (
+                              <button
+                                onClick={() => setFilterRisk(null)}
+                                className="text-xs text-primary hover:text-primary/80 transition-colors"
                               >
-                                <option value="">All Risk Levels</option>
-                                <option value="Low">Low</option>
-                                <option value="Medium">Medium</option>
-                                <option value="High">High</option>
-                              </select>
-                            </div>
-                          
-                          <div className="min-w-[150px]">
-                            <div className="flex justify-between items-center mb-1">
-                              <Label className="text-sm font-medium text-gray-700">Managed Status</Label>
-                              {filterManaged && (
-                                <button
-                                  onClick={() => setFilterManaged(null)}
-                                  className="text-xs text-primary hover:text-primary/80 transition-colors ml-2"
-                                >
-                                  Clear filter
-                                </button>
-                              )}
-                            </div>
-                            <select
-                              className="w-full h-10 px-3 rounded-lg border border-gray-200 bg-white mt-1 text-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200"
-                              value={filterManaged || ""}
-                              onChange={(e) => setFilterManaged(e.target.value || null)}
-                            >
-                              <option value="">All Statuses</option>
-                              <option value="Managed">Managed</option>
-                              <option value="Unmanaged">Unmanaged</option>
-                              <option value="Newly discovered">Newly discovered</option>
-                            </select>
+                                Clear filter
+                              </button>
+                            )}
                           </div>
+                          <select
+                            className="w-full h-10 px-3 rounded-lg border border-gray-200 bg-white mt-1 text-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                            value={filterRisk || ""}
+                            onChange={(e) => setFilterRisk(e.target.value || null)}
+                          >
+                            <option value="">All Risk Levels</option>
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                          </select>
+                        </div>
+
+                        <div className="min-w-[150px]">
+                          <div className="flex justify-between items-center mb-1">
+                            <Label className="text-sm font-medium text-gray-700">Managed Status</Label>
+                            {filterManaged && (
+                              <button
+                                onClick={() => setFilterManaged(null)}
+                                className="text-xs text-primary hover:text-primary/80 transition-colors ml-2"
+                              >
+                                Clear filter
+                              </button>
+                            )}
+                          </div>
+                          <select
+                            className="w-full h-10 px-3 rounded-lg border border-gray-200 bg-white mt-1 text-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                            value={filterManaged || ""}
+                            onChange={(e) => setFilterManaged(e.target.value || null)}
+                          >
+                            <option value="">All Statuses</option>
+                            <option value="Managed">Managed</option>
+                            <option value="Unmanaged">Unmanaged</option>
+                            <option value="Newly discovered">Newly discovered</option>
+                          </select>
                         </div>
                       </div>
+                    </div>
 
+                    <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
                       <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
-                        <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
                         <Table>
-                            <TableHeader className="sticky top-0 bg-gray-50/80 backdrop-blur-sm z-10">
-                              <TableRow className="border-b border-gray-100">
-                                <TableHead className={`cursor-pointer rounded-tl-lg bg-transparent`} onClick={() => handleSort("name")}>
-                                  <div className="flex items-center">
-                                    Application
-                                    {getSortIcon("name")}
-                                  </div>
-                                </TableHead>
-                                <TableHead className={`cursor-pointer`} onClick={() => handleSort("category")}>
-                                  <div className="flex items-center">
-                                    Category
-                                    {getSortIcon("category")}
-                                  </div>
-                                </TableHead>
-                                <TableHead className={`text-center cursor-pointer`} onClick={() => handleSort("userCount")}>
-                                  <div className="flex items-center justify-center">
-                                    Users
-                                    {getSortIcon("userCount")}
-                                  </div>
-                                </TableHead>
-                                
-                                  
-                                    <TableHead className="text-center cursor-pointer" onClick={() => handleSort("riskLevel")}>
-                                      <div className="flex items-center justify-center">
-                                       Scope Risk
-                                        {getSortIcon("riskLevel")}
-                                      </div>
-                                    </TableHead>
-                                    <TableHead
-                                      className="text-center cursor-pointer"
-                                      onClick={() => handleSort("totalPermissions")}
-                                    >
-                                      <div className="flex items-center justify-center">
-                                        Total Scope Permissions
-                                        {getSortIcon("totalPermissions")}
-                                      </div>
-                                    </TableHead>
-                                    <TableHead className="text-center cursor-pointer" onClick={() => handleSort("highRiskUserCount")}>
-                                      <div className="flex items-center justify-center">
-                                        High Risk Users
-                                        {getSortIcon("highRiskUserCount")}
-                                      </div>
-                                    </TableHead>
-                                
-                                <TableHead className={`cursor-pointer`} onClick={() => handleSort("managementStatus")}>
-                                  <div className="flex items-center">
+                          <TableHeader className="sticky top-0 bg-gray-50/80 backdrop-blur-sm z-10">
+                            <TableRow className="border-b border-gray-100">
+                              <TableHead className={`cursor-pointer rounded-tl-lg bg-transparent`} onClick={() => handleSort("name")}>
+                                <div className="flex items-center">
+                                  Application
+                                  {getSortIcon("name")}
+                                </div>
+                              </TableHead>
+                              <TableHead className={`cursor-pointer`} onClick={() => handleSort("category")}>
+                                <div className="flex items-center">
+                                  Category
+                                  {getSortIcon("category")}
+                                </div>
+                              </TableHead>
+                              <TableHead className={`text-center cursor-pointer`} onClick={() => handleSort("userCount")}>
+                                <div className="flex items-center justify-center">
+                                  Users
+                                  {getSortIcon("userCount")}
+                                </div>
+                              </TableHead>
+
+
+                              <TableHead className="text-center cursor-pointer" onClick={() => handleSort("riskLevel")}>
+                                <div className="flex items-center justify-center">
+                                  Scope Risk
+                                  {getSortIcon("riskLevel")}
+                                </div>
+                              </TableHead>
+                              <TableHead
+                                className="text-center cursor-pointer"
+                                onClick={() => handleSort("totalPermissions")}
+                              >
+                                <div className="flex items-center justify-center">
+                                  Total Scope Permissions
+                                  {getSortIcon("totalPermissions")}
+                                </div>
+                              </TableHead>
+                              <TableHead className="text-center cursor-pointer" onClick={() => handleSort("highRiskUserCount")}>
+                                <div className="flex items-center justify-center">
+                                  High Risk Users
+                                  {getSortIcon("highRiskUserCount")}
+                                </div>
+                              </TableHead>
+
+                              <TableHead className={`cursor-pointer`} onClick={() => handleSort("managementStatus")}>
+                                <div className="flex items-center">
                                   Managed Status
-                                    {getSortIcon("managementStatus")}
-                                  </div>
-                                </TableHead>
-                                <TableHead className={`text-center rounded-tr-lg`}>User Scope Analysis</TableHead>
-                              </TableRow>
-                            </TableHeader>
+                                  {getSortIcon("managementStatus")}
+                                </div>
+                              </TableHead>
+                              <TableHead className={`text-center rounded-tr-lg`}>User Scope Analysis</TableHead>
+                            </TableRow>
+                          </TableHeader>
                           <TableBody>
-                              {currentApps.length === 0 ? (
+                            {currentApps.length === 0 ? (
                               <TableRow>
                                 <TableCell colSpan={9} className="text-center py-6 text-muted-foreground">
                                   No applications found matching your filters
                                 </TableCell>
                               </TableRow>
                             ) : (
-                                currentApps.map((app, index) => (
-                                  <TableRow 
-                                    key={app.id} 
-                                    className={`${index % 2 === 0 ? "bg-muted/10" : ""} ${
-                                      index === currentApps.length - 1 ? "last-row" : ""
+                              currentApps.map((app, index) => (
+                                <TableRow
+                                  key={app.id}
+                                  className={`${index % 2 === 0 ? "bg-muted/10" : ""} ${index === currentApps.length - 1 ? "last-row" : ""
                                     }`}
-                                  >
+                                >
                                   <TableCell>
                                     <div className="flex items-center gap-3">
                                       <AppIcon name={app.name} logoUrl={app.logoUrl} logoUrlFallback={app.logoUrlFallback} />
-                                      <div 
+                                      <div
                                         className="font-medium cursor-pointer hover:text-primary transition-colors truncate max-w-[200px]"
                                         onClick={() => handleSeeUsers(app.id)}
                                       >
@@ -2859,100 +2841,100 @@ export default function ShadowITDashboard() {
                                     </div>
                                   </TableCell>
                                   <TableCell>
-                                    <CategoryBadge 
-                                      category={app.category} 
-                                      appId={app.id} 
-                                      isCategorizing={uncategorizedApps.has(app.id)} 
+                                    <CategoryBadge
+                                      category={app.category}
+                                      appId={app.id}
+                                      isCategorizing={uncategorizedApps.has(app.id)}
                                     />
                                   </TableCell>
                                   <TableCell className="text-center">
-                                      <TooltipProvider>
-                                        <Tooltip delayDuration={300}>
-                                          <TooltipTrigger asChild>
-                                    <div 
-                                      className="flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
-                                      onClick={() => handleSeeUsers(app.id)}
-                                    >
-                                      <div className="flex -space-x-2">
-                                        {app.users.slice(0, 3).map((user, idx) => (
+                                    <TooltipProvider>
+                                      <Tooltip delayDuration={300}>
+                                        <TooltipTrigger asChild>
                                           <div
-                                            key={idx}
-                                            className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 border-2 border-background text-xs font-medium"
+                                            className="flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                                            onClick={() => handleSeeUsers(app.id)}
                                           >
-                                            {getInitials(user.name)}
-                                          </div>
-                                        ))}
-                                        {app.userCount > 3 && (
-                                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 border-2 border-background text-xs font-medium">
-                                            +{app.userCount - 3}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="right" className="p-2">
-                                            <div className="max-h-48 overflow-y-auto space-y-1">
-                                              {app.users.map((user, idx) => (
-                                                <p key={idx} className="text-sm">{user.name}</p>
-                                              ))}
-                                            </div>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                  </TableCell>
-                                  
-                            
-                                  <TableCell>
-                                        <TooltipProvider>
-                                            <Tooltip delayDuration={300}>
-                                            <TooltipTrigger asChild>
-                                              <div className="flex items-center justify-center cursor-pointer" onClick={() => handleSeeUsers(app.id)}>
-                                                <RiskBadge level={app.riskLevel} />
-                                              </div>
-                                            </TooltipTrigger>
-                                              <TooltipContent side="right" className="p-2">
-                                                <p className="text-sm">{app.riskReason}</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      </TableCell>
-                                      <TableCell className="text-center">
-                                        <TooltipProvider>
-                                            <Tooltip delayDuration={300}>
-                                            <TooltipTrigger asChild>
-                                              <div className="text-center cursor-pointer" onClick={() => handleSeeUsers(app.id)}>{app.totalPermissions}</div>
-                                            </TooltipTrigger>
-                                              <TooltipContent side="right" className="p-2">
-                                                <div className="max-h-48 overflow-y-auto space-y-1">
-                                                  {app.scopes.map((scope, idx) => (
-                                                    <p key={idx} className="text-sm">{scope}</p>
-                                                  ))}
+                                            <div className="flex -space-x-2">
+                                              {app.users.slice(0, 3).map((user, idx) => (
+                                                <div
+                                                  key={idx}
+                                                  className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 border-2 border-background text-xs font-medium"
+                                                >
+                                                  {getInitials(user.name)}
                                                 </div>
-                                              </TooltipContent>
-                                            </Tooltip>
-                                          </TooltipProvider>
-                                      </TableCell>    
-                                    
-                                      <TableCell className="text-center">
-                                        <TooltipProvider>
-                                          <Tooltip delayDuration={300}>
-                                            <TooltipTrigger asChild>
-                                              <div 
-                                                className="text-center cursor-pointer flex items-center justify-center" 
-                                                onClick={() => handleSeeUsers(app.id)}
-                                              >
-                                                {app.users.filter(user => transformRiskLevel(user.riskLevel) === "High").length}
-                                                
-                                              </div>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="right" className="p-2">
-                                              <p className="text-sm">
-                                                {app.users.filter(user => transformRiskLevel(user.riskLevel) === "High").length} users with high risk level
-                                              </p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      </TableCell>
+                                              ))}
+                                              {app.userCount > 3 && (
+                                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 border-2 border-background text-xs font-medium">
+                                                  +{app.userCount - 3}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="right" className="p-2">
+                                          <div className="max-h-48 overflow-y-auto space-y-1">
+                                            {app.users.map((user, idx) => (
+                                              <p key={idx} className="text-sm">{user.name}</p>
+                                            ))}
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </TableCell>
+
+
+                                  <TableCell>
+                                    <TooltipProvider>
+                                      <Tooltip delayDuration={300}>
+                                        <TooltipTrigger asChild>
+                                          <div className="flex items-center justify-center cursor-pointer" onClick={() => handleSeeUsers(app.id)}>
+                                            <RiskBadge level={app.riskLevel} />
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="right" className="p-2">
+                                          <p className="text-sm">{app.riskReason}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <TooltipProvider>
+                                      <Tooltip delayDuration={300}>
+                                        <TooltipTrigger asChild>
+                                          <div className="text-center cursor-pointer" onClick={() => handleSeeUsers(app.id)}>{app.totalPermissions}</div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="right" className="p-2">
+                                          <div className="max-h-48 overflow-y-auto space-y-1">
+                                            {app.scopes.map((scope, idx) => (
+                                              <p key={idx} className="text-sm">{scope}</p>
+                                            ))}
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </TableCell>
+
+                                  <TableCell className="text-center">
+                                    <TooltipProvider>
+                                      <Tooltip delayDuration={300}>
+                                        <TooltipTrigger asChild>
+                                          <div
+                                            className="text-center cursor-pointer flex items-center justify-center"
+                                            onClick={() => handleSeeUsers(app.id)}
+                                          >
+                                            {app.users.filter(user => transformRiskLevel(user.riskLevel) === "High").length}
+
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="right" className="p-2">
+                                          <p className="text-sm">
+                                            {app.users.filter(user => transformRiskLevel(user.riskLevel) === "High").length} users with high risk level
+                                          </p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </TableCell>
 
                                   <TableCell>
                                     <select
@@ -2976,15 +2958,15 @@ export default function ShadowITDashboard() {
                                     </select>
                                   </TableCell>
                                   <TableCell>
-                                      <Button
+                                    <Button
                                       onClick={() => handleSeeUsers(app.id)}
-                                        variant="outline"
-                                        size="sm"
-                                        className="w-full text-primary hover:text-primary border-primary/30 hover:border-primary hover:bg-primary/5 transition-all"
-                                      >
-                                        <Eye className="h-4 w-4 mr-2" />
-                                        Deep Dive
-                                      </Button>
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full text-primary hover:text-primary border-primary/30 hover:border-primary hover:bg-primary/5 transition-all"
+                                    >
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      Deep Dive
+                                    </Button>
                                   </TableCell>
                                 </TableRow>
                               ))
@@ -2992,340 +2974,246 @@ export default function ShadowITDashboard() {
                           </TableBody>
                         </Table>
                       </div>
-                      </div>
+                    </div>
 
-                      {/* Add pagination controls after the Table component */}
-                      <div className="mt-4 flex items-center justify-between px-2">
-                        <div className="text-sm text-muted-foreground">
-                          Showing {startIndex + 1}-{Math.min(endIndex, sortedApps.length)} of {sortedApps.length} applications
+                    {/* Add pagination controls after the Table component */}
+                    <div className="mt-4 flex items-center justify-between px-2">
+                      <div className="text-sm text-muted-foreground">
+                        Showing {startIndex + 1}-{Math.min(endIndex, sortedApps.length)} of {sortedApps.length} applications
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setCurrentPage(1);
+                            mainContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }}
+                          disabled={currentPage === 1}
+                        >
+                          First
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setCurrentPage(prev => Math.max(1, prev - 1));
+                            mainContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }}
+                          disabled={currentPage === 1}
+                        >
+                          Previous
+                        </Button>
+                        <div className="flex items-center space-x-1">
+                          {getPageNumbers().map((page, index) => (
+                            page === '...' ? (
+                              <span key={`ellipsis-${index}`} className="px-2">...</span>
+                            ) : (
+                              <Button
+                                key={page}
+                                variant={currentPage === page ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => {
+                                  setCurrentPage(Number(page));
+                                  mainContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }}
+                                className="w-8"
+                              >
+                                {page}
+                              </Button>
+                            )
+                          ))}
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setCurrentPage(1);
-                              mainContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }}
-                            disabled={currentPage === 1}
-                          >
-                            First
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setCurrentPage(prev => Math.max(1, prev - 1));
-                              mainContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }}
-                            disabled={currentPage === 1}
-                          >
-                            Previous
-                          </Button>
-                          <div className="flex items-center space-x-1">
-                            {getPageNumbers().map((page, index) => (
-                              page === '...' ? (
-                                <span key={`ellipsis-${index}`} className="px-2">...</span>
-                              ) : (
-                                <Button
-                                  key={page}
-                                  variant={currentPage === page ? "default" : "outline"}
-                                  size="sm"
-                                  onClick={() => {
-                                    setCurrentPage(Number(page));
-                                    mainContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                  }}
-                                  className="w-8"
-                                >
-                                  {page}
-                                </Button>
-                              )
-                            ))}
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setCurrentPage(prev => Math.min(totalPages, prev + 1));
-                              mainContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }}
-                            disabled={currentPage === totalPages}
-                          >
-                            Next
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setCurrentPage(totalPages);
-                              mainContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }}
-                            disabled={currentPage === totalPages}
-                          >
-                            Last
-                          </Button>
-                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                            mainContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }}
+                          disabled={currentPage === totalPages}
+                        >
+                          Next
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setCurrentPage(totalPages);
+                            mainContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }}
+                          disabled={currentPage === totalPages}
+                        >
+                          Last
+                        </Button>
                       </div>
                     </div>
                   </div>
-                ) : (
-                  // Replace the dashboard view section with the following:
-                  // Dashboard view with charts - updated to match the requested charts
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
-                    {/* Application Distribution by Category */}
-                    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-                      <h3 className="text-lg font-medium text-gray-900">App Distribution by Category</h3>
-                      <p className="text-sm text-gray-500 mb-4">
-                        View application distribution across different categories within your organization.
-                      </p>
-                      <div className="h-80 flex items-center">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RechartsPieChart>
-                            <Pie
-                              data={getCategoryDistributionData()}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={60}
-                              outerRadius={80}
-                              fill="#8884d8"
-                              dataKey="value"
-                              nameKey="name"
-                              paddingAngle={2}
-                              strokeWidth={2}
-                              stroke="#fff"
-                              onClick={(data) => {
-                                checkAuth(() => {
+                </div>
+              ) : (
+                // Replace the dashboard view section with the following:
+                // Dashboard view with charts - updated to match the requested charts
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                  {/* Application Distribution by Category */}
+                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+                    <h3 className="text-lg font-medium text-gray-900">App Distribution by Category</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      View application distribution across different categories within your organization.
+                    </p>
+                    <div className="h-80 flex items-center">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsPieChart>
+                          <Pie
+                            data={getCategoryDistributionData()}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                            nameKey="name"
+                            paddingAngle={2}
+                            strokeWidth={2}
+                            stroke="#fff"
+                            onClick={(data) => {
+                              checkAuth(() => {
                                 // Clear all filters first
                                 setFilterRisk(null);
                                 setFilterManaged(null);
                                 // Set the new category filter
                                 setFilterCategory(data.name);
                                 setMainView("list");
-                                });
-                              }}
-                              style={{ cursor: 'pointer' }}
-                            >
-                              {getCategoryDistributionData().map((entry, index) => (
-                                <Cell 
-                                  key={`cell-${index}`} 
-                                  fill={entry.color}
-                                  fillOpacity={1}
-                                />
-                              ))}
-                            </Pie>
-                            <Legend
-                              layout="vertical"
-                              align="right"
-                              verticalAlign="middle"
-                              formatter={(value, entry, index) => {
-                                const item = getCategoryDistributionData()[index]
-                                return (
-                                  <span 
-                                    className="text-gray-900 cursor-pointer hover:text-primary"
-                                    onClick={() => {
-                                      checkAuth(() => {
+                              });
+                            }}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            {getCategoryDistributionData().map((entry, index) => (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={entry.color}
+                                fillOpacity={1}
+                              />
+                            ))}
+                          </Pie>
+                          <Legend
+                            layout="vertical"
+                            align="right"
+                            verticalAlign="middle"
+                            formatter={(value, entry, index) => {
+                              const item = getCategoryDistributionData()[index]
+                              return (
+                                <span
+                                  className="text-gray-900 cursor-pointer hover:text-primary"
+                                  onClick={() => {
+                                    checkAuth(() => {
                                       // Clear all filters first
                                       setFilterRisk(null);
                                       setFilterManaged(null);
                                       // Set the new category filter
                                       setFilterCategory(value);
                                       setMainView("list");
-                                      });
-                                    }}
-                                  >
-                                    {value}{" "}
-                                    <span className="text-gray-500 ml-4">
-                                      {item.percentage}% ({item.value})
-                                    </span>
+                                    });
+                                  }}
+                                >
+                                  {value}{" "}
+                                  <span className="text-gray-500 ml-4">
+                                    {item.percentage}% ({item.value})
                                   </span>
-                                )
-                              }}
-                            />
-                          </RechartsPieChart>
-                        </ResponsiveContainer>
+                                </span>
+                              )
+                            }}
+                          />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+
+
+                  {/* Apps by User Count */}
+                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-medium text-gray-900">Top Apps by User Count</h3>
+                      <div>
+                        <label htmlFor="managed-status-filter" className="mr-2 text-sm text-gray-700">Managed Status:</label>
+                        <select
+                          id="managed-status-filter"
+                          value={chartManagedStatusFilter}
+                          onChange={e => setChartManagedStatusFilter(e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
+                        >
+                          <option value="Any Status">Any Status</option>
+                          <option value="Managed">Managed</option>
+                          <option value="Unmanaged">Unmanaged</option>
+                          <option value="Newly discovered">Newly discovered</option>
+                        </select>
                       </div>
                     </div>
-
-                    
-
-                    {/* Apps by User Count */}
-                    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg font-medium text-gray-900">Top Apps by User Count</h3>
-                        <div>
-                          <label htmlFor="managed-status-filter" className="mr-2 text-sm text-gray-700">Managed Status:</label>
-                          <select
-                            id="managed-status-filter"
-                            value={chartManagedStatusFilter}
-                            onChange={e => setChartManagedStatusFilter(e.target.value)}
-                            className="border rounded px-2 py-1 text-sm"
-                          >
-                            <option value="Any Status">Any Status</option>
-                            <option value="Managed">Managed</option>
-                            <option value="Unmanaged">Unmanaged</option>
-                            <option value="Newly discovered">Newly discovered</option>
-                          </select>
-                        </div>
-                      </div>
-                      <p className="text-sm text-gray-500 mb-4">Applications ranked by number of users</p>
-                      <div className="h-96 overflow-y-auto">
-                        {(() => {
-                          const chartData = getAppsByUserCountChartData();
-                          if (chartData.length === 0) {
-                            return (
-                              <div className="h-full flex items-center justify-center text-gray-500">
-                                No apps that match this criteria
-                              </div>
-                            );
-                          }
+                    <p className="text-sm text-gray-500 mb-4">Applications ranked by number of users</p>
+                    <div className="h-96 overflow-y-auto">
+                      {(() => {
+                        const chartData = getAppsByUserCountChartData();
+                        if (chartData.length === 0) {
                           return (
-                            <ResponsiveContainer width="100%" height={Math.max(350, chartData.length * 30)}>
-                              <BarChart data={chartData} layout="vertical" margin={{ left: 150 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
-                                <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#111827', fontSize: 12 }} />
-                                <YAxis
-                                  dataKey="name"
-                                  type="category"
-                                  axisLine={false}
-                                  tickLine={false}
-                                  width={140}
-                                  tick={{ fill: '#111827', fontSize: 12 }}
-                                  tickFormatter={(value) => truncateText(value, 20)} // Added truncation
-                                />
-                                <Bar 
-                                  dataKey="value" 
-                                  name="Users" 
-                                  radius={[0, 4, 4, 0]} 
-                                  barSize={20}
-                                  strokeWidth={1}
-                                  stroke="#fff"
-                                  cursor="pointer"
-                                  onClick={(data) => {
-                                    const app = applications.find(a => a.name === data.name);
-                                    if (app) {
-                                      setMainView("list");
-                                      setSelectedAppId(app.id);
-                                      setIsUserModalOpen(true);
-                                    }
-                                  }}
-                                >
-                                  <LabelList 
-                                    dataKey="value" 
-                                    position="right" 
-                                    fill="#111827"
-                                    fontSize={10}
-                                    formatter={(value: number) => `${value}`}
-                                    offset={4}
-                                  />
-                                  {chartData.map((entry, index) => (
-                                    <Cell 
-                                      key={`cell-${index}`} 
-                                      fill={entry.color} 
-                                      fillOpacity={1}
-                                    />
-                                  ))}
-                                </Bar>
-                                <RechartsTooltip
-                                  formatter={(value) => [`${value} users`, ""]}
-                                  contentStyle={{ 
-                                    backgroundColor: 'white', 
-                                    border: '1px solid #e5e7eb', 
-                                    borderRadius: '8px', 
-                                    padding: '4px 12px',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                    fontFamily: 'inherit',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px'
-                                  }}
-                                  labelStyle={{ color: '#111827', fontWeight: 500, marginBottom: 0 }}
-                                  itemStyle={{ color: '#111827', fontWeight: 600 }}
-                                  separator=": "
-                                  cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
-                                />
-                              </BarChart>
-                            </ResponsiveContainer>
+                            <div className="h-full flex items-center justify-center text-gray-500">
+                              No apps that match this criteria
+                            </div>
                           );
-                        })()}
-                      </div>
-                    </div>
-
-                  
-                      
-                        {/* Risk Level Distribution */}
-                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-                          <h3 className="text-lg font-medium text-gray-900">Scope Risk Level Distribution</h3>
-                          <p className="text-sm text-gray-500 mb-4">Number of applications by scope risk level</p>
-                          <div className="h-80">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={getRiskChartData()} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
-                                <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#111827', fontSize: 12 }} />
-                                <YAxis
-                                  dataKey="name"
-                                  type="category"
-                                  axisLine={false}
-                                  tickLine={false}
-                                  width={80} 
-                                  tick={(props) => {
-                                    const { x, y, payload } = props;
-                                    return (
-                                      <g transform={`translate(${x},${y})`}>
-                                        <text
-                                          x={-3}
-                                          y={0}
-                                          dy={4}
-                                          textAnchor="end"
-                                          fill="#111827"
-                                          fontSize={12}
-                                          className="cursor-pointer hover:fill-primary transition-colors"
-                                          onClick={() => {
-                                            // Clear all filters first
-                                            setFilterCategory(null);
-                                            setFilterManaged(null);
-                                            // Set the new risk filter
-                                            setFilterRisk(payload.value);
-                                            setMainView("list");
-                                          }}
-                                        >
-                                          {truncateText(payload.value, 10)} {/* Apply truncation here */}
-                                        </text>
-                                      </g>
-                                    );
-                                  }}
-                                />
-                                <Bar 
-                                  dataKey="value" 
-                                  name="Applications" 
-                                  radius={[0, 4, 4, 0]} 
-                                  barSize={30}
-                                  strokeWidth={1}
-                                  stroke="#fff"
-                                  cursor="pointer"
-                                  onClick={(data) => {
-                                    // Clear all filters first
-                                    setFilterCategory(null);
-                                    setFilterManaged(null);
-                                    // Set the new risk filter
-                                    setFilterRisk(data.name);
+                        }
+                        return (
+                          <ResponsiveContainer width="100%" height={Math.max(350, chartData.length * 30)}>
+                            <BarChart data={chartData} layout="vertical" margin={{ left: 150 }}>
+                              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
+                              <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#111827', fontSize: 12 }} />
+                              <YAxis
+                                dataKey="name"
+                                type="category"
+                                axisLine={false}
+                                tickLine={false}
+                                width={140}
+                                tick={{ fill: '#111827', fontSize: 12 }}
+                                tickFormatter={(value) => truncateText(value, 20)} // Added truncation
+                              />
+                              <Bar
+                                dataKey="value"
+                                name="Users"
+                                radius={[0, 4, 4, 0]}
+                                barSize={20}
+                                strokeWidth={1}
+                                stroke="#fff"
+                                cursor="pointer"
+                                onClick={(data) => {
+                                  const app = applications.find(a => a.name === data.name);
+                                  if (app) {
                                     setMainView("list");
-                                  }}
-                                >
-                                  {getRiskChartData().map((entry, index) => (
-                                    <Cell 
-                                      key={`cell-${index}`} 
-                                      fill={entry.color}
-                                      fillOpacity={1}
-                                    />
-                                  ))}
-                                </Bar>
-                                <RechartsTooltip
-                                  formatter={(value) => [`${value} applications`, ""]}
-                                  contentStyle={{ 
-                                    backgroundColor: 'white', 
-                                    border: '1px solid #e5e7eb', 
-                                  borderRadius: '8px', 
+                                    setSelectedAppId(app.id);
+                                    setIsUserModalOpen(true);
+                                  }
+                                }}
+                              >
+                                <LabelList
+                                  dataKey="value"
+                                  position="right"
+                                  fill="#111827"
+                                  fontSize={10}
+                                  formatter={(value: number) => `${value}`}
+                                  offset={4}
+                                />
+                                {chartData.map((entry, index) => (
+                                  <Cell
+                                    key={`cell-${index}`}
+                                    fill={entry.color}
+                                    fillOpacity={1}
+                                  />
+                                ))}
+                              </Bar>
+                              <RechartsTooltip
+                                formatter={(value) => [`${value} users`, ""]}
+                                contentStyle={{
+                                  backgroundColor: 'white',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '8px',
                                   padding: '4px 12px',
                                   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                                   fontFamily: 'inherit',
@@ -3340,212 +3228,306 @@ export default function ShadowITDashboard() {
                               />
                             </BarChart>
                           </ResponsiveContainer>
-                        </div>
-                      </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
 
-                      {/* High Scope Risk Users chart */}
-                      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-lg font-medium text-gray-900">High Scope Risk Users</h3>
-                          <div>
-                            <label htmlFor="high-risk-users-filter" className="mr-2 text-sm text-gray-700">Managed Status:</label>
-                            <select
-                              id="high-risk-users-filter"
-                              value={highRiskUsersManagedStatusFilter}
-                              onChange={e => setHighRiskUsersManagedStatusFilter(e.target.value)}
-                              className="border rounded px-2 py-1 text-sm"
-                            >
-                              <option value="Any Status">Any Status</option>
-                              <option value="Managed">Managed</option>
-                              <option value="Unmanaged">Unmanaged</option>
-                              <option value="Newly discovered">Newly discovered</option>
-                            </select>
-                          </div>
-                        </div>
-                        <p className="text-sm text-gray-500 mb-4">Applications ranked by number of high-risk users</p>
-                        <div className="h-96 overflow-y-auto">
-                          {getHighRiskUsersByApp().filter(app => app.value > 0).length === 0 ? (
-                            <div className="h-full flex items-center justify-center text-gray-500">
-                              No applications found with high-risk users
-                            </div>
-                          ) : (
-                            <ResponsiveContainer width="100%" height={Math.max(400, getHighRiskUsersByApp().filter(app => app.value > 0).length * 30)}>
-                              <BarChart data={getHighRiskUsersByApp().filter(app => app.value > 0)} layout="vertical" margin={{ left: 150 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
-                                <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#111827', fontSize: 12 }} />
-                                <YAxis
-                                  dataKey="name"
-                                  type="category"
-                                  axisLine={false}
-                                  tickLine={false}
-                                  width={140}
-                                  tick={{ fill: '#111827', fontSize: 12 }}
-                                  tickFormatter={(value) => truncateText(value, 20)} // Added truncation
-                                />
-                                <Bar 
-                                  dataKey="value" 
-                                  name="High-Risk Users" 
-                                  radius={[0, 4, 4, 0]} 
-                                  barSize={20}
-                                  strokeWidth={1}
-                                  stroke="#fff"
-                                  cursor="pointer"
-                                  onClick={(data) => {
-                                    const app = applications.find(a => a.name === data.name);
-                                    if (app) {
-                                      setMainView("list");
-                                      setSelectedAppId(app.id);
-                                      setIsUserModalOpen(true);
-                                    }
-                                  }}
-                                >
-                                  <LabelList 
-                                    dataKey="value" 
-                                    position="right" 
-                                    fill="#111827"
-                                    fontSize={10}
-                                    formatter={(value: number) => `${value}`}
-                                    offset={4}
-                                  />
-                                  {getHighRiskUsersByApp().filter(app => app.value > 0).map((entry, index) => (
-                                    <Cell 
-                                      key={`cell-${index}`} 
-                                      fill={entry.color}  
-                                      fillOpacity={1}
-                                    />
-                                  ))}
-                                </Bar>
-                                <RechartsTooltip
-                                  formatter={(value) => [`${value} high-risk ${value === 1 ? 'user' : 'users'}`, ""]}
-                                  contentStyle={{ 
-                                    backgroundColor: 'white', 
-                                    border: '1px solid #e5e7eb', 
-                                    borderRadius: '8px', 
-                                    padding: '4px 12px',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                    fontFamily: 'inherit',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px'
-                                  }}
-                                  labelStyle={{ color: '#111827', fontWeight: 500, marginBottom: 0 }}
-                                  itemStyle={{ color: '#111827', fontWeight: 600 }}
-                                  separator=": "
-                                  cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
-                                />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          )}
-                        </div>
-                      </div>
 
-                      {/* Apps by Scope Permissions */}
-                      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-lg font-medium text-gray-900">Top Apps by Scope Permissions</h3>
-                          <div>
-                            <label htmlFor="scope-permissions-filter" className="mr-2 text-sm text-gray-700">Managed Status:</label>
-                            <select
-                              id="scope-permissions-filter"
-                              value={scopePermissionsManagedStatusFilter}
-                              onChange={e => setScopePermissionsManagedStatusFilter(e.target.value)}
-                              className="border rounded px-2 py-1 text-sm"
-                            >
-                              <option value="Any Status">Any Status</option>
-                              <option value="Managed">Managed</option>
-                              <option value="Unmanaged">Unmanaged</option>
-                              <option value="Newly discovered">Newly discovered</option>
-                            </select>
-                          </div>
-                        </div>
-                        <p className="text-sm text-gray-500 mb-4">Applications ranked by number of scope permissions</p>
-                        <div className="h-96 overflow-y-auto">
-                          {(() => {
-                            const chartData = getTop10AppsByPermissions();
-                            if (chartData.length === 0) {
+
+                  {/* Risk Level Distribution */}
+                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+                    <h3 className="text-lg font-medium text-gray-900">Scope Risk Level Distribution</h3>
+                    <p className="text-sm text-gray-500 mb-4">Number of applications by scope risk level</p>
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={getRiskChartData()} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
+                          <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#111827', fontSize: 12 }} />
+                          <YAxis
+                            dataKey="name"
+                            type="category"
+                            axisLine={false}
+                            tickLine={false}
+                            width={80}
+                            tick={(props) => {
+                              const { x, y, payload } = props;
                               return (
-                                <div className="h-full flex items-center justify-center text-gray-500">
-                                  No apps that match this criteria
-                                </div>
-                              );
-                            }
-                            return (
-                              <ResponsiveContainer width="100%" height={Math.max(350, chartData.length * 30)}>
-                                <BarChart data={chartData} layout="vertical" margin={{ left: 150 }}>
-                                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
-                                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#111827', fontSize: 12 }} />
-                                  <YAxis
-                                    dataKey="name"
-                                    type="category"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    width={140}
-                                    tick={{ fill: '#111827', fontSize: 12 }}
-                                    tickFormatter={(value) => truncateText(value, 20)} // Added truncation
-                                  />
-                                  <Bar 
-                                    dataKey="value" 
-                                    name="Permissions" 
-                                    radius={[0, 4, 4, 0]} 
-                                    barSize={20}
-                                    strokeWidth={1}
-                                    stroke="#fff"
-                                    cursor="pointer"
-                                    onClick={(data) => {
-                                      const app = applications.find(a => a.name === data.name);
-                                      if (app) {
-                                        setMainView("list");
-                                        setSelectedAppId(app.id);
-                                        setIsUserModalOpen(true);
-                                      }
+                                <g transform={`translate(${x},${y})`}>
+                                  <text
+                                    x={-3}
+                                    y={0}
+                                    dy={4}
+                                    textAnchor="end"
+                                    fill="#111827"
+                                    fontSize={12}
+                                    className="cursor-pointer hover:fill-primary transition-colors"
+                                    onClick={() => {
+                                      // Clear all filters first
+                                      setFilterCategory(null);
+                                      setFilterManaged(null);
+                                      // Set the new risk filter
+                                      setFilterRisk(payload.value);
+                                      setMainView("list");
                                     }}
                                   >
-                                    <LabelList 
-                                      dataKey="value" 
-                                      position="right" 
-                                      fill="#111827"
-                                      fontSize={10}
-                                      formatter={(value: number) => `${value}`}
-                                      offset={4}
-                                    />
-                                    {chartData.map((entry, index) => (
-                                      <Cell 
-                                        key={`cell-${index}`} 
-                                        fill={entry.color} 
-                                        fillOpacity={1}
-                                      />
-                                    ))}
-                                  </Bar>
-                                  <RechartsTooltip
-                                    formatter={(value) => [`${value} permissions`, ""]}
-                                    contentStyle={{ 
-                                      backgroundColor: 'white', 
-                                      border: '1px solid #e5e7eb', 
-                                      borderRadius: '8px', 
-                                      padding: '4px 12px',
-                                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                      fontFamily: 'inherit',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '8px'
-                                    }}
-                                    labelStyle={{ color: '#111827', fontWeight: 500, marginBottom: 0 }}
-                                    itemStyle={{ color: '#111827', fontWeight: 600 }}
-                                    separator=": "
-                                    cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
-                                  />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            );
-                          })()}
-                        </div>
+                                    {truncateText(payload.value, 10)} {/* Apply truncation here */}
+                                  </text>
+                                </g>
+                              );
+                            }}
+                          />
+                          <Bar
+                            dataKey="value"
+                            name="Applications"
+                            radius={[0, 4, 4, 0]}
+                            barSize={30}
+                            strokeWidth={1}
+                            stroke="#fff"
+                            cursor="pointer"
+                            onClick={(data) => {
+                              // Clear all filters first
+                              setFilterCategory(null);
+                              setFilterManaged(null);
+                              // Set the new risk filter
+                              setFilterRisk(data.name);
+                              setMainView("list");
+                            }}
+                          >
+                            {getRiskChartData().map((entry, index) => (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={entry.color}
+                                fillOpacity={1}
+                              />
+                            ))}
+                          </Bar>
+                          <RechartsTooltip
+                            formatter={(value) => [`${value} applications`, ""]}
+                            contentStyle={{
+                              backgroundColor: 'white',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              padding: '4px 12px',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                              fontFamily: 'inherit',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px'
+                            }}
+                            labelStyle={{ color: '#111827', fontWeight: 500, marginBottom: 0 }}
+                            itemStyle={{ color: '#111827', fontWeight: 600 }}
+                            separator=": "
+                            cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* High Scope Risk Users chart */}
+                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-medium text-gray-900">High Scope Risk Users</h3>
+                      <div>
+                        <label htmlFor="high-risk-users-filter" className="mr-2 text-sm text-gray-700">Managed Status:</label>
+                        <select
+                          id="high-risk-users-filter"
+                          value={highRiskUsersManagedStatusFilter}
+                          onChange={e => setHighRiskUsersManagedStatusFilter(e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
+                        >
+                          <option value="Any Status">Any Status</option>
+                          <option value="Managed">Managed</option>
+                          <option value="Unmanaged">Unmanaged</option>
+                          <option value="Newly discovered">Newly discovered</option>
+                        </select>
                       </div>
-                    
-                  
+                    </div>
+                    <p className="text-sm text-gray-500 mb-4">Applications ranked by number of high-risk users</p>
+                    <div className="h-96 overflow-y-auto">
+                      {getHighRiskUsersByApp().filter(app => app.value > 0).length === 0 ? (
+                        <div className="h-full flex items-center justify-center text-gray-500">
+                          No applications found with high-risk users
+                        </div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={Math.max(400, getHighRiskUsersByApp().filter(app => app.value > 0).length * 30)}>
+                          <BarChart data={getHighRiskUsersByApp().filter(app => app.value > 0)} layout="vertical" margin={{ left: 150 }}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
+                            <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#111827', fontSize: 12 }} />
+                            <YAxis
+                              dataKey="name"
+                              type="category"
+                              axisLine={false}
+                              tickLine={false}
+                              width={140}
+                              tick={{ fill: '#111827', fontSize: 12 }}
+                              tickFormatter={(value) => truncateText(value, 20)} // Added truncation
+                            />
+                            <Bar
+                              dataKey="value"
+                              name="High-Risk Users"
+                              radius={[0, 4, 4, 0]}
+                              barSize={20}
+                              strokeWidth={1}
+                              stroke="#fff"
+                              cursor="pointer"
+                              onClick={(data) => {
+                                const app = applications.find(a => a.name === data.name);
+                                if (app) {
+                                  setMainView("list");
+                                  setSelectedAppId(app.id);
+                                  setIsUserModalOpen(true);
+                                }
+                              }}
+                            >
+                              <LabelList
+                                dataKey="value"
+                                position="right"
+                                fill="#111827"
+                                fontSize={10}
+                                formatter={(value: number) => `${value}`}
+                                offset={4}
+                              />
+                              {getHighRiskUsersByApp().filter(app => app.value > 0).map((entry, index) => (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={entry.color}
+                                  fillOpacity={1}
+                                />
+                              ))}
+                            </Bar>
+                            <RechartsTooltip
+                              formatter={(value) => [`${value} high-risk ${value === 1 ? 'user' : 'users'}`, ""]}
+                              contentStyle={{
+                                backgroundColor: 'white',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '8px',
+                                padding: '4px 12px',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                fontFamily: 'inherit',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}
+                              labelStyle={{ color: '#111827', fontWeight: 500, marginBottom: 0 }}
+                              itemStyle={{ color: '#111827', fontWeight: 600 }}
+                              separator=": "
+                              cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Apps by Scope Permissions */}
+                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-medium text-gray-900">Top Apps by Scope Permissions</h3>
+                      <div>
+                        <label htmlFor="scope-permissions-filter" className="mr-2 text-sm text-gray-700">Managed Status:</label>
+                        <select
+                          id="scope-permissions-filter"
+                          value={scopePermissionsManagedStatusFilter}
+                          onChange={e => setScopePermissionsManagedStatusFilter(e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
+                        >
+                          <option value="Any Status">Any Status</option>
+                          <option value="Managed">Managed</option>
+                          <option value="Unmanaged">Unmanaged</option>
+                          <option value="Newly discovered">Newly discovered</option>
+                        </select>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-4">Applications ranked by number of scope permissions</p>
+                    <div className="h-96 overflow-y-auto">
+                      {(() => {
+                        const chartData = getTop10AppsByPermissions();
+                        if (chartData.length === 0) {
+                          return (
+                            <div className="h-full flex items-center justify-center text-gray-500">
+                              No apps that match this criteria
+                            </div>
+                          );
+                        }
+                        return (
+                          <ResponsiveContainer width="100%" height={Math.max(350, chartData.length * 30)}>
+                            <BarChart data={chartData} layout="vertical" margin={{ left: 150 }}>
+                              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
+                              <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#111827', fontSize: 12 }} />
+                              <YAxis
+                                dataKey="name"
+                                type="category"
+                                axisLine={false}
+                                tickLine={false}
+                                width={140}
+                                tick={{ fill: '#111827', fontSize: 12 }}
+                                tickFormatter={(value) => truncateText(value, 20)} // Added truncation
+                              />
+                              <Bar
+                                dataKey="value"
+                                name="Permissions"
+                                radius={[0, 4, 4, 0]}
+                                barSize={20}
+                                strokeWidth={1}
+                                stroke="#fff"
+                                cursor="pointer"
+                                onClick={(data) => {
+                                  const app = applications.find(a => a.name === data.name);
+                                  if (app) {
+                                    setMainView("list");
+                                    setSelectedAppId(app.id);
+                                    setIsUserModalOpen(true);
+                                  }
+                                }}
+                              >
+                                <LabelList
+                                  dataKey="value"
+                                  position="right"
+                                  fill="#111827"
+                                  fontSize={10}
+                                  formatter={(value: number) => `${value}`}
+                                  offset={4}
+                                />
+                                {chartData.map((entry, index) => (
+                                  <Cell
+                                    key={`cell-${index}`}
+                                    fill={entry.color}
+                                    fillOpacity={1}
+                                  />
+                                ))}
+                              </Bar>
+                              <RechartsTooltip
+                                formatter={(value) => [`${value} permissions`, ""]}
+                                contentStyle={{
+                                  backgroundColor: 'white',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '8px',
+                                  padding: '4px 12px',
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                  fontFamily: 'inherit',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
+                                }}
+                                labelStyle={{ color: '#111827', fontWeight: 500, marginBottom: 0 }}
+                                itemStyle={{ color: '#111827', fontWeight: 600 }}
+                                separator=": "
+                                cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+
 
                   {/* Application Similarity Groups */}
-                  
-                    {/* <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 col-span-2">
+
+                  {/* <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 col-span-2">
                       <h3 className="text-lg font-medium text-gray-900">Application Similarity Groups</h3>
                       <p className="text-sm text-gray-500 mb-4">
                         Groups of applications that share similar characteristics and usage patterns.
@@ -3649,7 +3631,7 @@ export default function ShadowITDashboard() {
                         </ResponsiveContainer>
                       </div>
                     </div> */}
-                  
+
                 </div>
               )}
             </div>
@@ -3662,7 +3644,7 @@ export default function ShadowITDashboard() {
                     {(() => {
                       // Count how many filters are active
                       const activeFilters = [filterCategory, filterRisk, filterManaged].filter(Boolean).length;
-                      
+
                       if (activeFilters === 0) {
                         return `We found ${sortedApps.length} applications.`;
                       }
@@ -3686,8 +3668,8 @@ export default function ShadowITDashboard() {
                   </h2>
                 </div>
                 <div className="flex gap-2">
-                  <Button 
-                    variant={mainView === "list" ? "default" : "outline"} 
+                  <Button
+                    variant={mainView === "list" ? "default" : "outline"}
                     onClick={() => {
                       setMainView("list");
                       handleCloseUserModal();
@@ -3697,8 +3679,8 @@ export default function ShadowITDashboard() {
                     <LayoutGrid className="h-4 w-4 mr-2" />
                     Applications
                   </Button>
-                  <Button 
-                    variant={mainView === "Insights" ? "default" : "outline"} 
+                  <Button
+                    variant={mainView === "Insights" ? "default" : "outline"}
                     onClick={handleViewInsights}
                     className={mainView === "Insights" ? "bg-gray-900 hover:bg-gray-800" : ""}
                   >
@@ -3716,182 +3698,182 @@ export default function ShadowITDashboard() {
 
                   {/* Only show profile if authenticated */}
                   {isAuthenticated() && (
-                  <div className="relative" ref={profileRef}>
-                    <button
-                      onClick={() => setIsProfileOpen(!isProfileOpen)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setIsProfileOpen(!isProfileOpen);
-                        } else if (e.key === 'Escape') {
-                          setIsProfileOpen(false);
-                        }
-                      }}
-                      aria-expanded={isProfileOpen}
-                      aria-haspopup="true"
-                      aria-label="User menu"
-                      className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors overflow-hidden"
-                    >
-                      {userInfo?.avatar_url ? (
-                        <img 
-                          src={userInfo.avatar_url} 
-                          alt={userInfo.name || "User"} 
-                          className="h-10 w-10 object-cover"
-                        />
-                      ) : userInfo?.name ? (
-                        <span className="text-sm font-medium">
-                          {userInfo.name.split(' ').map(n => n[0]).join('')}
-                        </span>
-                      ) : (
-                        <User className="h-5 w-5 text-gray-600" />
-                      )}
-                    </button>
-
-                    {isProfileOpen && (
-                      <div 
-                        className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-100 py-2 z-50"
-                        role="menu"
-                        aria-orientation="vertical"
-                        aria-labelledby="user-menu"
+                    <div className="relative" ref={profileRef}>
+                      <button
+                        onClick={() => setIsProfileOpen(!isProfileOpen)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setIsProfileOpen(!isProfileOpen);
+                          } else if (e.key === 'Escape') {
+                            setIsProfileOpen(false);
+                          }
+                        }}
+                        aria-expanded={isProfileOpen}
+                        aria-haspopup="true"
+                        aria-label="User menu"
+                        className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors overflow-hidden"
                       >
-                        {userInfo && (
-                          <>
-                            <div className="px-4 py-3 border-b border-gray-100">
-                              <div className="flex items-center gap-3 mb-2">
-                                <div>
-                                  <p className="font-medium text-gray-900">{userInfo.name}</p>
-                                  <p className="text-sm text-gray-500 truncate max-w-[200px]">{userInfo.email}</p>
+                        {userInfo?.avatar_url ? (
+                          <img
+                            src={userInfo.avatar_url}
+                            alt={userInfo.name || "User"}
+                            className="h-10 w-10 object-cover"
+                          />
+                        ) : userInfo?.name ? (
+                          <span className="text-sm font-medium">
+                            {userInfo.name.split(' ').map(n => n[0]).join('')}
+                          </span>
+                        ) : (
+                          <User className="h-5 w-5 text-gray-600" />
+                        )}
+                      </button>
+
+                      {isProfileOpen && (
+                        <div
+                          className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-100 py-2 z-50"
+                          role="menu"
+                          aria-orientation="vertical"
+                          aria-labelledby="user-menu"
+                        >
+                          {userInfo && (
+                            <>
+                              <div className="px-4 py-3 border-b border-gray-100">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <div>
+                                    <p className="font-medium text-gray-900">{userInfo.name}</p>
+                                    <p className="text-sm text-gray-500 truncate max-w-[200px]">{userInfo.email}</p>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            <div className="px-2 py-2">
-                              <button
-                                onClick={handleSignOut}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    handleSignOut();
-                                  }
-                                }}
-                                role="menuitem"
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                              >
-                                <LogOut className="h-4 w-4" />
-                                Sign out
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                              <div className="px-2 py-2">
+                                <button
+                                  onClick={handleSignOut}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      handleSignOut();
+                                    }
+                                  }}
+                                  role="menuitem"
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                >
+                                  <LogOut className="h-4 w-4" />
+                                  Sign out
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
 
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
                 <div className="p-6">
-                {selectedApp && (
-                  <>
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleCloseUserModal}
-                          className="flex items-center gap-1 text-gray-700 hover:bg-gray-100"
-                        >
-                          <ArrowLeft className="h-4 w-4" />
-                          <span>Back</span>
-                        </Button>
-                        <div>
-                          <h2 className="text-xl font-bold">{selectedApp.name}</h2>
-                          <p className="text-sm text-muted-foreground">{selectedApp.userCount} users with access</p>
+                  {selectedApp && (
+                    <>
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleCloseUserModal}
+                            className="flex items-center gap-1 text-gray-700 hover:bg-gray-100"
+                          >
+                            <ArrowLeft className="h-4 w-4" />
+                            <span>Back</span>
+                          </Button>
+                          <div>
+                            <h2 className="text-xl font-bold">{selectedApp.name}</h2>
+                            <p className="text-sm text-muted-foreground">{selectedApp.userCount} users with access</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        
+                        <div className="flex items-center gap-3">
+
                           <div className="flex items-center gap-1">
                             <span className="text-sm text-muted-foreground font-medium">Risk:</span>
                             <RiskBadge level={selectedApp.riskLevel} />
                           </div>
-                    
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm text-muted-foreground font-medium">Managed Status:</span>
-                          <select
+
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm text-muted-foreground font-medium">Managed Status:</span>
+                            <select
                               className="h-8 rounded-md border border-gray-200 bg-white px-2 text-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200"
-                            value={editedStatuses[selectedApp.id] || selectedApp.managementStatus}
-                            onChange={(e) => handleStatusChange(selectedApp.id, e.target.value)}
-                          >
-                            <option value="Managed">Managed</option>
-                            <option value="Unmanaged">Unmanaged</option>
-                            <option value="Newly discovered">Newly discovered</option>
-                          </select>
+                              value={editedStatuses[selectedApp.id] || selectedApp.managementStatus}
+                              onChange={(e) => handleStatusChange(selectedApp.id, e.target.value)}
+                            >
+                              <option value="Managed">Managed</option>
+                              <option value="Unmanaged">Unmanaged</option>
+                              <option value="Newly discovered">Newly discovered</option>
+                            </select>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* App Details Card */}
-                    <div className="mb-6 p-5 rounded-lg bg-gray-50 border border-gray-200">
-                      <h3 className="text-sm font-semibold mb-2">Application Details</h3>
-                      <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <dt className="text-muted-foreground font-medium">Category</dt>
-                          <dd className="font-medium">{selectedApp.category}</dd>
-                        </div>
-                        
+                      {/* App Details Card */}
+                      <div className="mb-6 p-5 rounded-lg bg-gray-50 border border-gray-200">
+                        <h3 className="text-sm font-semibold mb-2">Application Details</h3>
+                        <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <dt className="text-muted-foreground font-medium">Category</dt>
+                            <dd className="font-medium">{selectedApp.category}</dd>
+                          </div>
+
                           <div>
                             <dt className="text-muted-foreground font-medium">Total Scope Permissions</dt>
                             <dd className="font-medium">{selectedApp.totalPermissions}</dd>
                           </div>
-                      
-                        <div>
-                          <dt className="text-muted-foreground font-medium">Owner</dt>
-                          <dd className="font-medium">{selectedApp.ownerEmail || "Not assigned"}</dd>
-                        </div>
-                      </dl>
-                    </div>
 
-                    <Tabs defaultValue="users" className="mb-6">
-                      <TabsList className="bg-gray-100 p-1">
-                        <TabsTrigger value="users" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
-                        All Users
-                        </TabsTrigger>
-                        <TabsTrigger value="scopes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
-                        Scope User Groups
-                        </TabsTrigger>
-                        {/* <TabsTrigger value="similar" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                          <div>
+                            <dt className="text-muted-foreground font-medium">Owner</dt>
+                            <dd className="font-medium">{selectedApp.ownerEmail || "Not assigned"}</dd>
+                          </div>
+                        </dl>
+                      </div>
+
+                      <Tabs defaultValue="users" className="mb-6">
+                        <TabsList className="bg-gray-100 p-1">
+                          <TabsTrigger value="users" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                            All Users
+                          </TabsTrigger>
+                          <TabsTrigger value="scopes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                            Scope User Groups
+                          </TabsTrigger>
+                          {/* <TabsTrigger value="similar" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
                           Similar Apps
                         </TabsTrigger> */}
-                        <TabsTrigger value="notes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
-                          Notes
-                        </TabsTrigger>
-                      </TabsList>
+                          <TabsTrigger value="notes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                            Notes
+                          </TabsTrigger>
+                        </TabsList>
 
-                      <TabsContent value="users">
-                        <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-                          <div className="flex-1">
-                            <Label htmlFor="userSearch" className="text-sm font-medium">
-                              Search Users
-                            </Label>
-                            <Input
-                              id="userSearch"
-                              placeholder="Search by name or email..."
-                              value={userSearchTerm}
-                              onChange={(e) => setUserSearchTerm(e.target.value)}
-                              className="mt-1"
-                            />
+                        <TabsContent value="users">
+                          <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
+                            <div className="flex-1">
+                              <Label htmlFor="userSearch" className="text-sm font-medium">
+                                Search Users
+                              </Label>
+                              <Input
+                                id="userSearch"
+                                placeholder="Search by name or email..."
+                                value={userSearchTerm}
+                                onChange={(e) => setUserSearchTerm(e.target.value)}
+                                className="mt-1"
+                              />
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="rounded-md border">
+                          <div className="rounded-md border">
                             <div className="max-h-[800px] overflow-y-auto">
-                          <Table>
+                              <Table>
                                 <TableHeader className="sticky top-0 bg-gray-50/80 backdrop-blur-sm z-10">
-                              <TableRow>
+                                  <TableRow>
                                     <TableHead className="w-[50px] rounded-tl-lg bg-transparent">#</TableHead>
-                                    <TableHead 
-                                      className="w-[200px] cursor-pointer bg-transparent" 
+                                    <TableHead
+                                      className="w-[200px] cursor-pointer bg-transparent"
                                       onClick={() => handleUserSort("name")}
                                     >
                                       <div className="flex items-center">
@@ -3899,7 +3881,7 @@ export default function ShadowITDashboard() {
                                         {getUserSortIcon("name")}
                                       </div>
                                     </TableHead>
-                                    <TableHead 
+                                    <TableHead
                                       className="cursor-pointer bg-transparent"
                                       onClick={() => handleUserSort("email")}
                                     >
@@ -3909,92 +3891,92 @@ export default function ShadowITDashboard() {
                                       </div>
                                     </TableHead>
 
-                                    <TableHead 
+                                    <TableHead
                                       className="cursor-pointer rounded-tr-lg bg-transparent"
                                       onClick={() => handleUserSort("riskLevel")}
                                     >
                                       <div className="flex items-center">
-                                      User Scope Risk
+                                        User Scope Risk
                                         {getUserSortIcon("riskLevel")}
                                       </div>
                                     </TableHead>
-                                  
+
                                     <TableHead className="bg-transparent">Scope Permissions</TableHead>
-                                    
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                  {currentUsers.length === 0 ? (
-                                <TableRow>
-                                  <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                                    No users found matching your search
-                                  </TableCell>
-                                </TableRow>
-                              ) : (
-                                    currentUsers.map((user, index) => (
-                                  <TableRow key={user.id} className={index % 2 === 0 ? "bg-muted/30" : ""}>
-                                        <TableCell className="text-muted-foreground">{userStartIndex + index + 1}</TableCell>
-                                    <TableCell>
-                                      <div className="flex items-center gap-2">
-                                        <Avatar className="h-8 w-8">
-                                          <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                                            {getInitials(user.name)}
-                                          </AvatarFallback>
-                                        </Avatar>
-                                        <span className="font-medium">{user.name}</span>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>{user.email}</TableCell>
-                                    <TableCell>
-                                      <TooltipProvider>
-                                        <Tooltip delayDuration={300}>
-                                          <TooltipTrigger asChild>
-                                            <div className="flex items-center ml-4">
-                                              <RiskBadge level={user.riskLevel} scopes={user.scopes} />
-                                            </div>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="right" className="p-2">
-                                            <p className="text-xs">{user.riskReason}</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="max-h-24 overflow-y-auto text-sm">
-                                        {user.scopes.map((scope, i) => {
-                                          // Use the centralized risk assessment function
-                                          const scopeRiskLevel = evaluateSingleScopeRisk(scope);
-                                          
-                                          // Use the centralized color function
-                                          const riskColor = getRiskLevelColor(scopeRiskLevel);
-                                          const riskStatus = `${transformRiskLevel(scopeRiskLevel)}-Risk Scope`;
-                                          
-                                          return (
-                                            <div key={i} className="py-1 border-b border-muted last:border-0 flex items-center">
-                                              <TooltipProvider>
-                                                <Tooltip delayDuration={300}>
-                                                  <TooltipTrigger asChild>
-                                                    <div 
-                                                      className="w-2 h-2 rounded-full mr-2 flex-shrink-0 cursor-pointer" 
-                                                      style={{ backgroundColor: riskColor }}
-                                                    />
-                                                  </TooltipTrigger>
-                                                  <TooltipContent side="left" className="p-2">
-                                                    <p className="text-xs font-medium">{riskStatus}</p>
-                                                  </TooltipContent>
-                                                </Tooltip>
-                                              </TooltipProvider>
-                                              <span className="truncate">{scope}</span>
-                                            </div>
-                                          )
-                                        })}
-                                      </div>
-                                    </TableCell>
+
                                   </TableRow>
-                                ))
-                              )}
-                            </TableBody>
-                          </Table>
+                                </TableHeader>
+                                <TableBody>
+                                  {currentUsers.length === 0 ? (
+                                    <TableRow>
+                                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                                        No users found matching your search
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : (
+                                    currentUsers.map((user, index) => (
+                                      <TableRow key={user.id} className={index % 2 === 0 ? "bg-muted/30" : ""}>
+                                        <TableCell className="text-muted-foreground">{userStartIndex + index + 1}</TableCell>
+                                        <TableCell>
+                                          <div className="flex items-center gap-2">
+                                            <Avatar className="h-8 w-8">
+                                              <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+                                                {getInitials(user.name)}
+                                              </AvatarFallback>
+                                            </Avatar>
+                                            <span className="font-medium">{user.name}</span>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell>{user.email}</TableCell>
+                                        <TableCell>
+                                          <TooltipProvider>
+                                            <Tooltip delayDuration={300}>
+                                              <TooltipTrigger asChild>
+                                                <div className="flex items-center ml-4">
+                                                  <RiskBadge level={user.riskLevel} scopes={user.scopes} />
+                                                </div>
+                                              </TooltipTrigger>
+                                              <TooltipContent side="right" className="p-2">
+                                                <p className="text-xs">{user.riskReason}</p>
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className="max-h-24 overflow-y-auto text-sm">
+                                            {user.scopes.map((scope, i) => {
+                                              // Use the centralized risk assessment function
+                                              const scopeRiskLevel = evaluateSingleScopeRisk(scope);
+
+                                              // Use the centralized color function
+                                              const riskColor = getRiskLevelColor(scopeRiskLevel);
+                                              const riskStatus = `${transformRiskLevel(scopeRiskLevel)}-Risk Scope`;
+
+                                              return (
+                                                <div key={i} className="py-1 border-b border-muted last:border-0 flex items-center">
+                                                  <TooltipProvider>
+                                                    <Tooltip delayDuration={300}>
+                                                      <TooltipTrigger asChild>
+                                                        <div
+                                                          className="w-2 h-2 rounded-full mr-2 flex-shrink-0 cursor-pointer"
+                                                          style={{ backgroundColor: riskColor }}
+                                                        />
+                                                      </TooltipTrigger>
+                                                      <TooltipContent side="left" className="p-2">
+                                                        <p className="text-xs font-medium">{riskStatus}</p>
+                                                      </TooltipContent>
+                                                    </Tooltip>
+                                                  </TooltipProvider>
+                                                  <span className="truncate">{scope}</span>
+                                                </div>
+                                              )
+                                            })}
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    ))
+                                  )}
+                                </TableBody>
+                              </Table>
                             </div>
 
                             {/* User pagination controls */}
@@ -4054,15 +4036,15 @@ export default function ShadowITDashboard() {
                                 </Button>
                               </div>
                             </div>
-                        </div>
-                      </TabsContent>
+                          </div>
+                        </TabsContent>
 
-                      <TabsContent value="scopes">
-                        <div className="p-5 border border-gray-200 rounded-md bg-white">
-                          <h3 className="text-lg font-medium mb-4">Scope User Groups</h3>
-                          <p className="text-sm text-black mb-4">
-                            Users are grouped by identical scope permission sets. Each user group represents a unique set of permissions.
-                          </p>
+                        <TabsContent value="scopes">
+                          <div className="p-5 border border-gray-200 rounded-md bg-white">
+                            <h3 className="text-lg font-medium mb-4">Scope User Groups</h3>
+                            <p className="text-sm text-black mb-4">
+                              Users are grouped by identical scope permission sets. Each user group represents a unique set of permissions.
+                            </p>
 
                             {(() => {
                               const scopeGroups = getScopeGroups(selectedApp)
@@ -4092,14 +4074,14 @@ export default function ShadowITDashboard() {
                                         {selectedApp?.scopes.map((scope, scopeIndex) => {
                                           // Use the centralized risk assessment function
                                           const scopeRiskLevel = evaluateSingleScopeRisk(scope);
-                                          
+
                                           // Use the centralized color function
                                           const riskColor = getRiskLevelColor(scopeRiskLevel);
 
                                           return (
                                             <div key={scopeIndex} className="py-1 border-b border-muted last:border-0 flex items-center">
-                                              <div 
-                                                className="w-2 h-2 rounded-full mr-2 flex-shrink-0" 
+                                              <div
+                                                className="w-2 h-2 rounded-full mr-2 flex-shrink-0"
                                                 style={{ backgroundColor: riskColor }}
                                               />
                                               <span className="text-sm">{scope}</span>
@@ -4153,14 +4135,14 @@ export default function ShadowITDashboard() {
                                               {group.scopes.map((scope: string, scopeIndex: number) => {
                                                 // Use the centralized risk assessment function
                                                 const scopeRiskLevel = evaluateSingleScopeRisk(scope);
-                                                
+
                                                 // Use the centralized color function
                                                 const riskColor = getRiskLevelColor(scopeRiskLevel);
 
                                                 return (
                                                   <div key={scopeIndex} className="py-1 border-b border-muted last:border-0 flex items-center">
-                                                    <div 
-                                                      className="w-2 h-2 rounded-full mr-2 flex-shrink-0" 
+                                                    <div
+                                                      className="w-2 h-2 rounded-full mr-2 flex-shrink-0"
                                                       style={{ backgroundColor: riskColor }}
                                                     />
                                                     <span className="text-sm">{scope}</span>
@@ -4255,9 +4237,9 @@ export default function ShadowITDashboard() {
                               )
                             })()}
                           </div>
-                      </TabsContent>
+                        </TabsContent>
 
-                      {/* <TabsContent value="similar">
+                        {/* <TabsContent value="similar">
                         <div className="p-5 border border-gray-200 rounded-md bg-white">
                           <h3 className="text-lg font-medium mb-4">Similar Applications</h3>
                           <p className="text-sm text-muted-foreground mb-6">
@@ -4340,71 +4322,70 @@ export default function ShadowITDashboard() {
                         </div>
                       </TabsContent> */}
 
-                      <TabsContent value="notes">
-                        <div className="p-5 border border-gray-200 rounded-md bg-white">
-                          <div className="space-y-4">
-                            <div>
-                              <Label htmlFor="owner" className="text-sm font-medium">
-                                Owner Email
-                              </Label>
-                              <Input
-                                id="owner"
-                                placeholder="Enter owner email"
-                                value={ownerEmail}
-                                onChange={(e) => setOwnerEmail(e.target.value)}
-                                className="mt-1"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="notes" className="text-sm font-medium">
-                                Notes
-                              </Label>
-                              <textarea
-                                id="notes"
-                                className="w-full min-h-[100px] p-3 rounded-md border border-input bg-background mt-1"
-                                placeholder="Add notes about this application..."
-                                value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
-                              />
-                            </div>
-                            
-                            {saveMessage && (
-                              <div className={`p-3 rounded-md ${
-                                saveMessage.type === "success" 
-                                  ? "bg-green-50 text-green-700 border border-green-200" 
-                                  : "bg-red-50 text-red-700 border border-red-200"
-                              }`}>
-                                {saveMessage.text}
+                        <TabsContent value="notes">
+                          <div className="p-5 border border-gray-200 rounded-md bg-white">
+                            <div className="space-y-4">
+                              <div>
+                                <Label htmlFor="owner" className="text-sm font-medium">
+                                  Owner Email
+                                </Label>
+                                <Input
+                                  id="owner"
+                                  placeholder="Enter owner email"
+                                  value={ownerEmail}
+                                  onChange={(e) => setOwnerEmail(e.target.value)}
+                                  className="mt-1"
+                                />
                               </div>
-                            )}
-                            
-                            <Button 
-                              onClick={handleSaveNotesAndOwner} 
-                              disabled={isSaving}
-                            >
-                              {isSaving ? "Saving..." : "Save Changes"}
-                            </Button>
+                              <div>
+                                <Label htmlFor="notes" className="text-sm font-medium">
+                                  Notes
+                                </Label>
+                                <textarea
+                                  id="notes"
+                                  className="w-full min-h-[100px] p-3 rounded-md border border-input bg-background mt-1"
+                                  placeholder="Add notes about this application..."
+                                  value={notes}
+                                  onChange={(e) => setNotes(e.target.value)}
+                                />
+                              </div>
+
+                              {saveMessage && (
+                                <div className={`p-3 rounded-md ${saveMessage.type === "success"
+                                  ? "bg-green-50 text-green-700 border border-green-200"
+                                  : "bg-red-50 text-red-700 border border-red-200"
+                                  }`}>
+                                  {saveMessage.text}
+                                </div>
+                              )}
+
+                              <Button
+                                onClick={handleSaveNotesAndOwner}
+                                disabled={isSaving}
+                              >
+                                {isSaving ? "Saving..." : "Save Changes"}
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      </TabsContent>
-                    </Tabs>
-                  </>
-                )}
+                        </TabsContent>
+                      </Tabs>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
           )}
-       </main>
+        </div>
 
-      {/* Use the new SettingsModal component */}
-      <SettingsModal 
-        isOpen={isSettingsOpen} 
-        onClose={() => setIsSettingsOpen(false)} 
-      />
+        {/* Use the new SettingsModal component */}
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+        />
 
-      <div className="max-w-[70rem] mx-auto px-4 sm:px-8">
+        <div className="max-w-[70rem] mx-auto px-4 sm:px-8">
           <h2 className="text-2xl font-semibold mb-8 sm:mb-14 text-gray-900 text-center mt-11">
-          Complete visibility. Real control. All in one place
+            Complete visibility. Real control. All in one place
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
             <div className="flex flex-col p-8 bg-white rounded-xl shadow-sm border border-gray-100">
@@ -4413,19 +4394,19 @@ export default function ShadowITDashboard() {
               </div>
               <h3 className="text-lg font-semibold mb-2">Spot unauthorized apps instantly</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-              Automatically detect all the AI and SaaS apps your employees are using across Google Workspace or Microsoft 365. Identify your org's managed apps and mark specific apps for review.
+                Automatically detect all the AI and SaaS apps your employees are using across Google Workspace or Microsoft 365. Identify your org's managed apps and mark specific apps for review.
               </p>
             </div>
             <div className="flex flex-col p-8 bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="relative">
-            
-              <div className="bg-primary/10 rounded-full w-12 h-12 flex items-center justify-center mb-6">
-                <ShieldAlert className="h-6 w-6 text-primary" />
+
+                <div className="bg-primary/10 rounded-full w-12 h-12 flex items-center justify-center mb-6">
+                  <ShieldAlert className="h-6 w-6 text-primary" />
                 </div>
               </div>
               <h3 className="text-lg font-semibold mb-2">Smart risk assessment</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-              Get instant visibility into OAuth scopes and see clear risk indicators based on scope permissions per user.
+                Get instant visibility into OAuth scopes and see clear risk indicators based on scope permissions per user.
               </p>
             </div>
             <div className="flex flex-col p-8 bg-white rounded-xl shadow-sm border border-gray-100">
@@ -4433,18 +4414,18 @@ export default function ShadowITDashboard() {
                 <div className="absolute -top-3 -right-3">
                   <div className="bg-black text-white text-xs font-medium px-3 py-1 rounded-full flex items-center gap-1">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M13 3L4 14H13L11 21L20 10H11L13 3Z" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M13 3L4 14H13L11 21L20 10H11L13 3Z" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     Stitchflow Exclusive
                   </div>
                 </div>
-              <div className="bg-primary/10 rounded-full w-12 h-12 flex items-center justify-center mb-6">
-                <ChartNoAxesCombined className="h-6 w-6 text-primary" />
+                <div className="bg-primary/10 rounded-full w-12 h-12 flex items-center justify-center mb-6">
+                  <ChartNoAxesCombined className="h-6 w-6 text-primary" />
                 </div>
               </div>
               <h3 className="text-lg font-semibold mb-2">Granular insights</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-            View app insights by category, risk, and scope groups—all in one place. Catch risky behavior before it becomes a problem.
+                View app insights by category, risk, and scope groups—all in one place. Catch risky behavior before it becomes a problem.
               </p>
             </div>
             <div className="flex flex-col p-8 bg-white rounded-xl shadow-sm border border-gray-100">
@@ -4452,50 +4433,32 @@ export default function ShadowITDashboard() {
                 <div className="absolute -top-3 -right-3">
                   <div className="bg-black text-white text-xs font-medium px-3 py-1 rounded-full flex items-center gap-1">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M13 3L4 14H13L11 21L20 10H11L13 3Z" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M13 3L4 14H13L11 21L20 10H11L13 3Z" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     Stitchflow Exclusive
                   </div>
                 </div>
-              <div className="bg-primary/10 rounded-full w-12 h-12 flex items-center justify-center mb-6">
-                <Bell className="h-6 w-6 text-primary" />
+                <div className="bg-primary/10 rounded-full w-12 h-12 flex items-center justify-center mb-6">
+                  <Bell className="h-6 w-6 text-primary" />
                 </div>
               </div>
               <h3 className="text-lg font-semibold mb-2">Continuous monitoring & real-time alerts</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-              Get notified when new apps or users appear, or when high-risk apps gain new users. Your environment, under control.
+                Get notified when new apps or users appear, or when high-risk apps gain new users. Your environment, under control.
               </p>
             </div>
           </div>
-      </div>
-
-      <FAQ />
-
-      <WhyStitchflow className="bg-[#f8f5f3] mb-8" />
-
-      <FeedbackChat/>
-
-      <footer className="bottom-0 left-0 right-0 flex justify-between items-center px-4 py-3 mt-4 bg-[#1a1a2e] text-white">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="hover:text-blue-500 transition-colors">
-            stitchflow.com
-          </Link>
-          <Link href="/privacy" className="hover:text-blue-500 transition-colors">
-            Privacy Policy
-          </Link>
-          <Link href="/terms-of-service" className="hover:text-blue-500 transition-colors">
-            Terms of Service
-          </Link>
         </div>
-        <a 
-          href="mailto:contact@stitchflow.io" 
-          className="hover:text-blue-500 transition-colors"
-        >
-          contact@stitchflow.io
-        </a>
-      </footer>
 
-      
+        <WhyStitchflow className="mt-24" />
+        <FAQ />
+      </main>
+
+      <FeedbackChat />
+
+      <FooterMain />
+
+
 
       {/* Update the custom styles */}
       <style jsx global>{`
@@ -4586,7 +4549,7 @@ export default function ShadowITDashboard() {
         }
       `}</style>
       {showLoginModal && <LoginModal error={loginError} />}
-    </div>
+    </div >
   )
 }
 
