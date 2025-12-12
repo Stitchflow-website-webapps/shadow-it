@@ -7,6 +7,7 @@ import { EmailService } from '@/app/lib/services/email-service';
 import { ResourceMonitor, processInBatchesWithResourceControl } from '@/lib/resource-monitor';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 // **NEW: Configuration for resource management**
 const PROCESSING_CONFIG = {

@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { GoogleWorkspaceService } from '@/lib/google-workspace';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   let syncRecord: any = null;
