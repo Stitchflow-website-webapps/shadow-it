@@ -6,6 +6,8 @@ import { categorizeApplication } from '@/app/api/background/sync/categorize/rout
 import { EmailService } from '@/app/lib/services/email-service';
 import { ResourceMonitor, processInBatchesWithResourceControl } from '@/lib/resource-monitor';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * A test cron job for a specific organization.
  * This job fetches and compares user and application data from Google Workspace against the database and logs the differences without sending notifications or triggering a full sync.

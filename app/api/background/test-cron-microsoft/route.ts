@@ -6,6 +6,8 @@ import { categorizeApplication } from '@/app/api/background/sync/categorize/rout
 import { EmailService } from '@/app/lib/services/email-service';
 import { ResourceMonitor, processInBatchesWithResourceControl } from '@/lib/resource-monitor';
 
+export const dynamic = 'force-dynamic';
+
 // **NEW: Configuration for resource management**
 const PROCESSING_CONFIG = {
   BATCH_SIZE: 30, // Conservative batch size for large orgs
