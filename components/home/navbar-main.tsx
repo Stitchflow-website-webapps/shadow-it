@@ -48,10 +48,10 @@ interface NavbarConfig {
 // Static navbar configuration
 const navbarConfig: NavbarConfig = {
     logo: {
-        src: "/stitchflow-logo.png",
+        src: "/tools/shadow-it-scan/full-logo-stitchflow.webp",
         alt: "Stitchflow",
-        width: 24,
-        height: 24,
+        width: 128,
+        height: 28,
     },
     menuItems: [
         {
@@ -442,9 +442,8 @@ const NavbarMain = () => {
                                     width={logo.width}
                                     height={logo.height}
                                     priority
-                                    className="rounded-md"
+                                    className="h-7"
                                 />
-                                <span className="text-base font-semibold text-[#363338]">stitchflow</span>
                             </div>
 
                             <DesktopNavigation

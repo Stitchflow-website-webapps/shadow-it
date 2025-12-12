@@ -5,13 +5,13 @@ import Image from 'next/image';
 
 const footerConfig = {
     certifications: [
-        { label: 'AICPA SOC2', image: '/footer/Certification_Icon_Container2.svg' },
-        { label: 'GDPR', image: '/footer/Certification_Icon_Container.svg' },
-        { label: 'CCPA', image: '/footer/Certification_Icon_Container3.svg' },
+        { label: 'AICPA SOC2', image: '/tools/shadow-it-scan/footer/Certification_Icon_Container2.svg' },
+        { label: 'GDPR', image: '/tools/shadow-it-scan/footer/Certification_Icon_Container.svg' },
+        { label: 'CCPA', image: '/tools/shadow-it-scan/footer/Certification_Icon_Container3.svg' },
     ],
     backedBy: {
         label: 'Backed by',
-        image: '/footer/okta-ventures.svg',
+        image: '/tools/shadow-it-scan/footer/okta-ventures.svg',
     },
     freeTools: [
         { label: 'Software renewal tracker', url: 'https://www.stitchflow.com/tools/renewal-tracker' },
@@ -29,14 +29,14 @@ const footerConfig = {
         { label: 'Security', url: 'https://www.stitchflow.com/security' },
     ],
     socialLinks: [
-        { platform: 'YouTube', url: 'https://www.youtube.com/@Stitchflow', icon: '/footer/yt.svg' },
-        { platform: 'Instagram', url: 'https://www.instagram.com/stitchflowhq', icon: '/footer/ig.svg' },
-        { platform: 'X', url: 'https://x.com/stitchflowHQ', icon: '/footer/x.svg' },
-        { platform: 'LinkedIn', url: 'https://www.linkedin.com/company/stitchflowhq', icon: '/footer/in.svg' },
+        { platform: 'YouTube', url: 'https://www.youtube.com/@Stitchflow', icon: '/tools/shadow-it-scan/footer/yt.svg' },
+        { platform: 'Instagram', url: 'https://www.instagram.com/stitchflowhq', icon: '/tools/shadow-it-scan/footer/ig.svg' },
+        { platform: 'X', url: 'https://x.com/stitchflowHQ', icon: '/tools/shadow-it-scan/footer/x.svg' },
+        { platform: 'LinkedIn', url: 'https://www.linkedin.com/company/stitchflowhq', icon: '/tools/shadow-it-scan/footer/in.svg' },
     ],
     reviewBadges: [
-        { label: 'Capterra', url: 'https://www.capterra.com/p/10013420/Stitchflow/', image: '/footer/badge1.png' },
-        { label: 'G2', url: 'https://www.g2.com/products/stitchflow/reviews', image: '/footer/badge2.png' },
+        { label: 'Capterra', url: 'https://www.capterra.com/p/10013420/Stitchflow/', image: '/tools/shadow-it-scan/footer/badge1.png' },
+        { label: 'G2', url: 'https://www.g2.com/products/stitchflow/reviews', image: '/tools/shadow-it-scan/footer/badge2.png' },
     ],
     copyright: 'Copyright © 2025 Stitchflow, Inc.',
     legalLinks: [
@@ -177,7 +177,7 @@ export default function FooterMain() {
                 </div>
                 <div className="mt-12 md:mt-24 xl:mt-32 px-2 md:px-0">
                     <Image
-                        src="/footer/footer-wordmark.png"
+                        src="/tools/shadow-it-scan/footer/footer-wordmark.png"
                         alt="Stitchflow"
                         width={1920}
                         height={1080}

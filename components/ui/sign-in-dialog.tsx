@@ -7,7 +7,7 @@ import { X } from "lucide-react"
 
 // Custom Reddit logo component
 const RedditLogo = () => (
-  <img src="/reddit-logo.svg" alt="Reddit Logo" width="20" height="20" className="text-orange-500" />
+  <img src="/tools/shadow-it-scan/reddit-logo.svg" alt="Reddit Logo" width="20" height="20" className="text-orange-500" />
 )
 
 export default function SignInDialog() {

@@ -67,7 +67,7 @@ export default function RootLayout({
         {/* End Google Tag Manager */}
 
         <meta charSet="UTF-8" />
-        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/x-icon" href="/tools/shadow-it-scan/favicon.ico" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
         {/* Google Tag Manager (noscript) */}
