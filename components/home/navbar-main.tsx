@@ -50,7 +50,7 @@ const navbarConfig: NavbarConfig = {
     logo: {
         src: "/tools/shadow-it-scan/full-logo-stitchflow.webp",
         alt: "Stitchflow",
-        width: 128,
+        width: 120,
         height: 28,
     },
     menuItems: [
