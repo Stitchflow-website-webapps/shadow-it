@@ -442,7 +442,7 @@ const NavbarMain = () => {
                                     width={logo.width}
                                     height={logo.height}
                                     priority
-                                    className="h-7"
+                                    className="h-7 w-auto object-contain"
                                 />
                             </div>
 
