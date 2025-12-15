@@ -1,6 +1,21 @@
 import { LoopsClient, APIError, RateLimitExceededError } from "loops";
 
-const loops = new LoopsClient(process.env.LOOPS_API_KEY!);
+let loopsClient: LoopsClient | null = null;
+
+function getLoopsClient(): LoopsClient | null {
+  if (loopsClient) {
+    return loopsClient;
+  }
+
+  const apiKey = process.env.LOOPS_API_KEY;
+  if (!apiKey) {
+    console.warn('[EmailService] LOOPS_API_KEY is not set. Email notifications are disabled.');
+    return null;
+  }
+
+  loopsClient = new LoopsClient(apiKey);
+  return loopsClient;
+}
 
 export interface AppNotificationData {
   to: string;
@@ -106,8 +121,13 @@ export class EmailService {
           break;
       }
 
+      const client = getLoopsClient();
+      if (!client) {
+        return false;
+      }
+
       // Send the email
-      await loops.sendTransactionalEmail({
+      await client.sendTransactionalEmail({
         transactionalId: templateId,
         email: data.to,
         addToAudience: true,
@@ -154,8 +174,13 @@ export class EmailService {
 
   // Utility method to test if API key is valid
   static async testApiKey() {
+    const client = getLoopsClient();
+    if (!client) {
+      return false;
+    }
+
     try {
-      const response = await loops.testApiKey();
+      await client.testApiKey();
       return true; // If no error is thrown, the key is valid
     } catch (error) {
       if (error instanceof APIError) {
@@ -174,9 +199,14 @@ export class EmailService {
     
     // Determine the platform and send appropriate variables
     const isAppHub = creationSource === false;
+
+    const client = getLoopsClient();
+    if (!client) {
+      return false;
+    }
     
     try {
-      await loops.sendTransactionalEmail({
+      await client.sendTransactionalEmail({
         transactionalId: this.NEW_APP_TEMPLATE_ID,
         email: to,
         dataVariables: {
@@ -210,9 +240,14 @@ export class EmailService {
     
     // Determine the platform and send appropriate variables
     const isAppHub = creationSource === false;
+
+    const client = getLoopsClient();
+    if (!client) {
+      return false;
+    }
     
     try {
-      await loops.sendTransactionalEmail({
+      await client.sendTransactionalEmail({
         transactionalId: this.NEW_USER_TEMPLATE_ID,
         email: to,
         dataVariables: {
@@ -307,8 +342,13 @@ export class EmailService {
       reAuthUrl = authUrl.toString();
     }
     
+    const client = getLoopsClient();
+    if (!client) {
+      return false;
+    }
+
     try {
-      await loops.sendTransactionalEmail({
+      await client.sendTransactionalEmail({
         transactionalId,
         email: to,
         dataVariables: {
