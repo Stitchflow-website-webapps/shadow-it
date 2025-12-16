@@ -1,3 +1,14 @@
+// Type for individual vendor file metadata
+export interface VendorFile {
+  id: string
+  fileName: string
+  label: string
+  filePath: string
+  uploadedAt: string
+  fileType: string
+  url?: string
+}
+
 export interface App {
   id: string
   name: string
@@ -9,7 +20,7 @@ export interface App {
   stitchflowStatus: string
   appTier: string
   department: string
-  owner: string
+  technicalOwner: string
   comment?: string
   appPlan: string
   planLimit: string
@@ -17,6 +28,19 @@ export interface App {
   costPerUser?: string
   renewalDate?: string
   contractUrl?: string
+  vendorFiles?: VendorFile[]
+  vendorFilesLimit?: number // Count of uploaded vendor files (not the maximum allowed)
   licensesUsed: number | null
   usageDescription?: string
+  // New fields
+  renewalType?: string
+  billingOwner?: string
+  purchaseCategory?: string
+  optOutDate?: string
+  optOutPeriod?: number | null
+  vendorContractStatus?: string
+  paymentMethod?: string
+  paymentTerms?: string
+  budgetSource?: string
+  billingFrequency?: string
 }

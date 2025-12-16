@@ -12,7 +12,8 @@ import {
   Sliders,
   Mail,
   Inbox,
-  ShieldCheck
+  ShieldCheck,
+  ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -250,7 +251,7 @@ export default function Sidebar({
         <div className="flex-1 overflow-y-auto p-4">
           {/* Discover Section */}
           <div>
-            <h3 className={`font-semibold text-[#7B7481] mb-3 ${contentVisibility}`} style={{ fontSize: '14px', lineHeight: '18px' }}>
+            <h3 className={`font-medium text-[#7B7481] mb-3 ${contentVisibility}`} style={{ fontSize: '12px', lineHeight: '16px' }}>
               Discover
             </h3>
             <nav className="space-y-1">
@@ -259,7 +260,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'applications' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -272,11 +273,11 @@ export default function Sidebar({
                     ? 'text-white' 
                     : 'text-[#7B7481] group-hover:text-[#363338]'
                 }`} />
-                <span className={`font-medium transition-colors duration-200 ${contentVisibility} ${
+                <span className={`font-normal transition-colors duration-200 ${contentVisibility} ${
                   currentView === 'applications'
                     ? 'text-white'
                     : 'group-hover:text-[#1A1A1A]'
-                }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
+                }`} style={{ fontSize: '14px', lineHeight: '20px' }}>
                   Discovered Apps
                 </span>
               </button>
@@ -286,7 +287,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'ai-risk-analysis' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -299,11 +300,11 @@ export default function Sidebar({
                     ? 'text-white' 
                     : 'text-[#7B7481] group-hover:text-[#363338]'
                 }`} />
-                <span className={`font-medium transition-colors duration-200 ${contentVisibility} ${
+                <span className={`font-normal transition-colors duration-200 ${contentVisibility} ${
                   currentView === 'ai-risk-analysis'
                     ? 'text-white'
                     : 'group-hover:text-[#1A1A1A]'
-                }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
+                }`} style={{ fontSize: '14px', lineHeight: '20px' }}>
                   AI Risk Analysis
                 </span>
               </button>
@@ -312,7 +313,7 @@ export default function Sidebar({
 
           {/* Organize Section */}
           <div className="mt-6">
-            <h3 className={`font-semibold text-[#7B7481] mb-3 ${contentVisibility}`} style={{ fontSize: '14px', lineHeight: '18px' }}>
+            <h3 className={`font-medium text-[#7B7481] mb-3 ${contentVisibility}`} style={{ fontSize: '12px', lineHeight: '16px' }}>
               Organize
             </h3>
             <nav className="space-y-1">
@@ -321,7 +322,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'organize-app-inbox' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -342,11 +343,11 @@ export default function Sidebar({
                   )}
                 </div>
                 <div className={`flex items-center justify-between w-full ${contentVisibility}`}>
-                  <span className={`font-medium transition-colors duration-200 ${
+                  <span className={`font-normal transition-colors duration-200 ${
                     currentView === 'organize-app-inbox'
                       ? 'text-white'
                       : 'group-hover:text-[#1A1A1A]'
-                  }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
+                  }`} style={{ fontSize: '14px', lineHeight: '20px' }}>
                     Managed Apps
                   </span>
                   
@@ -357,7 +358,7 @@ export default function Sidebar({
 
           {/* Settings Section */}
           <div className="mt-6">
-            <h3 className={`font-semibold text-[#7B7481] mb-3 ${contentVisibility}`} style={{ fontSize: '14px', lineHeight: '18px' }}>
+            <h3 className={`font-medium text-[#7B7481] mb-3 ${contentVisibility}`} style={{ fontSize: '12px', lineHeight: '16px' }}>
               Settings
             </h3>
             <nav className="space-y-1">
@@ -366,7 +367,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'email-notifications' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -379,11 +380,11 @@ export default function Sidebar({
                     ? 'text-white' 
                     : 'text-[#7B7481] group-hover:text-[#363338]'
                 }`} />
-                <span className={`font-medium transition-colors duration-200 ${contentVisibility} ${
+                <span className={`font-normal transition-colors duration-200 ${contentVisibility} ${
                   currentView === 'email-notifications'
                     ? 'text-white'
                     : 'group-hover:text-[#1A1A1A]'
-                }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
+                }`} style={{ fontSize: '14px', lineHeight: '20px' }}>
                   Email Notifications
                 </span>
               </button>
@@ -393,7 +394,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'organization-settings' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -406,11 +407,11 @@ export default function Sidebar({
                     ? 'text-white' 
                     : 'text-[#7B7481] group-hover:text-[#363338]'
                 }`} />
-                <span className={`font-medium transition-colors duration-200 ${contentVisibility} ${
+                <span className={`font-normal transition-colors duration-200 ${contentVisibility} ${
                   currentView === 'organization-settings'
                     ? 'text-white'
                     : 'group-hover:text-[#1A1A1A]'
-                }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
+                }`} style={{ fontSize: '14px', lineHeight: '20px' }}>
                  AI Risk Weights
                 </span>
               </button>
@@ -420,7 +421,7 @@ export default function Sidebar({
                 className={`
                   w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
                   transition-all duration-200 ease-in-out
-                  group relative
+                  group relative hover-override
                   ${currentView === 'app-inbox-settings' 
                     ? 'bg-[#363338] text-white shadow-sm' 
                     : 'text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]'
@@ -433,16 +434,36 @@ export default function Sidebar({
                     ? 'text-white' 
                     : 'text-[#7B7481] group-hover:text-[#363338]'
                 }`} />
-                <span className={`font-medium transition-colors duration-200 ${contentVisibility} ${
+                <span className={`font-normal transition-colors duration-200 ${contentVisibility} ${
                   currentView === 'app-inbox-settings'
                     ? 'text-white'
                     : 'group-hover:text-[#1A1A1A]'
-                }`} style={{ fontSize: '16px', lineHeight: '20px' }}>
+                }`} style={{ fontSize: '14px', lineHeight: '20px' }}>
                    IdP
                 </span>
               </button>
             </nav>
           </div>
+
+        </div>
+
+        {/* Stitchflow App Link - Above User Section */}
+        <div className="border-t border-[#E0D5C8] p-4">
+          <button
+            onClick={() => window.open('https://app.stitchflow.io/', '_blank', 'noopener,noreferrer')}
+            className={`
+              w-full flex items-center space-x-2 px-3 py-2 rounded-md text-left
+              transition-all duration-200 ease-in-out
+              group relative hover-override
+              text-[#363338] hover:bg-[#D4C9B8] hover:shadow-sm hover:translate-y-[-1px]
+              ${isCollapsed ? 'justify-center px-2' : 'justify-start'}
+            `}
+          >
+            <ExternalLink className="h-4 w-4 flex-shrink-0 transition-colors duration-200 text-[#7B7481] group-hover:text-[#363338]" />
+            <span className={`font-normal transition-colors duration-200 ${contentVisibility} group-hover:text-[#1A1A1A]`} style={{ fontSize: '14px', lineHeight: '20px' }}>
+              Stitchflow App
+            </span>
+          </button>
         </div>
 
         {/* User Section at Bottom */}
@@ -482,7 +503,7 @@ export default function Sidebar({
                             e.stopPropagation();
                             onSignOut();
                           }}
-                          className="h-5 w-5 p-0 bg-white hover:bg-red-50 text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 rounded-full shadow-md hover:shadow-lg transition-all duration-200"
+                          className="h-5 w-5 p-0 bg-white hover:bg-red-50 text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 rounded-full shadow-md hover:shadow-lg transition-all duration-200 hover-override"
                           title="Sign out"
                         >
                           <LogOut className="h-2.5 w-2.5" />
@@ -512,10 +533,10 @@ export default function Sidebar({
                           </div>
                         </div>
                         <div className="flex flex-col flex-1 min-w-0">
-                          <span className="font-semibold text-[#363338] group-hover:text-[#1A1A1A] transition-colors duration-200 truncate" style={{ fontSize: '13px', lineHeight: '18px' }}>
+                          <span className="font-medium text-[#363338] group-hover:text-[#1A1A1A] transition-colors duration-200 truncate" style={{ fontSize: '12px', lineHeight: '16px' }}>
                             {userInfo.name || 'Unknown User'}
                           </span>
-                          <span className="text-[#7B7481] group-hover:text-[#5C5561] transition-colors duration-200 truncate" style={{ fontSize: '11px', lineHeight: '14px' }}>
+                          <span className="text-[#7B7481] group-hover:text-[#5C5561] transition-colors duration-200 truncate" style={{ fontSize: '10px', lineHeight: '12px' }}>
                             {userInfo.email || 'No email'}
                           </span>
                         </div>
@@ -529,7 +550,7 @@ export default function Sidebar({
                               e.stopPropagation();
                               onSignOut();
                             }}
-                            className="h-6 w-6 p-0 hover:bg-red-50 hover:text-red-600 text-[#7B7481] transition-all duration-200 rounded-md flex-shrink-0"
+                            className="h-6 w-6 p-0 hover:bg-red-50 hover:text-red-600 text-[#7B7481] transition-all duration-200 rounded-md flex-shrink-0 hover-override"
                             title="Sign out"
                           >
                             <LogOut className="h-3 w-3" />

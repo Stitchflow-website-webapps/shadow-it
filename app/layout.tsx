@@ -3,6 +3,9 @@ import './globals.css'
 import Link from 'next/link';
 import { Suspense } from 'react';
 import Script from 'next/script';
+import { Inter } from 'next/font/google';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Discover and organize managed apps | Stitchflow',
@@ -30,7 +33,7 @@ export default function RootLayout({
         <link rel="icon" type="image/png" href="https://cdn.prod.website-files.com/648b3fb5ff20b9eb641b8ea2/65b1d6fd463f7ec764b594e6_Group%207.png" />
         <link rel="canonical" href="https://www.manage.stitchflow.io/" />
       </head>
-      <body>
+      <body className={inter.className}>
         {/* Google Tag Manager (noscript) */}
         <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-K8ZP8PLV"
         height="0" width="0" style={{display: 'none', visibility: 'hidden'}}></iframe></noscript>

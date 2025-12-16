@@ -6,19 +6,29 @@ import { getLicenseUtilizationStatus } from "@/lib/utils"
 const FILTER_FIELDS = [
   { value: 'name', label: 'App Name', type: 'text' },
   { value: 'department', label: 'Department', type: 'text' },
-  { value: 'owner', label: 'Owner', type: 'text' },
+  { value: 'technicalOwner', label: 'Technical Owner', type: 'text' },
   { value: 'ssoEnforced', label: 'SSO Enforced', type: 'select', options: ['Yes', 'No'] },
   { value: 'deprovisioning', label: 'Deprovisioning', type: 'select', options: ['Okta SCIM', 'Azure AD federation', 'OneLogin SCIM', 'JumpCloud federation', 'Google federation', 'Workflow', 'Manual', 'Unknown'] },
   { value: 'managedStatus', label: 'Managed Status', type: 'select', options: ['Managed', 'Unmanaged', 'Newly discovered'] },
   { value: 'stitchflowStatus', label: 'Stitchflow Status', type: 'select', options: ['Yes - API', 'Yes - CSV Sync', 'Not connected'] },
   { value: 'appTier', label: 'App Tier', type: 'select', options: ['Tier 1', 'Tier 2', 'Tier 3'] },
-  { value: 'appPlan', label: 'App Plan', type: 'select', options: ['Annual Plan', 'Monthly Plan', 'N/A', 'Other'] },
+  { value: 'billingFrequency', label: 'Billing Frequency', type: 'select', options: ['Annual Plan', 'Monthly Plan', 'Quarterly', 'Usage Based', 'Other'] },
+  { value: 'renewalType', label: 'Renewal Type', type: 'select', options: ['Auto Renewal', 'Manual Renewal', 'Perpetual Renewal'] },
+  { value: 'billingOwner', label: 'Billing Owner', type: 'text' },
+  { value: 'purchaseCategory', label: 'Purchase Category', type: 'select', options: ['Software', 'Services','Add-on','Infrastructure','Hardware','Others'] },
+  { value: 'optOutDate', label: 'Opt-Out Date', type: 'date' },
+  { value: 'optOutPeriod', label: 'Opt-Out Period (Days)', type: 'number' },
+  { value: 'vendorContractStatus', label: 'Vendor/Contract Status', type: 'select', options: ['Active', 'Inactive'] },
+  { value: 'paymentMethod', label: 'Payment Method', type: 'select', options: ['Company Credit Card', 'E-Check', 'Wire', 'Accounts Payable'] },
+  { value: 'paymentTerms', label: 'Payment Terms', type: 'select', options: ['Net 30', 'Due Upon Receipt', '2/10 Net 30', 'Partial Payment'] },
+  { value: 'budgetSource', label: 'Budget Source', type: 'text' },
   { value: 'planLimit', label: 'Plan Limit', type: 'number' },
   { value: 'licensesUsed', label: 'Licenses Used', type: 'number' },
   { value: 'costPerUser', label: 'Cost Per User', type: 'number' },
   { value: 'renewalDate', label: 'Renewal Date', type: 'date' },
   { value: 'comment', label: 'Access Policy & Notes', type: 'limited_text' },
   { value: 'usageDescription', label: "App Usage", type: 'limited_text' },
+  { value: 'vendorFileLabels', label: 'Vendor File Label', type: 'limited_text' }
 ]
 
 // Helper function to get field configuration
@@ -116,6 +126,8 @@ export function applyFilters(apps: App[], filters: FilterCondition[], searchQuer
       app.renewalDate?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       app.contractUrl?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       app.usageDescription?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      // Vendor file labels search
+      (app.vendorFiles || []).some(file => file.label?.toLowerCase().includes(searchQuery.toLowerCase())) ||
       // License utilization status search
       (() => {
         const utilizationStatus = getLicenseUtilizationStatus(app.licensesUsed, app.planLimit || '');
@@ -249,6 +261,7 @@ function getAppFieldValue(app: App, field: string): string {
     case 'comment': return app.comment || ''
     case 'contractUrl': return app.contractUrl || ''
     case 'usageDescription': return app.usageDescription || ''
+    case 'vendorFileLabels': return (app.vendorFiles || []).map(file => file.label).filter(label => label.trim()).join(' ')
     default: return ''
   }
 }

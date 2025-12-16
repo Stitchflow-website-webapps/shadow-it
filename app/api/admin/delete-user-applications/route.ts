@@ -52,12 +52,15 @@ export async function POST(request: Request) {
     // Extract user IDs
     const userIds = users.map(user => user.id);
     
-    // Delete user_applications in batches to avoid URI length limits
+    // Delete user_applications for these users in batches to avoid URI size limits
     const BATCH_SIZE = 100; // Process 100 users at a time
     let totalDeleted = 0;
+    let batchNumber = 1;
+    console.log("User count: "+userIds.length)
     
     for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
       const batch = userIds.slice(i, i + BATCH_SIZE);
+      console.log(`Processing batch ${batchNumber} (${batch.length} users)...`);
       
       const { error: deleteError } = await supabaseAdmin
         .from('user_applications')
@@ -65,20 +68,57 @@ export async function POST(request: Request) {
         .in('user_id', batch);
       
       if (deleteError) {
-        console.error(`Error deleting user applications batch ${i}-${i + batch.length}:`, deleteError);
+        console.error(`Error deleting user applications in batch ${batchNumber}:`, deleteError);
         return NextResponse.json(
-          { error: `Failed to delete user applications at batch ${i}-${i + batch.length}` },
+          { error: `Failed to delete user applications in batch ${batchNumber}` },
           { status: 500 }
         );
       }
       
       totalDeleted += batch.length;
-      console.log(`Processed batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(userIds.length/BATCH_SIZE)}: ${batch.length} users`);
+      batchNumber++;
+      
+      // Small delay between batches to avoid overwhelming the database
+      if (i + BATCH_SIZE < userIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    // Now delete the users themselves from the users table
+    console.log(`Deleting ${userIds.length} users from users table...`);
+    let userBatchNumber = 1;
+    
+    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+      const batch = userIds.slice(i, i + BATCH_SIZE);
+      console.log(`Deleting user batch ${userBatchNumber} (${batch.length} users)...`);
+      
+      const { error: deleteUsersError } = await supabaseAdmin
+        .from('users')
+        .delete()
+        .in('id', batch);
+      
+      if (deleteUsersError) {
+        console.error(`Error deleting users in batch ${userBatchNumber}:`, deleteUsersError);
+        return NextResponse.json(
+          { error: `Failed to delete users in batch ${userBatchNumber}` },
+          { status: 500 }
+        );
+      }
+      
+      userBatchNumber++;
+      
+      // Small delay between batches to avoid overwhelming the database
+      if (i + BATCH_SIZE < userIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
     
     return NextResponse.json({ 
-      message: `Successfully deleted user applications for organization: ${organization_id}`,
-      deleted_count: userIds.length
+      message: `Successfully deleted user applications and users for organization: ${organization_id}`,
+      deleted_user_applications: userIds.length,
+      deleted_users: userIds.length,
+      user_app_batches_processed: batchNumber - 1,
+      user_batches_processed: userBatchNumber - 1
     });
     
   } catch (error: any) {

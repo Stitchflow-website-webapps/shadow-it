@@ -24,7 +24,7 @@ interface AppTableProps {
   onSelectionChange?: (selectedIds: Set<string>) => void
 }
 
-type SortField = 'name' | 'renewalDate' | 'deprovisioning' | 'managedStatus' | 'stitchflowStatus' | 'appTier' | 'appPlan' | 'planLimit' | 'licensesUsed' | 'costPerUser'
+type SortField = 'name' | 'renewalDate' | 'deprovisioning' | 'managedStatus' | 'stitchflowStatus' | 'appTier' | 'billingFrequency' | 'renewalType' | 'billingOwner' | 'purchaseCategory' | 'optOutDate' | 'optOutPeriod' | 'vendorContractStatus' | 'paymentMethod' | 'paymentTerms' | 'budgetSource' | 'planLimit' | 'licensesUsed' | 'costPerUser'
 type SortDirection = 'asc' | 'desc'
 
 // Helper function to parse date strings, including month-only
@@ -183,6 +183,15 @@ export function AppTable({
       return 0
     }
 
+    if (sortField === 'optOutPeriod') {
+      const aNum = a.optOutPeriod ?? 0
+      const bNum = b.optOutPeriod ?? 0
+      
+      if (aNum < bNum) return sortDirection === 'asc' ? -1 : 1
+      if (aNum > bNum) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    }
+
     // Handle string and date fields
     let aValue: string | Date = ''
     let bValue: string | Date = ''
@@ -196,9 +205,13 @@ export function AppTable({
         aValue = parseDateString(a.renewalDate || '') || new Date(0)
         bValue = parseDateString(b.renewalDate || '') || new Date(0)
         break
-              case 'deprovisioning':
-          aValue = a.deprovisioning || ''
-          bValue = b.deprovisioning || ''
+      case 'optOutDate':
+        aValue = parseDateString(a.optOutDate || '') || new Date(0)
+        bValue = parseDateString(b.optOutDate || '') || new Date(0)
+        break
+      case 'deprovisioning':
+        aValue = a.deprovisioning || ''
+        bValue = b.deprovisioning || ''
         break
       case 'stitchflowStatus':
         aValue = a.stitchflowStatus || ''
@@ -208,9 +221,37 @@ export function AppTable({
         aValue = a.appTier || ''
         bValue = b.appTier || ''
         break
-      case 'appPlan':
-        aValue = a.appPlan || ''
-        bValue = b.appPlan || ''
+      case 'billingFrequency':
+        aValue = a.billingFrequency || ''
+        bValue = b.billingFrequency || ''
+        break
+      case 'renewalType':
+        aValue = a.renewalType || ''
+        bValue = b.renewalType || ''
+        break
+      case 'billingOwner':
+        aValue = a.billingOwner || ''
+        bValue = b.billingOwner || ''
+        break
+      case 'purchaseCategory':
+        aValue = a.purchaseCategory || ''
+        bValue = b.purchaseCategory || ''
+        break
+      case 'vendorContractStatus':
+        aValue = a.vendorContractStatus || ''
+        bValue = b.vendorContractStatus || ''
+        break
+      case 'paymentMethod':
+        aValue = a.paymentMethod || ''
+        bValue = b.paymentMethod || ''
+        break
+      case 'paymentTerms':
+        aValue = a.paymentTerms || ''
+        bValue = b.paymentTerms || ''
+        break
+      case 'budgetSource':
+        aValue = a.budgetSource || ''
+        bValue = b.budgetSource || ''
         break
     }
 
@@ -308,7 +349,7 @@ export function AppTable({
               <SortableHeader field="name" className="w-[20%]">App Name</SortableHeader>
               <SortableHeader field="deprovisioning" className="w-[12%]">Deprovisioning</SortableHeader>
               <SortableHeader field="appTier" className="w-[8%]">Tier</SortableHeader>
-              <SortableHeader field="appPlan" className="w-[10%]">Plan</SortableHeader>
+              <SortableHeader field="billingFrequency" className="w-[10%]">Plan</SortableHeader>
               <SortableHeader field="planLimit" className="w-[8%]">Limit</SortableHeader>
               <SortableHeader field="licensesUsed" className="w-[10%]">Licenses Used</SortableHeader>
               <SortableHeader field="costPerUser" className="w-[8%]">Cost/User</SortableHeader>
@@ -376,7 +417,7 @@ export function AppTable({
                   <span className="text-sm text-gray-900 truncate">{app.appTier || "—"}</span>
                 </td>
                 <td className="px-4 py-4 whitespace-nowrap">
-                  <span className="text-sm text-gray-900 truncate">{app.appPlan || "—"}</span>
+                  <span className="text-sm text-gray-900 truncate">{app.billingFrequency || "—"}</span>
                 </td>
                 <td className="px-4 py-4 whitespace-nowrap">
                   <span className="text-sm text-gray-900 truncate">{app.planLimit || "—"}</span>

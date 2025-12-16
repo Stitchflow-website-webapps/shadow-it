@@ -278,6 +278,10 @@ export default function ShadowITDashboard() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginError, setLoginError] = useState<string>('');
   
+  // State for organization information (for special user case)
+  const [organizationInfo, setOrganizationInfo] = useState<{ id: string; name: string; domain: string; authProvider: string } | null>(null);
+  const [isSpecialUser, setIsSpecialUser] = useState(false);
+  
   // State for the "Top Apps by User Count" chart's managed status filter
   const [chartManagedStatusFilter, setChartManagedStatusFilter] = useState<string>('Any Status');
 
@@ -728,6 +732,23 @@ export default function ShadowITDashboard() {
         setApplications([]);
         setIsLoading(false);
         return;
+      }
+
+      // Check if this is the special user case
+      if (typeof window !== 'undefined') {
+        const userEmail = localStorage.getItem('userEmail');
+        const specialUser = localStorage.getItem('specialUser');
+        
+        if (userEmail === 'success@stitchflow.io' && specialUser === 'true') {
+          setIsSpecialUser(true);
+          
+          // Fetch organization information if we have an orgId
+          if (fetchOrgIdValue) {
+            await fetchOrganizationInfo(fetchOrgIdValue);
+          }
+        } else {
+          setIsSpecialUser(false);
+        }
       }
 
       // Fetch applications using optimized endpoint with fallback
@@ -2422,6 +2443,23 @@ export default function ShadowITDashboard() {
     return reasons;
   }
 
+  // Function to fetch organization information for special user
+  const fetchOrganizationInfo = async (orgId: string) => {
+    try {
+      const response = await fetch(`/api/organization-info?orgId=${orgId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.organization) {
+          setOrganizationInfo(data.organization);
+        }
+      } else {
+        console.warn('Failed to fetch organization info:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching organization info:', error);
+    }
+  };
+
   // Add after the getMonthlyActiveUsers function
   function getAppSimilarityNetwork() {
     // Create nodes for each app
@@ -3224,28 +3262,31 @@ export default function ShadowITDashboard() {
                         const activeFilters = [filterCategory, filterTime, filterRisk, filterManaged].filter(Boolean).length;
                         const filteredCount = filteredApps.length;
 
+                        // Add organization name for special user
+                        const orgPrefix = isSpecialUser && organizationInfo ? `${organizationInfo.name}: ` : '';
+
                         if (activeFilters === 0) {
-                          return `We found ${filteredCount} applications.`;
+                          return `${orgPrefix}We found ${filteredCount} applications.`;
                         }
 
                         // Single filter messages
                         if (activeFilters === 1) {
                           if (filterCategory) {
-                            return `We found ${filteredCount} applications in ${filterCategory}.`;
+                            return `${orgPrefix}We found ${filteredCount} applications in ${filterCategory}.`;
                           }
                           if (filterTime) {
-                            return `We found ${filteredCount} applications added ${filterTime.toLowerCase()}.`;
+                            return `${orgPrefix}We found ${filteredCount} applications added ${filterTime.toLowerCase()}.`;
                           }
                           if (filterRisk) {
-                            return `We found ${filteredCount} ${filterRisk.toLowerCase()} risk applications.`;
+                            return `${orgPrefix}We found ${filteredCount} ${filterRisk.toLowerCase()} risk applications.`;
                           }
                           if (filterManaged) {
-                            return `We found ${filteredCount} ${filterManaged.toLowerCase()} applications.`;
+                            return `${orgPrefix}We found ${filteredCount} ${filterManaged.toLowerCase()} applications.`;
                           }
                         }
 
                         // Multiple filters - show total count with "filtered"
-                        return `We found ${filteredCount} filtered applications.`;
+                        return `${orgPrefix}We found ${filteredCount} filtered applications.`;
                       })()}
                     </p>
                   </div>
@@ -3284,7 +3325,7 @@ export default function ShadowITDashboard() {
                 </div>
 
                 {mainView === "list" ? (
-                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+                  <div className="page-zoom-90 bg-white rounded-xl border border-gray-100 shadow-sm">
                     <div className="p-6">
                       {/* Filter section */}
                       <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
@@ -3785,7 +3826,7 @@ export default function ShadowITDashboard() {
                 ) : (
                   // Replace the dashboard view section with the following:
                   // Dashboard view with charts - updated to match the requested charts
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="page-zoom-90 grid grid-cols-1 md:grid-cols-2 gap-6">
                     
                     {/* Application Distribution by Category */}
                     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
@@ -4378,25 +4419,28 @@ export default function ShadowITDashboard() {
                       const activeFilters = [filterCategory, filterTime, filterRisk, filterManaged].filter(Boolean).length;
                       const filteredCount = filteredApps.length;
 
+                      // Add organization name for special user
+                      const orgPrefix = isSpecialUser && organizationInfo ? `${organizationInfo.name}: ` : '';
+
                       if (activeFilters === 0) {
-                        return `We found ${filteredCount} applications.`;
+                        return `${orgPrefix}We found ${filteredCount} applications.`;
                       }
 
                       // Single filter messages
                       if (activeFilters === 1) {
                         if (filterCategory) {
-                          return `We found ${filteredCount} applications in ${filterCategory}.`;
+                          return `${orgPrefix}We found ${filteredCount} applications in ${filterCategory}.`;
                         }
                         if (filterRisk) {
-                          return `We found ${filteredCount} ${filterRisk.toLowerCase()} risk applications.`;
+                          return `${orgPrefix}We found ${filteredCount} ${filterRisk.toLowerCase()} risk applications.`;
                         }
                         if (filterManaged) {
-                          return `We found ${filteredCount} ${filterManaged.toLowerCase()} applications.`;
+                          return `${orgPrefix}We found ${filteredCount} ${filterManaged.toLowerCase()} applications.`;
                         }
                       }
 
                       // Multiple filters - show total count with "filtered"
-                      return `We found ${filteredCount} filtered applications.`;
+                      return `${orgPrefix}We found ${filteredCount} filtered applications.`;
                     })()}
                   </h2>
                 </div>
@@ -4495,19 +4539,19 @@ export default function ShadowITDashboard() {
 
                     <Tabs defaultValue={defaultTab} className="mb-6">
                       <TabsList className="bg-gray-100 p-1">
-                        <TabsTrigger value="users" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                        <TabsTrigger value="users" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white hover-override">
                         All Users
                         </TabsTrigger>
-                        <TabsTrigger value="scopes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                        <TabsTrigger value="scopes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white hover-override">
                         Scope User Groups
                         </TabsTrigger>
-                        <TabsTrigger value="ai-risk-scoring" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                        <TabsTrigger value="ai-risk-scoring" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white hover-override">
                         AI Risk Scoring
                         </TabsTrigger>
                         {/* <TabsTrigger value="similar" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
                           Similar Apps
                         </TabsTrigger> */}
-                        <TabsTrigger value="notes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white">
+                        <TabsTrigger value="notes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-200 data-[state=active]:hover:bg-white hover-override">
                           Notes
                         </TabsTrigger>
                       </TabsList>
@@ -5147,18 +5191,39 @@ export default function ShadowITDashboard() {
           color: #374151;
         }
 
-        /* Button hover states */
-        button:hover {
+        /* Button hover states - more specific selectors to avoid conflicts */
+        button:not([data-sidebar]):not([data-tabs-trigger]):not(.hover-override):hover {
           background-color: rgba(0, 0, 0, 0.05);
         }
 
-        button[data-state="active"] {
+        button[data-state="active"]:not([data-sidebar]):not([data-tabs-trigger]) {
           background-color: #111827;
           color: white;
         }
 
-        button[data-state="active"]:hover {
+        button[data-state="active"]:not([data-sidebar]):not([data-tabs-trigger]):hover {
           background-color: #1f2937;
+        }
+
+        /* Fix sidebar hover conflicts */
+        [data-sidebar="menu-button"]:hover {
+          background-color: var(--sidebar-accent) !important;
+          color: var(--sidebar-accent-foreground) !important;
+        }
+
+        /* Fix tab trigger hover conflicts */
+        [data-tabs-trigger]:hover {
+          background-color: hsl(var(--muted)) !important;
+        }
+
+        [data-tabs-trigger][data-state="active"]:hover {
+          background-color: hsl(var(--background)) !important;
+        }
+
+        /* Ensure card hover states work properly */
+        .hover-card:hover {
+          background-color: hsl(var(--muted)/0.1) !important;
+          border-color: hsl(var(--border)) !important;
         }
       `}</style>
     </div>
