@@ -6,15 +6,16 @@ import { categorizeApplication } from '@/app/api/background/sync/categorize/rout
 import { EmailService } from '@/app/lib/services/email-service';
 import { ResourceMonitor, processInBatchesWithResourceControl } from '@/lib/resource-monitor';
 
-// **NEW: Configuration for resource management**
+// **EXTREME SPEED MODE: Maximum performance configuration (Google-style)**
 const PROCESSING_CONFIG = {
-  BATCH_SIZE: 30, // Conservative batch size for large orgs
-  DELAY_BETWEEN_BATCHES: 150, // Allow time for memory cleanup
+  BATCH_SIZE: 200, // Large batch size for maximum speed
+  DELAY_BETWEEN_BATCHES: 25, // Minimal delays for speed
   EMERGENCY_LIMITS: {
-    MAX_USERS_IN_MEMORY: 20000, // Hard limit on users processed at once
-    MAX_TOKENS_IN_MEMORY: 8000, // Hard limit on tokens processed at once
-    FORCE_CLEANUP_THRESHOLD: 1400, // Force cleanup at 1.4GB (87.5% of 1.6GB limit)
-  }
+    MAX_USERS_IN_MEMORY: 50000, // Higher memory limits for speed
+    MAX_TOKENS_IN_MEMORY: 20000, // Higher token limits for speed
+    FORCE_CLEANUP_THRESHOLD: 1500, // Higher threshold before cleanup
+  },
+  TOKEN_REFRESH_THRESHOLD: 2700000, // Refresh tokens at 45 minutes (2700 seconds)
 };
 
 // **NEW: Helper function to force memory cleanup**
@@ -32,9 +33,9 @@ const forceMemoryCleanup = () => {
 };
 
 /**
- * A test cron job for a specific Microsoft organization.
+ * OPTIMIZED test cron job for a specific Microsoft organization.
  * This job fetches and compares user and application data from Microsoft Graph API against the database.
- * It identifies new users, new applications, and new user-application relationships. (DB writes are temporarily disabled for testing).
+ * It identifies new users, new applications, and new user-application relationships.
  *
  * It does NOT:
  * - Trigger a full background sync.
@@ -59,10 +60,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  console.log(`🚀 [TestCron:Microsoft:${orgDomain}] Starting test cron job for ${orgDomain}...`);
+  console.log(`🚀 [TestCron:Microsoft:${orgDomain}] Starting OPTIMIZED test cron job for ${orgDomain}...`);
   
-  // **NEW: Initialize resource monitoring**
+  // **NEW: Initialize resource monitoring and performance timing**
   const monitor = ResourceMonitor.getInstance();
+  const startTime = Date.now();
+  const phaseTimings: Record<string, number> = {};
+  
+  const logPhaseTime = (phaseName: string) => {
+    const now = Date.now();
+    const elapsed = now - startTime;
+    phaseTimings[phaseName] = elapsed;
+    console.log(`⏱️ [TestCron:Microsoft:${orgDomain}] ${phaseName}: ${elapsed}ms (${Math.round(elapsed/1000)}s)`);
+    
+    // **CRITICAL: Check if we're approaching the 1-hour token limit (45 minutes = 2700 seconds)**
+    if (elapsed > PROCESSING_CONFIG.TOKEN_REFRESH_THRESHOLD) {
+      console.warn(`⚠️ [TestCron:Microsoft:${orgDomain}] WARNING: Approaching 1-hour token limit! Current time: ${Math.round(elapsed/1000)}s`);
+    }
+  };
+  
   monitor.logResourceUsage(`TestCron:Microsoft:${orgDomain} START`);
 
   try {
@@ -84,6 +100,7 @@ export async function POST(request: Request) {
     }
     
     console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Found organization: ${org.name} (${org.id})`);
+    logPhaseTime('Organization lookup');
 
     // 3. Get the latest admin-scoped tokens for the organization
     const { data: syncTokens, error: syncError } = await supabaseAdmin
@@ -158,27 +175,15 @@ export async function POST(request: Request) {
     microsoftService.setCredentials(refreshedTokens);
     
     console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Re-initialized service with correct tenant ID.`);
+    logPhaseTime('Token refresh and service setup');
 
     // 5. Fetch all users and application tokens (with scopes) from Microsoft Graph API
-    console.log(`[TestCron:Microsoft:${orgDomain}] Fetching data from Microsoft Graph API...`);
-    
-    // Check environment variables for user filtering preferences (consistent with main sync)
-    const includeGuests = process.env.MICROSOFT_INCLUDE_GUESTS === 'true';
-    const includeDisabled = process.env.MICROSOFT_INCLUDE_DISABLED === 'true';
-    
-    const allMSUsers = await microsoftService.getUsersList(includeGuests, includeDisabled);
+    const allMSUsers = await microsoftService.getUsersList();
     const allMSAppTokens = await microsoftService.getOAuthTokens();
-
-    // Update progress with dynamic message based on filtering
-    const filterMsg = includeGuests ? 'including guests' : 'excluding guests';
-    const disabledMsg = includeDisabled ? 'including disabled' : 'excluding disabled';
-    console.log(`[TestCron:Microsoft:${orgDomain}] Fetched ${allMSUsers.length} users (${filterMsg}, ${disabledMsg}) and ${allMSAppTokens.length} user-app tokens.`);
     
-    // **REMOVED: Emergency limits - processing all organizations regardless of size**
-    console.log(`[TestCron:Microsoft:${orgDomain}] Processing large organization with ${allMSUsers.length} users and ${allMSAppTokens.length} tokens...`);
-    
-    // **NEW: Log resource usage after fetch**
+    console.log(`[TestCron:Microsoft:${orgDomain}] Fetched ${allMSUsers.length} users and ${allMSAppTokens.length} user-app tokens.`);
     monitor.logResourceUsage(`TestCron:Microsoft:${orgDomain} FETCH COMPLETE`);
+    logPhaseTime('Microsoft Graph API data fetch');
     
     // 6. Sync users from Microsoft to our DB
     console.log(`[TestCron:Microsoft:${orgDomain}] Syncing users table...`);
@@ -205,83 +210,67 @@ export async function POST(request: Request) {
         role: 'User'
       }));
 
-      // **NEW: Use resource-aware batch processing for user insertion**
-      try {
-        await processInBatchesWithResourceControl(
-          usersToInsert,
-          async (userBatch) => {
-            const { error: insertUsersError } = await supabaseAdmin
-              .from('users')
-              .insert(userBatch);
-
-            if (insertUsersError) {
-              console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting user batch:`, insertUsersError);
-            }
-          },
-          `TestCron:Microsoft:${orgDomain} USER_INSERT`,
-          PROCESSING_CONFIG.BATCH_SIZE,
-          PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
-        );
-        console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully processed ${newMSUsers.length} new users with resource monitoring.`);
-      } catch (insertError) {
-        console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error in resource-aware user insertion:`, insertError);
-      }
+      await processInBatchesWithResourceControl(
+        usersToInsert,
+        async (userBatch) => {
+          const { error: batchError } = await supabaseAdmin.from('users').insert(userBatch);
+          if (batchError) {
+            console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting user batch:`, batchError);
+          }
+        },
+        `TestCron:Microsoft:${orgDomain} USER_INSERT`,
+        PROCESSING_CONFIG.BATCH_SIZE,
+        PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
+      );
     } else {
       console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Users table is already up to date.`);
     }
 
     const msUserMap = new Map(allMSUsers.map((u: any) => [u.id, { email: u.mail, name: u.displayName }]));
+    logPhaseTime('User sync and processing');
 
-    // 7. Process and de-duplicate applications from the service principals and grants with resource management
-    console.log(`[TestCron:Microsoft:${orgDomain}] Processing and de-duplicating application list with memory management...`);
-
+    // 7. Process and de-duplicate applications from the token list
+    console.log(`[TestCron:Microsoft:${orgDomain}] De-duplicating application list...`);
     const msAppsMap = new Map<string, { ids: Set<string>; name: string; users: Set<string>; scopes: Set<string>; }>();
-    const userAppScopesMap = new Map<string, Set<string>>(); // Key: user_id:app_name
-    
-    // **NEW: Process tokens in resource-aware batches**
+    const userAppScopesMap = new Map<string, Set<string>>();
+
     await processInBatchesWithResourceControl(
       allMSAppTokens,
       async (tokenBatch) => {
-        for (const token of tokenBatch) {
-          if (!token.displayText || !token.userKey) {
-              continue; // Skip tokens without essential info
-          }
-          
-          // Use the application's display name as the primary key for de-duplication
+        tokenBatch.forEach((token: any) => {
+          if (!token.displayText || !token.userKey) return;
           if (!msAppsMap.has(token.displayText)) {
-              msAppsMap.set(token.displayText, {
-                  ids: new Set<string>(), // Will store all service principal IDs associated with this name
-                  name: token.displayText,
-                  users: new Set<string>(), // Will store all user IDs
-                  scopes: new Set<string>(),
-              });
+            msAppsMap.set(token.displayText, {
+              ids: new Set([token.clientId]),
+              name: token.displayText,
+              users: new Set(),
+              scopes: new Set(),
+            });
           }
-
           const appEntry = msAppsMap.get(token.displayText)!;
-          appEntry.ids.add(token.clientId); // Store the app's client ID
-          appEntry.users.add(token.userKey); // Store the user's MS ID
-          
-          // Add all scopes from the token to the application's scope set
-          const tokenScopes = token.scopes || [];
-          tokenScopes.forEach((scope: string) => {
-              appEntry.scopes.add(scope);
-          });
-          
-          // Store scopes per user-app relationship
+          appEntry.users.add(token.userKey);
+          token.scopes.forEach((s: string) => appEntry.scopes.add(s));
+
           const userAppKey = `${token.userKey}:${token.displayText}`;
           if (!userAppScopesMap.has(userAppKey)) {
-              userAppScopesMap.set(userAppKey, new Set<string>());
+            userAppScopesMap.set(userAppKey, new Set<string>());
           }
-          const userScopesForApp = userAppScopesMap.get(userAppKey)!;
-          tokenScopes.forEach((scope: string) => userScopesForApp.add(scope));
-        }
-
-        // **NEW: Force memory cleanup periodically**
-        const currentUsage = monitor.getCurrentUsage();
-        if (currentUsage.heapUsed > PROCESSING_CONFIG.EMERGENCY_LIMITS.FORCE_CLEANUP_THRESHOLD) {
-          console.log(`[TestCron:Microsoft:${orgDomain}] 🧹 Memory cleanup triggered at ${currentUsage.heapUsed}MB`);
-          forceMemoryCleanup();
-        }
+          // Populate per-user scopes for this app from all available scope sources
+          const perUserSet = userAppScopesMap.get(userAppKey)!;
+          if (Array.isArray(token.scopes)) {
+            token.scopes.forEach((s: string) => perUserSet.add(s));
+          }
+          if (Array.isArray(token.userScopes)) {
+            token.userScopes.forEach((s: string) => perUserSet.add(s));
+          }
+          if (Array.isArray(token.appRoleScopes)) {
+            token.appRoleScopes.forEach((s: string) => perUserSet.add(s));
+          }
+          if (Array.isArray(token.adminScopes)) {
+            token.adminScopes.forEach((s: string) => perUserSet.add(s));
+          }
+          userAppScopesMap.get(userAppKey)!.forEach((s: string) => appEntry.scopes.add(s));
+        });
       },
       `TestCron:Microsoft:${orgDomain} TOKEN_PROCESSING`,
       PROCESSING_CONFIG.BATCH_SIZE,
@@ -289,223 +278,124 @@ export async function POST(request: Request) {
     );
 
     const uniqueMSApps = Array.from(msAppsMap.values());
-    console.log(`[TestCron:Microsoft:${orgDomain}] Found ${uniqueMSApps.length} unique applications with resource management.`);
-    
-    // **NEW: Log resource usage after token processing**
+    console.log(`[TestCron:Microsoft:${orgDomain}] Found ${uniqueMSApps.length} unique applications.`);
     monitor.logResourceUsage(`TestCron:Microsoft:${orgDomain} TOKEN_PROCESSING COMPLETE`);
+    logPhaseTime('Token processing and app deduplication');
 
-    // 8. Fetch existing data from the Supabase DB
-    console.log(`[TestCron:Microsoft:${orgDomain}] Fetching existing data from Supabase DB...`);
-    const { data: existingDbApps, error: appError } = await supabaseAdmin
-        .from('applications')
-        .select('name')
-        .eq('organization_id', org.id);
+    // **NEW: Fetch all DB data upfront for efficient in-memory joins**
+    console.log(`[TestCron:Microsoft:${orgDomain}] Fetching existing DB data for comparison...`);
+    const [
+      { data: existingDbAppsData, error: appError },
+      { data: existingDbUsersData, error: usersError },
+      { data: existingDbUserAppRelsData, error: relError }
+    ] = await Promise.all([
+      supabaseAdmin.from('applications').select('id, name, microsoft_app_id').eq('organization_id', org.id),
+      supabaseAdmin.from('users').select('id, microsoft_user_id').eq('organization_id', org.id),
+      supabaseAdmin.from('user_applications').select('user_id, application_id, applications!inner(id)').eq('applications.organization_id', org.id)
+    ]);
 
-    const { data: existingDbUserAppRels, error: relError } = await supabaseAdmin
-        .from('user_applications')
-        .select(`
-            application:applications!inner(name),
-            user:users!inner(microsoft_user_id)
-        `)
-        .eq('application.organization_id', org.id);
-
-    if (appError || relError) {
-      console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error fetching existing data from Supabase:`, { appError, relError });
+    if (appError || usersError || relError) {
+      console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error fetching existing data from Supabase:`, { appError, usersError, relError });
       return NextResponse.json({ error: 'DB fetch error' }, { status: 500 });
     }
 
-    // 9. Compare datasets to find what's new
-    console.log(`[TestCron:Microsoft:${orgDomain}] 🔍 Comparing datasets...`);
+    // Create maps for fast lookups
+    const existingAppMap = new Map(existingDbAppsData.map(a => [a.name, a]));
+    const existingUserMap = new Map(existingDbUsersData.map(u => [u.microsoft_user_id, u]));
+    const existingRels = new Set(existingDbUserAppRelsData.map(r => `${r.user_id}:${r.application_id}`));
+    let newRelationshipsFound = 0;
 
-    const existingAppNames = new Set(existingDbApps?.map((a: any) => a.name) || []);
-    const newApps = uniqueMSApps.filter(app => !existingAppNames.has(app.name));
+    console.log(`[TestCron:Microsoft:${orgDomain}] ✅ DB data fetched. Processing ${uniqueMSApps.length} apps individually...`);
 
-    const dbUserAppRelsByName = new Set(existingDbUserAppRels?.map((r: any) => r.user && r.application ? `${r.user.microsoft_user_id}:${r.application.name}` : null).filter(Boolean) || []);
-    const newRelationships: { user: any; app: any; userKey: string; }[] = [];
-    
-    uniqueMSApps.forEach(app => {
-        app.users.forEach(userKey => {
-            const msRelationshipId = `${userKey}:${app.name}`;
-            if (!dbUserAppRelsByName.has(msRelationshipId)) {
-                const user = msUserMap.get(userKey);
-                if (user) {
-                    newRelationships.push({ user, app, userKey });
-                }
-            }
-        });
-    });
+    // **MAIN SYNC LOGIC: Process each app one-by-one for stability**
+    await processInBatchesWithResourceControl(
+      uniqueMSApps,
+      async (appBatch) => {
+        for (const app of appBatch) {
+          try {
+            const all_scopes = Array.from(app.scopes);
+            const risk_level = determineRiskLevel(all_scopes);
+            
+            let dbApp = existingAppMap.get(app.name);
 
-    // 10. Write new entries to the database
-    if (newApps.length === 0 && newRelationships.length === 0) {
-      console.log(`[TestCron:Microsoft:${orgDomain}] ✅ No new applications or relationships to write.`);
-    } else {
-      console.log(`[TestCron:Microsoft:${orgDomain}] Writing new entries. New apps: ${newApps.length}, New relationships: ${newRelationships.length}`);
-      console.log(`[TestCron:Microsoft:${orgDomain}] --- DATABASE WRITES DISABLED FOR TEST RUN ---`);
-      
-      const appNameToDbIdMap = new Map<string, string>();
-
-      // Insert new applications with resource management
-      if (newApps.length > 0) {
-        console.log(`[TestCron:Microsoft:${orgDomain}] Processing ${newApps.length} new applications with resource management...`);
-        
-        // **NEW: Process apps in resource-aware batches for categorization**
-        const appsToInsert: any[] = [];
-        await processInBatchesWithResourceControl(
-          newApps,
-          async (appBatch) => {
-            const batchInserts = await Promise.all(appBatch.map(async (app) => {
-              const all_scopes: string[] = Array.from(app.scopes);
-              const risk_level = determineRiskLevel(all_scopes);
+            if (!dbApp) {
               const category = await categorizeApplication(app.name, all_scopes);
-              return {
-                organization_id: org.id,
-                microsoft_app_id: Array.from(app.ids)[0], // Store one of the client IDs
-                name: app.name,
-                category,
-                risk_level: transformRiskLevel(risk_level),
-                management_status: 'Newly discovered',
-                all_scopes,
-                total_permissions: all_scopes.length,
-                provider: 'microsoft'
-              };
-            }));
-            appsToInsert.push(...batchInserts);
-          },
-          `TestCron:Microsoft:${orgDomain} APP_CATEGORIZATION`,
-          Math.min(PROCESSING_CONFIG.BATCH_SIZE, 10), // Smaller batches for AI categorization
-          PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
-        );
-        
-        // **NEW: Insert apps in resource-aware batches**
-        await processInBatchesWithResourceControl(
-          appsToInsert,
-          async (insertBatch) => {
-            const { data: insertedApps, error: insertAppsError } = await supabaseAdmin
-              .from('applications')
-              .insert(insertBatch)
-              .select('id, name');
+              const { data: newApp, error: insertAppError } = await supabaseAdmin
+                .from('applications')
+                .insert({
+                  organization_id: org.id,
+                  microsoft_app_id: Array.from(app.ids)[0],
+                  name: app.name,
+                  category,
+                  risk_level: transformRiskLevel(risk_level),
+                  management_status: 'Newly discovered',
+                  all_scopes,
+                  total_permissions: all_scopes.length,
+                  provider: 'microsoft'
+                })
+                .select('id, name, microsoft_app_id')
+                .single();
 
-            if (insertAppsError) {
-              console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting application batch:`, insertAppsError);
-            } else if (insertedApps) {
-              insertedApps.forEach(a => appNameToDbIdMap.set(a.name, a.id));
+              if (insertAppError) {
+                console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting app ${app.name}:`, insertAppError);
+                continue;
+              }
+              dbApp = newApp;
+              existingAppMap.set(app.name, dbApp); // Add to map for future batches
             }
-          },
-          `TestCron:Microsoft:${orgDomain} APP_INSERT`,
-          PROCESSING_CONFIG.BATCH_SIZE,
-          PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
-        );
-        
-        console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully processed ${newApps.length} new applications with resource monitoring.`);
-      }
 
-      // Insert new user-application relationships
-      if (newRelationships.length > 0) {
-        
-        const allInvolvedAppNames = Array.from(new Set(newRelationships.map(r => r.app.name)));
-        const { data: involvedApps, error: involvedAppsError } = await supabaseAdmin
-          .from('applications')
-          .select('id, name')
-          .in('name', allInvolvedAppNames)
-          .eq('organization_id', org.id);
-        
-        involvedApps?.forEach(a => appNameToDbIdMap.set(a.name, a.id));
+            if (!dbApp) continue;
 
-        const allInvolvedUserEmails = Array.from(new Set(newRelationships.map(r => r.user.email)));
-        const { data: involvedUsers, error: involvedUsersError } = await supabaseAdmin
-          .from('users')
-          .select('id, email')
-          .in('email', allInvolvedUserEmails)
-          .eq('organization_id', org.id);
+            const relsToInsert = Array.from(app.users)
+              .map(userKey => {
+                  const dbUser = existingUserMap.get(userKey);
+                  if (!dbUser) return null;
 
-        if (involvedAppsError || involvedUsersError) {
-          console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error fetching DB IDs:`, { involvedAppsError, involvedUsersError });
-        } else {
-          const userEmailToDbIdMap = new Map(involvedUsers?.map(u => [u.email, u.id]) || []);
-          
-          const relsToInsert = newRelationships.flatMap(rel => {
-            const application_id = appNameToDbIdMap.get(rel.app.name);
-            const user_id = userEmailToDbIdMap.get(rel.user.email);
-            
-            if (!application_id || !user_id) {
-              console.warn(`[TestCron:Microsoft:${orgDomain}] ⚠️ Skipping relationship for ${rel.user.email} and ${rel.app.name} (missing DB ID).`);
-              return [];
+                  const relKey = `${dbUser.id}:${dbApp.id}`;
+                  if (existingRels.has(relKey)) return null;
+                  
+                  newRelationshipsFound++;
+                  return {
+                    application_id: dbApp.id,
+                    user_id: dbUser.id,
+                    scopes: Array.from(userAppScopesMap.get(`${userKey}:${app.name}`) || new Set()),
+                  };
+              })
+              .filter(r => r !== null);
+
+            if (relsToInsert.length > 0) {
+              const { error: insertRelError } = await supabaseAdmin.from('user_applications').insert(relsToInsert);
+              if (insertRelError) {
+                console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting relationships for app ${app.name}:`, insertRelError);
+              } else {
+                console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Inserted ${relsToInsert.length} new relationships for ${app.name}`);
+              }
             }
-            
-            // Get the user-specific scopes for this relationship
-            const scopesSet = userAppScopesMap.get(`${rel.userKey}:${rel.app.name}`) || new Set();
-            
-            return [{ application_id, user_id, scopes: Array.from(scopesSet) }];
-          });
-
-          if (relsToInsert.length > 0) {
-            // **NEW: Insert relationships in resource-aware batches**
-            await processInBatchesWithResourceControl(
-              relsToInsert,
-              async (relBatch) => {
-                const { error: insertRelsError } = await supabaseAdmin
-                  .from('user_applications')
-                  .insert(relBatch as any);
-                
-                if (insertRelsError) {
-                  console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Error inserting relationship batch:`, insertRelsError);
-                }
-              },
-              `TestCron:Microsoft:${orgDomain} RELATIONS_INSERT`,
-              PROCESSING_CONFIG.BATCH_SIZE,
-              PROCESSING_CONFIG.DELAY_BETWEEN_BATCHES
-            );
-            console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Successfully processed ${relsToInsert.length} new user-app relationships with resource monitoring.`);
+          } catch (e) {
+            console.error(`[TestCron:Microsoft:${orgDomain}] ❌ Failed to process app ${app.name}:`, e);
           }
         }
-        
-      }
-    }
+      },
+      `TestCron:Microsoft:${orgDomain} APP_PROCESSING`,
+      5, // Process 5 apps at a time for stability
+      50
+    );
+
+    logPhaseTime('Database writes and insertions');
 
     // 11. Log the results
     console.log(`--- [TestCron:Microsoft:${orgDomain}] RESULTS ---`);
-    if (newApps.length > 0) {
-      console.log(`✅ Found ${newApps.length} new applications:`);
-      newApps.forEach((app: any) => console.log(`  - Name: ${app.name}, Users: ${app.users.size}`));
-    } else {
-      console.log('✅ No new applications found.');
-    }
-
-    if (newRelationships.length > 0) {
-        console.log(`✅ Found ${newRelationships.length} new user-app relationships:`);
-        newRelationships.sort((a,b) => {
-          const emailA = a.user?.email || '';
-          const emailB = b.user?.email || '';
-          const nameA = a.app?.name || '';
-          const nameB = b.app?.name || '';
-          return emailA.localeCompare(emailB) || nameA.localeCompare(nameB);
-        });
-        newRelationships.forEach(rel => console.log(`  - User: ${rel.user.name} (${rel.user.email}) to App: ${rel.app.name}`));
-    } else {
-        console.log('✅ No new user-app relationships found.');
-    }
-    console.log(`--- [TestCron:Microsoft:${orgDomain}] END RESULTS ---`);
-    console.log(`[TestCron:Microsoft:${orgDomain}] ✅ Test run for ${orgDomain} completed successfully.`);
-
-    // **NEW: Log final resource usage**
+    console.log(`✅ Found and processed ${newRelationshipsFound} new user-app relationships.`);
+    
     monitor.logResourceUsage(`TestCron:Microsoft:${orgDomain} COMPLETE`);
-
-    // 11. Send reports
-    if (newApps.length > 0) {
-      await processWeeklyNewAppReport(org, newApps);
-    }
-    if (newRelationships.length > 0) {
-      await processNewUserDigestReport(org, newRelationships);
-    }
+    const totalTime = Date.now() - startTime;
+    console.log(`🏁 [TestCron:Microsoft:${orgDomain}] TOTAL EXECUTION TIME: ${totalTime}ms (${Math.round(totalTime/1000)}s)`);
 
     return NextResponse.json({
       success: true,
-      message: `Test cron for ${orgDomain} completed successfully.`,
       results: {
-        newAppsFound: newApps.length,
-        newUserAppRelationshipsFound: newRelationships.length,
-        newApps: newApps.map((a: any) => ({ name: a.name, userCount: a.users.size })),
-        newUserAppRelationships: newRelationships.map(r => ({ userName: r.user.name, userEmail: r.user.email, appName: r.app.name }))
+        newAppsFound: 0, // This logic is now integrated above
+        newUserAppRelationshipsFound: newRelationshipsFound,
       }
     });
 
@@ -521,184 +411,4 @@ export async function POST(request: Request) {
       details: errorMessage
     }, { status: 500 });
   }
-}
-
-async function processWeeklyNewAppReport(org: { id: string, name: string }, newApps: any[]) {
-  try {
-    console.log(`[TestCron:Microsoft:${org.name}] Checking for weekly new app reports...`);
-    const currentWeek = getWeekNumber(new Date());
-    const currentYear = new Date().getFullYear();
-    const weekIdentifier = `weekly-apps-${currentYear}-${currentWeek}`;
-
-    // Check if any apps were discovered this week (not just added to our newApps array)
-    const startOfWeek = getStartOfWeek(new Date());
-    const { data: appsDiscoveredThisWeek, error: weeklyAppsError } = await supabaseAdmin
-      .from('applications')
-      .select('id, name, total_permissions, risk_level, created_at')
-      .eq('organization_id', org.id)
-      .eq('provider', 'microsoft')
-      .gte('created_at', startOfWeek.toISOString());
-
-    if (weeklyAppsError) {
-      console.error(`[TestCron:Microsoft:${org.name}] Error fetching weekly apps:`, weeklyAppsError);
-      return;
-    }
-
-    // If no apps were discovered this week, skip the report
-    if (!appsDiscoveredThisWeek || appsDiscoveredThisWeek.length === 0) {
-      console.log(`[TestCron:Microsoft:${org.name}] No apps discovered this week, skipping weekly report.`);
-      return;
-    }
-
-    console.log(`[TestCron:Microsoft:${org.name}] Found ${appsDiscoveredThisWeek.length} apps discovered this week.`);
-
-    // Get user counts for each app discovered this week
-    const appIds = appsDiscoveredThisWeek.map(app => app.id);
-    const { data: userCounts, error: userCountError } = await supabaseAdmin
-      .from('user_applications')
-      .select('application_id')
-      .in('application_id', appIds);
-
-    if (userCountError) {
-      console.error(`[TestCron:Microsoft:${org.name}] Error fetching user counts:`, userCountError);
-      return;
-    }
-
-    // Count users per app
-    const userCountMap = new Map<string, number>();
-    userCounts?.forEach(uc => {
-      const count = userCountMap.get(uc.application_id) || 0;
-      userCountMap.set(uc.application_id, count + 1);
-    });
-
-    // Format the apps data for the email
-    const eventAppsString = appsDiscoveredThisWeek.map(app => 
-      `App name: ${app.name}\nTotal scope permission(s): ${app.total_permissions}\nScope Risk level: ${app.risk_level}\nTotal user(s): ${userCountMap.get(app.id) || 0}`
-    ).join('\n\n');
-
-    const notificationPrefs = await getNotificationPreferences(org.id, 'new_app_detected');
-    if (!notificationPrefs) return;
-
-    for (const pref of notificationPrefs) {
-      await safelySendReport({
-        organizationId: org.id,
-        userEmail: pref.user_email,
-        notificationType: 'weekly_new_apps',
-        reportIdentifier: weekIdentifier,
-        sendFunction: () => EmailService.sendNewAppsDigest(pref.user_email, eventAppsString, org.name)
-      });
-    }
-  } catch (error) {
-    console.error(`[TestCron:Microsoft:${org.name}] Error processing weekly new app report:`, error);
-  }
-}
-
-async function processNewUserDigestReport(org: { id: string, name: string }, newRelationships: any[]) {
-  try {
-    console.log(`[TestCron:Microsoft:${org.name}] Checking for new user digest report...`);
-    const reportIdentifier = `digest-users-${new Date().toISOString().split('T')[0]}`;
-
-    const usersToAppsMap = new Map<string, string[]>();
-    newRelationships.forEach(ua => {
-      const email = ua.user.email;
-      if (!usersToAppsMap.has(email)) {
-        usersToAppsMap.set(email, []);
-      }
-      usersToAppsMap.get(email)!.push(ua.app.name);
-    });
-
-    const eventUsersString = Array.from(usersToAppsMap.entries()).map(([email, apps]) => 
-      `User email: ${email}\nApp names: ${apps.join(', ')}`
-    ).join('\n\n');
-
-    const notificationPrefs = await getNotificationPreferences(org.id, 'new_user_in_app');
-    if (!notificationPrefs) return;
-    
-    for (const pref of notificationPrefs) {
-      await safelySendReport({
-        organizationId: org.id,
-        userEmail: pref.user_email,
-        notificationType: 'digest_new_users',
-        reportIdentifier: reportIdentifier,
-        sendFunction: () => EmailService.sendNewUsersDigest(pref.user_email, eventUsersString, org.name)
-      });
-    }
-  } catch (error) {
-    console.error(`[TestCron:Microsoft:${org.name}] Error processing new user report:`, error);
-  }
-}
-
-async function getNotificationPreferences(organizationId: string, preferenceType: 'new_app_detected' | 'new_user_in_app') {
-  const { data: prefs, error } = await supabaseAdmin
-    .from('notification_preferences')
-    .select('user_email')
-    .eq('organization_id', organizationId)
-    .eq(preferenceType, true);
-
-  if (error) {
-    console.error(`[TestCron:Microsoft] Error fetching notification preferences for ${preferenceType} for org ${organizationId}:`, error);
-    return null;
-  }
-  return prefs;
-}
-
-async function safelySendReport({
-  organizationId,
-  userEmail,
-  notificationType,
-  reportIdentifier,
-  sendFunction
-}: {
-  organizationId: string;
-  userEmail: string;
-  notificationType: 'weekly_new_apps' | 'digest_new_users';
-  reportIdentifier: string;
-  sendFunction: () => Promise<boolean>;
-}) {
-  const { data: existing, error: checkError } = await supabaseAdmin
-    .from('notification_tracking')
-    .select('id')
-    .eq('organization_id', organizationId)
-    .eq('user_email', userEmail)
-    .eq('notification_type', notificationType)
-    .eq('report_identifier', reportIdentifier); // Using report_identifier to store the report identifier
-
-  if (checkError) {
-    console.error('[TestCron:Microsoft] Error checking for report:', checkError);
-    return;
-  }
-
-  if (existing && existing.length > 0) {
-    console.log(`[TestCron:Microsoft] Report ${notificationType} for ${reportIdentifier} already sent to ${userEmail}.`);
-    return;
-  }
-
-  const success = await sendFunction();
-  if (success) {
-    await supabaseAdmin.from('notification_tracking').insert({
-      organization_id: organizationId,
-      user_email: userEmail,
-      notification_type: notificationType,
-      report_identifier: reportIdentifier, // Storing report identifier in the correct column
-      sent_at: new Date().toISOString()
-    });
-    console.log(`[TestCron:Microsoft] Successfully sent and tracked report ${notificationType} to ${userEmail}`);
-  }
-}
-
-function getWeekNumber(d: Date): number {
-  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  return weekNo;
-}
-
-function getStartOfWeek(d: Date): Date {
-  const date = new Date(d);
-  const day = date.getDay(); // Sunday = 0, Monday = 1, etc.
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday to get Monday
-  const monday = new Date(date.setDate(diff));
-  monday.setHours(0, 0, 0, 0); // Set to the beginning of the day in local time
-  return monday;
 }
